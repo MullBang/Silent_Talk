@@ -1,30 +1,24 @@
 """Pydantic 요청/응답 스키마 정의.
 
-API 계층의 입출력 계약을 정의한다. confidence는 0~1 정규화값,
-raw_score는 CTC log-prob 원본임을 스키마 수준에서 구분한다.
+설계문서 5절 API 명세 기준. API 계층의 입출력 계약을 정의한다.
+confidence는 0~1 정규화값(또는 null), raw_score는 CTC log-prob 원본.
+status 문자열은 services.job_manager의 상태값(pending/processing/done/error/timeout)을
+따른다.
 """
 
 from __future__ import annotations
 
-from enum import Enum
+from typing import Literal, Optional
 
-from pydantic import BaseModel
-
-
-class JobStatus(str, Enum):
-    """Job 진행 상태 열거형."""
-
-    PROCESSING = "processing"
-    DONE = "done"
-    FAILED = "failed"
+from pydantic import BaseModel, Field
 
 
 class UploadResponse(BaseModel):
     """POST /api/upload 응답."""
 
     session_id: str
-    filename: str
-    status: str
+    file_name: str
+    duration_sec: float
 
 
 class InferRequest(BaseModel):
@@ -33,56 +27,66 @@ class InferRequest(BaseModel):
     session_id: str
 
 
-class InferResponse(BaseModel):
-    """POST /api/infer 응답. results를 포함하지 않는다 (폴링 전용 분리)."""
+class InferStartResponse(BaseModel):
+    """POST /api/infer 응답. results를 절대 포함하지 않는다 (폴링 전용 분리)."""
 
     job_id: str
     session_id: str
-    status: JobStatus
+    status: str = "processing"
 
 
-class InferResultItem(BaseModel):
-    """추론 결과 단일 항목."""
+class ResultItem(BaseModel):
+    """추론 결과 단일 세그먼트."""
 
-    transcript: str
-    confidence: float  # 0~1 정규화값
-    raw_score: float   # CTC log-prob 원본
+    start_ms: Optional[int] = None
+    end_ms: Optional[int] = None
+    text: str
+    confidence: Optional[float] = None  # 0.0~1.0 정규화 신뢰도 또는 null
 
 
 class ResultResponse(BaseModel):
     """GET /api/result/{session_id} 응답."""
 
     session_id: str
-    status: JobStatus
-    results: list[InferResultItem] | None = None
-    error: str | None = None
+    status: str
+    progress: float = 0.0
+    error_message: Optional[str] = None
+    results: Optional[list[ResultItem]] = None
 
 
-class EvaluationRequest(BaseModel):
-    """POST /api/evaluation/run 요청. 경로 대신 식별자만 받는다."""
+class EvalRequest(BaseModel):
+    """POST /api/evaluation/run 요청. 경로 대신 등록된 식별자만 받는다."""
 
     test_set_id: str
+    eval_unit: Literal["word", "sentence"] = "word"
 
 
-class EvaluationResponse(BaseModel):
+class EvalStartResponse(BaseModel):
     """POST /api/evaluation/run 응답."""
 
-    job_id: str
-    test_set_id: str
-    status: JobStatus
+    eval_job_id: str
+    status: str = "queued"
 
 
-class EvaluationStatusResponse(BaseModel):
-    """GET /api/evaluation/status/{id} 응답."""
+class EvalResult(BaseModel):
+    """평가 지표 결과."""
 
-    job_id: str
-    status: JobStatus
-    progress: float | None = None
-    metrics: dict | None = None
+    cer: float
+    wer: float
+    avg_latency_ms: float
+    detection_rate: float
+
+
+class EvalStatusResponse(BaseModel):
+    """GET /api/evaluation/status/{eval_job_id} 응답."""
+
+    status: str
+    progress: float = 0.0
+    result: Optional[EvalResult] = None
 
 
 class ErrorResponse(BaseModel):
     """공통 에러 응답."""
 
     detail: str
-    code: str | None = None
+    code: Optional[str] = None

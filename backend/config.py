@@ -80,7 +80,15 @@ MAX_DURATION_SEC: int = 180
 """
 
 JOB_TIMEOUT_SEC: int = 300
-"""비동기 Job 타임아웃 (초). 초과 시 status='failed' 처리."""
+"""비동기 Job 타임아웃 (초). 초과 시 status='timeout' 처리."""
+
+TEST_SETS: dict[str, str] = {
+    # "demo_word": r"D:\009.립리딩(입모양) 음성인식 데이터\01.데이터\2.Validation",
+}
+"""평가용 테스트셋 화이트리스트 (test_set_id → 경로).
+
+설계문서 보안 규칙: test_set_path 직접 전달 금지 → 등록된 test_set_id로만 조회.
+"""
 
 POLL_INTERVAL_SEC: float = 1.0
 """GET /api/result 폴링 권장 간격 (초)."""
