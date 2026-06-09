@@ -106,5 +106,12 @@ CORS_ORIGINS: list[str] = [
 TMP_UPLOAD_DIR: str = os.path.join(os.getcwd(), "tmp", "uploads")
 """임시 업로드 파일 저장 디렉토리. 추론 완료 후 즉시 os.remove()."""
 
+MODEL_WEIGHTS_PATH: str = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "models", "weights", "baseline.pt"
+)
+"""베이스라인 모델 가중치 경로. 존재하지 않으면 미학습 모델로 폴백.
+
+*.pt는 .gitignore 대상 — download_weights.sh로 별도 배포."""
+
 LOG_DIR: str = os.path.join(os.getcwd(), "logs")
 """로그 출력 디렉토리."""

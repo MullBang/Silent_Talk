@@ -13,7 +13,7 @@ import sys
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # backend 루트를 import 경로에 부트스트랩
@@ -72,19 +72,13 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws/stream")
     async def ws_stream(websocket: WebSocket) -> None:
-        """WebSocket 실시간 스트리밍 (2차 목표 — 현재는 placeholder).
+        """WebSocket 실시간 스트리밍 (설계문서 4절, 2차 목표).
 
-        연결을 수락한 뒤 SESSION_END 또는 연결 종료까지 메시지를 무시한다.
-        실제 제어/바이너리 처리는 services.ws_handler에서 구현 예정.
+        Origin 검사·제어/바이너리 처리·추론은 services.ws_handler에 위임한다.
         """
-        await websocket.accept()
-        try:
-            while True:
-                await websocket.receive_text()
-        except WebSocketDisconnect:
-            return
-        except Exception:  # noqa: BLE001
-            await websocket.close()
+        from services.ws_handler import handle_connection
+
+        await handle_connection(websocket)
 
     return app
 
