@@ -40,3 +40,30 @@ VVAD_IDX_BOT  = [17,18,84,181,180,314]    # 아랫입술 내측 — d_raw 중심
 # Python: 타입 힌트 + docstring 필수
 # 모든 함수: try/except 에러 핸들링
 # confidence: 0~1 정규화값 / raw_score: CTC log-prob 원본
+
+## 운영/구현 노트 (데모 검증 2026-06-10 반영)
+
+### 환경 · 실행
+# torch + mediapipe 동시 사용 시, 단독 스크립트(python -c / .py 직접 실행)에서
+#   import 순서에 따라 segfault(exit 139) 발생 가능. pytest 환경에서는 정상.
+#   → ML 라이브러리(torch, mediapipe)는 모듈 상단에서 일관된 순서로 먼저 import.
+#     학습/추론 스크립트는 동일 import 순서를 유지하고, 검증은 pytest 경유 권장.
+# python-magic은 Windows에서 libmagic 미탑재 시 import 실패.
+#   → upload는 python-magic 우선, 실패 시 파일 시그니처(ftyp / RIFF-AVI) 폴백으로
+#     '확장자 + 내용' 2중 검증을 유지한다.
+# 백그라운드 스크립트 로그가 안 보이면 stdout 버퍼링 문제 → python -u 또는 flush=True.
+
+### 성능
+# MediaPipe Face Mesh는 1920x1080 프레임 CPU 처리 시 매우 느림(프레임당 비용 큼).
+#   → 얼굴 검출 입력 프레임은 적정 해상도(예: 가로 640px)로 축소 후 처리 권장.
+#   ★ 단, 학습·추론 전처리는 반드시 동일 기준(해상도 축소 포함)을 적용하고,
+#     최종 ROI 출력은 96x96 불변. (전처리 불일치 시 모델 성능 저하)
+
+### 데이터 (AI Hub)
+# 원본 영상 = 30fps · 1920x1080 · 약 5분(다문장). 그대로는 MAX_DURATION_SEC(180s) 초과.
+#   → 라벨 Sentence_info[].start_time/end_time 기준으로 문장 단위 클립을 잘라 투입.
+
+### Git 위생
+# logs/ · tmp/ · *.log 는 하위 경로 포함 전역 gitignore (루트 전용 패턴은
+#   backend/logs/ 등 하위 디렉토리를 놓침).
+# *.pt / *.pth / *.onnx 커밋 금지 (GitHub 100MB 제한).
