@@ -5,15 +5,15 @@ import React, { useState } from 'react';
 
 import ResultPage from './pages/ResultPage';
 import UploadPage from './pages/UploadPage';
+import WebcamPage from './pages/WebcamPage';
 
 /**
  * 애플리케이션 루트.
- * 추론 완료 시 결과(payload)를 받아 결과 화면으로 전환하고,
- * '새 파일' 클릭 시 업로드 화면으로 되돌린다.
+ * 업로드 ↔ 결과 ↔ 웹캠(/webcam) 화면을 상태 기반으로 전환한다.
  * @returns {JSX.Element}
  */
 export default function App() {
-  const [view, setView] = useState('upload'); // 'upload' | 'result'
+  const [view, setView] = useState('upload'); // 'upload' | 'result' | 'webcam'
   const [payload, setPayload] = useState(null); // { sessionId, fileName, results }
 
   const handleComplete = (result) => {
@@ -26,17 +26,25 @@ export default function App() {
     setView('upload');
   };
 
-  return (
-    <div className="min-h-screen bg-white text-gray-900">
-      {view === 'result' && payload ? (
-        <ResultPage
-          fileName={payload.fileName}
-          results={payload.results}
-          onNewFile={handleNewFile}
-        />
-      ) : (
-        <UploadPage onComplete={handleComplete} />
-      )}
-    </div>
-  );
+  let screen;
+  if (view === 'webcam') {
+    screen = <WebcamPage onBack={() => setView('upload')} />;
+  } else if (view === 'result' && payload) {
+    screen = (
+      <ResultPage
+        fileName={payload.fileName}
+        results={payload.results}
+        onNewFile={handleNewFile}
+      />
+    );
+  } else {
+    screen = (
+      <UploadPage
+        onComplete={handleComplete}
+        onWebcam={() => setView('webcam')}
+      />
+    );
+  }
+
+  return <div className="min-h-screen bg-white text-gray-900">{screen}</div>;
 }

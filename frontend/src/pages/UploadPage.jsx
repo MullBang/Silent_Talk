@@ -57,7 +57,7 @@ function ResultPoller({ sessionId, onProgress, onDone, onTimeout, onError }) {
  *   추론 완료 시 결과 화면으로 전환하기 위한 콜백 (App 라우팅에서 연결).
  * @returns {JSX.Element}
  */
-export default function UploadPage({ onComplete }) {
+export default function UploadPage({ onComplete, onWebcam }) {
   const [phase, setPhase] = useState('IDLE');
   const [file, setFile] = useState(null);
   const [agreed, setAgreed] = useState(false);
@@ -125,12 +125,11 @@ export default function UploadPage({ onComplete }) {
         <h1 className="text-xl font-bold text-gray-900">🎤 립리딩 텍스트 변환</h1>
         <button
           type="button"
-          disabled
-          aria-label="웹캠 모드 (준비 중)"
-          title="2차 목표 — 준비 중"
-          className="cursor-not-allowed rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-400"
+          onClick={onWebcam}
+          aria-label="웹캠 모드로 전환"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
         >
-          웹캠 모드 →
+          웹캠 모드로 전환 →
         </button>
       </header>
 
