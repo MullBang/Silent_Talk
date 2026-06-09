@@ -1,112 +1,143 @@
-# 립리딩 프로젝트 (Lip Reading) — Silent Talk
+# Silent Talk — 립리딩 기반 실시간 텍스트 변환 시스템
 
-영상 속 화자의 입 모양을 분석해 발화 내용을 텍스트로 복원하는 한국어 립리딩 시스템.
+영상·웹캠 속 화자의 입 모양을 분석해 발화 내용을 한국어 텍스트로 복원하는 립리딩 웹 서비스.
+소음·무음·보안 환경에서의 시각 기반 대체 입력(배리어프리)을 목표로 한다.
 
-> 모든 핵심 기준값과 규칙은 [`CLAUDE.md`](./CLAUDE.md)를 단일 진실 공급원으로 따른다.
->
-> 프로젝트 근간 문서(SSOT): [기획서 완성본](./docs/기획서_완성본.md) · [설계문서 완성본](./docs/설계문서_완성본.md)
-> — 기능/화면/DB 명세, 성능 목표, 보안 정책의 기준. 구현이 충돌하면 설계문서를 따른다.
+> 핵심 기준값/규칙은 [`CLAUDE.md`](./CLAUDE.md), 전체 명세는 근간 문서를 단일 진실 공급원으로 따른다:
+> [기획서 완성본](./docs/기획서_완성본.md) · [설계문서 완성본](./docs/설계문서_완성본.md) (충돌 시 설계문서 기준)
 
-**진행 현황:** 1단계(프로젝트 뼈대) ✅ · 2단계(전처리 파이프라인) ✅ · 3단계(모델/추론) 예정
-
-## 아키텍처
+## 프로젝트 개요
 
 ```
-영상 업로드 → 전처리(25fps 리샘플 → 3초 세그먼트 → MediaPipe ROI 96×96 정규화)
-           → 3D-CNN + LSTM + CTC 추론 → Beam Search + 자모 복원 → 결과
+[업로드 영상 | 웹캠]
+   → 전처리(25fps 타임스탬프 리샘플 → 3초 세그먼트 → MediaPipe 입술 ROI 96×96 정규화)
+   → 3D-CNN + BiLSTM + CTC 추론
+   → CTC Beam Search + 자모(python-jamo) 음절 복원
+   → [타임스탬프 결과 화면 | 실시간 자막]
 ```
 
-- **백엔드**: FastAPI. 추론은 비동기 Job으로 등록되며 결과는 폴링으로 조회한다
-  (`POST /api/infer` → `GET /api/result/{session_id}`).
-- **프론트엔드**: React + Vite. 1초 간격 폴링으로 진행률/결과를 표시한다.
+- **백엔드**: FastAPI. 업로드 추론은 비동기 Job(폴링), 웹캠은 WebSocket 스트리밍.
+- **프론트엔드**: React + Vite + Tailwind. 업로드(SCR-01)/결과(SCR-02)/웹캠(SCR-03) 화면.
+- **모델**: LipNet 구조 베이스라인(3D-CNN+BiLSTM+CTC), 자모 41클래스(자음19+모음21+blank).
 
-## 프로젝트 구조
+**진행 현황**: 1~5단계 구현 완료(전처리·서비스·API·모델/디코더·웹캠·평가). 백엔드 75개 테스트 통과.
+인식 텍스트는 **모델 가중치 학습 후** 실제 한국어가 출력된다(현재는 미학습 placeholder).
+
+## 실행 방법
+
+### 사전 준비
+```bash
+# 백엔드 (Python 3.10+)
+pip install -r requirements.txt
+
+# 프론트엔드 (Node 18+)
+cd frontend && npm install
+```
+
+### 백엔드 실행
+```bash
+cd backend
+uvicorn main:app --reload --port 8000
+# Swagger UI: http://127.0.0.1:8000/docs   ·   헬스체크: /health
+```
+
+### 프론트엔드 실행
+```bash
+cd frontend
+npm run dev
+# http://localhost:5173
+```
+
+> Windows에서 백엔드 헬스체크가 `localhost`로 안 되면 `127.0.0.1:8000`을 사용한다(uvicorn 기본 IPv4 바인딩).
+> 웹캠 모드는 `https` 또는 `localhost`(보안 컨텍스트)에서만 동작한다.
+
+## 모델 가중치 다운로드
+
+가중치 파일(`*.pt`)은 GitHub 100MB 제한으로 저장소에 커밋하지 않는다(`.gitignore` 등록).
+별도 스토리지에서 받아 `backend/models/weights/baseline.pt`에 배치한다.
+
+```bash
+bash scripts/download_weights.sh
+# 또는 수동으로 backend/models/weights/baseline.pt 에 가중치 배치
+```
+
+가중치가 없으면 미학습 모델로 폴백하여 파이프라인 구조는 동작하지만, 의미 있는 텍스트는 학습 후 생성된다.
+
+## 테스트 실행
+
+```bash
+# 백엔드 단위/통합 테스트 (75개)
+pytest backend/tests
+
+# 특정 모듈만
+pytest backend/tests/test_api.py -v
+
+# 프론트엔드 빌드 검증
+cd frontend && npm run build
+```
+
+### 성능 평가 (CER/WER)
+```bash
+python scripts/evaluate.py \
+    --test_set_id aihub_subset \
+    --model_version baseline_v1 \
+    --eval_unit word
+```
+- `test_set_id`는 `backend/config.py`의 `TEST_SETS`에 등록된 식별자만 허용(경로 직접 전달 금지).
+- 테스트셋 디렉토리는 `manifest.json`(`[{"video","text"}, ...]`)과 영상 파일로 구성.
+- 결과: `results/evaluation_log.csv`(eval_id, model_version, cer, wer, avg_latency_ms, detection_rate, …) + `results/eval_*.png` 그래프.
+
+## 폴더 구조
 
 ```
 backend/
-├── preprocessing/        # ✅ 전처리 파이프라인 (2단계 완료)
-│   ├── resampler.py      #   FPS 타임스탬프 리샘플링 + 길이 검증
-│   ├── segmenter.py      #   3초(75프레임) 세그먼트 분할 + last-frame 패딩
-│   ├── roi_extractor.py  #   MediaPipe ROI 크롭/정규화/모델 텐서 변환
-│   └── pipeline.py       #   위 3종을 연결하는 오케스트레이터
-├── models/               # ⏳ 3D-CNN + LSTM + CTC, CTC 디코더 (뼈대)
-├── api/                  # ⏳ upload / infer / evaluation 라우트 (뼈대)
-├── schemas/              #   Pydantic 요청/응답 스키마
-├── services/             # ⏳ Job 관리 / 파일 클리너 / WebSocket (뼈대)
-├── config.py             #   CLAUDE.md 기준값 전역 상수
-├── main.py               #   FastAPI 진입점
-└── tests/                # ✅ 전처리 단위 테스트 (22 passed)
-frontend/                 # ⏳ React + Vite UI (SCR-01 업로드 / SCR-02 결과)
-scripts/                  #   가중치 다운로드, 성능 평가
+├── main.py                  # FastAPI 진입점(CORS·라이프사이클·/ws/stream)
+├── config.py                # CLAUDE.md 기준값 전역 상수 (FPS/SEQ_LEN/ROI/제약/CORS/TEST_SETS)
+├── api/                     # REST 라우트
+│   ├── upload.py            #   POST /api/upload (MIME 2중 검증·크기·길이)
+│   ├── infer.py             #   POST /api/infer (비동기) · GET /api/result/{id}
+│   └── evaluation.py        #   POST /api/evaluation/run · GET /api/evaluation/status/{id}
+├── schemas/models.py        # Pydantic 요청/응답 스키마
+├── preprocessing/           # 전처리 파이프라인
+│   ├── resampler.py         #   타임스탬프 25fps 리샘플 + 길이 검증
+│   ├── segmenter.py         #   3초(75프레임) 분할 + last-frame 패딩
+│   ├── roi_extractor.py     #   MediaPipe ROI 크롭/정규화/모델 텐서
+│   └── pipeline.py          #   오케스트레이터
+├── models/                  # 모델/디코더
+│   ├── __init__.py          #   자모 어휘(GRAPHEME_VOCAB, 41클래스)
+│   ├── baseline.py          #   LipNetBaseline (3D-CNN+BiLSTM+CTC)
+│   └── decoder.py           #   CTC beam search + 자모 복원 + 신뢰도
+├── services/                # 서비스 계층
+│   ├── job_manager.py       #   비동기 Job 상태(메모리)
+│   ├── file_cleaner.py      #   APScheduler 임시 파일 정리
+│   └── ws_handler.py        #   WebSocket 실시간 스트리밍 핸들러
+└── tests/                   # pytest (75개)
+
+frontend/
+├── index.html · src/main.jsx · src/App.jsx   # 진입점·라우팅
+├── src/pages/               # UploadPage(SCR-01) · ResultPage(SCR-02) · WebcamPage(SCR-03)
+├── src/components/          # DropZone · ProgressBar · ResultList · ErrorModal
+├── src/hooks/usePolling.js  # 1초 폴링 훅
+├── src/api/client.js        # axios API 호출
+├── src/constants.js         # CLAUDE.md 값 미러(랜드마크·임계값)
+└── src/webcamUtils.js       # V-VAD/ROI 헬퍼
+
+scripts/
+├── download_weights.sh      # 가중치 다운로드
+└── evaluate.py              # 성능 평가(CER/WER·CSV·그래프)
+
+docs/                        # 근간 문서(기획서·설계문서 완성본)
 ```
-
-## 전처리 파이프라인 (2단계 완료)
-
-`run_preprocessing_pipeline(video_path)`가 아래 흐름으로 영상을 모델 입력 텐서로 변환한다.
-
-| 단계 | 모듈 / 함수 | 입력 → 출력 |
-|---|---|---|
-| ① 길이 검증 | `resampler.get_video_duration_sec` | `MAX_DURATION_SEC`(30s) 초과 시 `ValueError` |
-| ② 리샘플링 | `resampler.resample_to_fps` | 원본 → 25fps 프레임 (타임스탬프 nearest-neighbor) |
-| ③ 세그먼트 분할 | `segmenter.split_into_segments` | 프레임 → 3초(75프레임) 세그먼트, 부족분 last-frame 패딩 |
-| ④ ROI 추출 | `roi_extractor.extract_roi_from_segment` | 세그먼트 → `(75,96,96,3)` ROI, 연속 12프레임 미검출 시 `None` |
-| ⑤ 정규화·텐서화 | `roi_extractor.normalize_roi` → `to_model_tensor` | ROI → `(1,3,75,96,96)` `torch.Tensor` |
-
-**반환** `list[dict]`:
-- 처리 성공: `{tensor: Tensor(1,3,75,96,96), start_ms, end_ms, skipped: False}`
-- 검출 실패: `{tensor: None, start_ms, end_ms, skipped: True, text: '[검출 실패 구간]', confidence: None}`
-
-핵심 규칙 준수: `cap.set(CAP_PROP_FPS)` 미사용(타임스탬프 기반), zero-padding 금지(last-frame),
-여러 명 검출 시 bbox 면적 최대 1인만 추적, 전처리 `(B,75,96,96,3)` → 모델 입력 `(B,3,75,96,96)`.
 
 ## 핵심 불변 규칙 (CLAUDE.md 발췌)
-
-- FPS=25, SEQ_LEN=75, ROI 96×96 — **절대 변경 금지**.
-- `cap.set(CAP_PROP_FPS)` 금지 → 타임스탬프 기반 리샘플링.
-- zero-padding 금지 → `last-frame` 패딩.
-- 전처리 출력 `(B,75,96,96,3)` → 모델 입력 `permute((0,4,1,2,3))` → `(B,3,75,96,96)`.
-- CORS 와일드카드 `*` 금지, MIME 2중 검증, `*.pt/*.pth/*.onnx` 커밋 금지.
-
-## 개발 환경
-
-### 백엔드
-```bash
-pip install -r requirements.txt
-uvicorn backend.main:app --reload
-```
-
-### 프론트엔드
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### 테스트
-```bash
-pytest backend/tests
-```
-
-현재 전처리 단위 테스트 통과 현황:
-
-| 모듈 | 테스트 | 상태 |
-|---|---|---|
-| `resampler` | 5 | ✅ |
-| `segmenter` | 6 | ✅ |
-| `roi_extractor` | 11 | ✅ |
+- FPS=25, SEQ_LEN=75, ROI 96×96 — 절대 변경 금지. `cap.set(CAP_PROP_FPS)` 금지(타임스탬프 리샘플).
+- zero-padding 금지 → `last-frame` 패딩. 전처리 `(B,75,96,96,3)` → 모델 입력 `(B,3,75,96,96)`.
+- CORS 와일드카드 금지, MIME 2중 검증, `*.pt/*.pth/*.onnx` 커밋 금지.
+- confidence = 0~1 정규화값 / raw_score = CTC log-prob 원본.
 
 ## 로드맵
-
-- **1단계 — 프로젝트 뼈대** ✅
-  폴더 구조, 함수 시그니처, 타입 힌트, docstring, 의존성 파일.
-- **2단계 — 전처리 파이프라인** ✅
-  - 2-A: FPS 타임스탬프 리샘플러 + 길이 검증
-  - 2-B: 3초 세그먼트 분할 + last-frame 패딩
-  - 2-C: MediaPipe ROI 크롭 / ImageNet 정규화 / 모델 텐서 변환
-  - 2-D: 오케스트레이터(`pipeline.py`)로 통합, `(1,3,75,96,96)` 출력 확인
-- **3단계 — 모델 / 추론** ⏳
-  3D-CNN + LSTM + CTC 모델, CTC Beam Search + 자모 복원 디코더.
-- **4단계 — API / 비동기 Job** ⏳
-  업로드 · 추론 등록 · 결과 폴링 · 평가, 파일 클리너, WebSocket.
-- **5단계 — 프론트엔드** ⏳
-  업로드/결과 화면, 1초 폴링, 보안 컨텍스트 검사.
+- **1단계** 프로젝트 뼈대 ✅ · **2단계** 전처리 파이프라인 ✅
+- **3단계** FastAPI 백엔드(Job·파일정리·REST API) ✅
+- **4단계** React 프론트엔드(업로드/결과 화면, E2E) ✅
+- **5단계** 모델·디코더 + 웹캠 실시간 + 성능 평가 ✅
+- **이후** 모델 학습/가중치 확보 → 실제 인식 정확도(CER/WER) 개선, 개선 모델(3D-ResNet/Transformer) 실험

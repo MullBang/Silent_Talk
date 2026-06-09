@@ -8,6 +8,7 @@ torch>=2.0.0
 torchvision
 numpy
 python-jamo
+matplotlib
 apscheduler
 websockets
 pytest
