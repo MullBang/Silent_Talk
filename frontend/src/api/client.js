@@ -39,10 +39,11 @@ function getVideoDurationSec(file) {
  * 영상 파일을 업로드한다. (POST /api/upload)
  * 업로드 전 파일 크기/길이를 클라이언트에서 1차 검증한다.
  * @param {File} file
+ * @param {(percent: number) => void} [onProgress] - 업로드 진행률(0~100) 콜백.
  * @returns {Promise<{ session_id: string, file_name: string, duration_sec: number }>}
  * @throws {Error} 크기 초과 / 길이 초과 시
  */
-export async function uploadVideo(file) {
+export async function uploadVideo(file, onProgress) {
   // ① 크기 검증 (500MB)
   const sizeMb = file.size / 1024 / 1024;
   if (sizeMb > MAX_UPLOAD_SIZE_MB) {
@@ -65,6 +66,11 @@ export async function uploadVideo(file) {
   form.append('file', file);
   const { data } = await apiClient.post('/api/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (typeof onProgress === 'function' && e.total) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    },
   });
   return data;
 }
