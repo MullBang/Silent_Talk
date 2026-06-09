@@ -10,9 +10,10 @@ __pycache__/
 .venv/
 venv/
 
-# 임시/로그
-/tmp/uploads/
-/logs/
+# 임시/로그 (루트·하위 디렉토리 모두)
+tmp/
+logs/
+*.log
 
 # 프론트엔드
 node_modules/
