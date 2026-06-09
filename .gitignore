@@ -18,6 +18,9 @@ venv/
 node_modules/
 dist/
 
+# Claude Code 로컬 세션/설정
+.claude/
+
 # OS / 에디터
 .DS_Store
 Thumbs.db
