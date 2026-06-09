@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn[standard]
+python-multipart
+python-magic
+mediapipe
+opencv-python-headless
+torch>=2.0.0
+torchvision
+numpy
+python-jamo
+apscheduler
+websockets
+pytest
+httpx
+pydantic>=2.0

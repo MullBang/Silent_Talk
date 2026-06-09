@@ -1,0 +1,25 @@
+# 모델 가중치 (GitHub 100MB 제한 — CLAUDE.md §보안)
+*.pt
+*.pth
+*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# 임시/로그
+/tmp/uploads/
+/logs/
+
+# 프론트엔드
+node_modules/
+dist/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
