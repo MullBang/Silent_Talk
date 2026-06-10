@@ -74,8 +74,21 @@ python scripts/train.py --data data_cache/clips --epochs 150 \
 # → backend/models/weights/baseline.pt 저장 (best val CER)
 ```
 
-> 데이터 준비(MediaPipe)가 병목이다. 대량 준비는 상한을 늘려 백그라운드/야간 실행을 권장한다.
+> 데이터 준비(MediaPipe)가 병목이다. 대량 준비는 상한/오프셋을 늘려 백그라운드/야간 실행을 권장한다.
+> (`--offset N`으로 이미 처리한 앞 N개를 건너뛴다.)
 > 립리딩은 본래 대량 데이터가 필요하므로, 소규모로는 train loss는 내려가도 val CER은 높게 머문다.
+
+### 학습 모델 성능 테스트
+```bash
+# 검증셋(학습 제외분)으로 예측/정답/CER 출력
+python scripts/test_model.py --data data_cache/clips
+
+# 전체 또는 별도 준비한 테스트셋으로
+python scripts/test_model.py --data data_cache/clips --all
+```
+- 각 클립의 정답·예측·CER과 평균 CER을 출력한다(낮을수록 정확).
+- 웹 UI에서 직접 테스트하려면 백엔드+프론트를 띄우고 3분 이하 영상을 업로드한다
+  (`baseline.pt`가 있으면 업로드 추론도 실제 모델을 사용).
 
 - 라벨 텍스트는 자모(초성/중성/종성) 인덱스로 인코딩(41클래스 CTC).
 - CTC 제약상 입력 프레임 길이 T ≥ 라벨 길이여야 하며, 문장이 길면 충분한 프레임이 필요하다.

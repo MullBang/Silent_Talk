@@ -45,6 +45,7 @@ def main() -> None:
     p.add_argument("--label-tar", required=True, help="라벨 tar 경로(TL*.tar)")
     p.add_argument("--out", default="data_cache/clips", help="npz 출력 디렉토리")
     p.add_argument("--max-videos", type=int, default=15, help="처리 최대 영상 수")
+    p.add_argument("--offset", type=int, default=0, help="정렬 순서에서 건너뛸 앞 영상 수")
     p.add_argument("--max-sentences", type=int, default=6, help="영상당 최대 문장 수")
     p.add_argument("--scale", type=int, default=480, help="다운스케일 폭(px)")
     args = p.parse_args()
@@ -53,7 +54,7 @@ def main() -> None:
     if not videos:
         print(f"[오류] 영상이 없습니다: {args.source_root}")
         sys.exit(1)
-    videos = videos[: args.max_videos]
+    videos = videos[args.offset: args.offset + args.max_videos]
 
     print(f"[인덱스] 라벨 tar 스캔: {os.path.basename(args.label_tar)}")
     label_index = _build_label_index(args.label_tar)
