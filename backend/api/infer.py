@@ -18,7 +18,7 @@ _BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
 
-from config import TMP_UPLOAD_DIR  # noqa: E402
+from config import MODEL_WEIGHTS_PATH, TMP_UPLOAD_DIR  # noqa: E402
 from preprocessing.pipeline import run_preprocessing_pipeline  # noqa: E402
 from schemas.models import (  # noqa: E402
     InferRequest,
@@ -32,8 +32,43 @@ from services.file_cleaner import delete_upload_file  # noqa: E402
 router = APIRouter()
 
 _FAIL_TEXT = "[검출 실패 구간]"
-# 3단계에서는 모델 미구현 — 더미 추론 텍스트로 대체한다.
-_DUMMY_TEXT = "[모델 미구현 — 더미 출력]"
+_UNREC_TEXT = "[인식 불가]"
+# 가중치가 없을 때의 폴백 텍스트.
+_DUMMY_TEXT = "[모델 미학습 — 가중치 없음]"
+
+# 지연 로딩 모델 캐시
+_model = None
+_model_loaded = False
+
+
+def _get_model():
+    """학습된 가중치가 있으면 모델을 1회 로드한다 (없으면 None)."""
+    global _model, _model_loaded
+    if not _model_loaded:
+        _model_loaded = True
+        try:
+            from models.baseline import LipNetBaseline
+
+            if os.path.exists(MODEL_WEIGHTS_PATH):
+                _model = LipNetBaseline.load_from_checkpoint(MODEL_WEIGHTS_PATH)
+        except Exception:  # noqa: BLE001 - 로드 실패 시 더미 폴백
+            _model = None
+    return _model
+
+
+def _infer_segment(tensor) -> tuple[str, float | None]:
+    """세그먼트 텐서를 모델로 추론한다 (가중치 없으면 더미)."""
+    model = _get_model()
+    if model is None:
+        return _DUMMY_TEXT, None
+    import torch
+
+    from models.decoder import decode
+
+    with torch.no_grad():
+        log_probs = model(tensor)
+    text, confidence, _raw = decode(log_probs)
+    return (text or _UNREC_TEXT), confidence
 
 
 def _find_upload_file(session_id: str) -> str | None:
@@ -110,14 +145,13 @@ def _run_infer_job(session_id: str, file_path: str) -> None:
                     }
                 )
             else:
-                # TODO(3단계 모델): tensor → 모델 추론 → CTC 디코딩
-                text = _dummy_infer(seg["tensor"])
+                text, confidence = _infer_segment(seg["tensor"])
                 results.append(
                     {
                         "start_ms": seg["start_ms"],
                         "end_ms": seg["end_ms"],
                         "text": text,
-                        "confidence": None,
+                        "confidence": confidence,
                     }
                 )
             jm.update_progress(session_id, (i + 1) / total * 100.0)
@@ -128,18 +162,6 @@ def _run_infer_job(session_id: str, file_path: str) -> None:
     finally:
         # 추론 완료/실패와 무관하게 임시 파일 즉시 삭제 (개인정보 보호)
         delete_upload_file(file_path)
-
-
-def _dummy_infer(tensor) -> str:
-    """모델 미구현 단계의 더미 추론.
-
-    Args:
-        tensor: (1, 3, 75, 96, 96) 모델 입력 텐서.
-
-    Returns:
-        더미 텍스트 (3단계 모델 학습 후 실제 추론으로 대체).
-    """
-    return _DUMMY_TEXT
 
 
 @router.get("/result/{session_id}", response_model=ResultResponse)
