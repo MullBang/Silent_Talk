@@ -23,6 +23,12 @@ import numpy as np
 import torch
 from jamo import h2j
 
+# Windows 콘솔(cp949)에서도 한글이 깨지지 않도록 UTF-8 출력 강제
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:  # noqa: BLE001
+    pass
+
 _BACKEND = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 if _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
@@ -110,7 +116,7 @@ def main() -> None:
 
     avg = sum(cers) / len(cers)
     print(f"=== 평균 CER: {avg:.4f}  ({len(cers)}개) ===")
-    print(f"    (CER 0=완벽, 1=전부 오류 · 참고: 문자정확도 ≈ {max(0.0, 1 - avg) * 100:.1f}%)")
+    print(f"    (CER 0=완벽, 1=전부 오류 · 참고: 문자정확도 약 {max(0.0, 1 - avg) * 100:.1f}%)")
 
 
 if __name__ == "__main__":
