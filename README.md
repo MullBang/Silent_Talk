@@ -51,6 +51,28 @@ npm run dev
 > Windows에서 백엔드 헬스체크가 `localhost`로 안 되면 `127.0.0.1:8000`을 사용한다(uvicorn 기본 IPv4 바인딩).
 > 웹캠 모드는 `https` 또는 `localhost`(보안 컨텍스트)에서만 동작한다.
 
+## 모델 학습
+
+AI Hub 「립리딩(입모양) 음성인식 데이터」로 베이스라인을 학습한다. GPU 권장(설계 RTX 3060+).
+CUDA 빌드 torch 필요: `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124`.
+
+```bash
+# ① 데이터 준비: 영상+라벨(Sentence_info) → 문장별 ROI/자모 라벨 npz 캐시
+python scripts/prepare_data.py \
+    --video "<원천데이터>/lip_..._001.mp4" \
+    --label "<라벨링데이터>/lip_..._001.json" \
+    --out data_cache/clips
+
+# ② 학습: 캐시 npz로 3D-CNN+BiLSTM+CTC 학습 (GPU 자동 감지)
+python scripts/train.py --data data_cache/clips --epochs 50 --batch-size 2 --lr 1e-4
+# → backend/models/weights/baseline.pt 저장
+```
+
+- 라벨 텍스트는 자모(초성/중성/종성) 인덱스로 인코딩(41클래스 CTC).
+- CTC 제약상 입력 프레임 길이 T ≥ 라벨 길이여야 하며, 문장이 길면 충분한 프레임이 필요하다.
+- `prepare_data.py`는 mediapipe만, `train.py`는 torch만 사용해 네이티브 충돌(segfault)을 피한다.
+- 학습된 `baseline.pt`가 있으면 추론(API/웹캠/평가)이 자동으로 이를 로드한다.
+
 ## 모델 가중치 다운로드
 
 가중치 파일(`*.pt`)은 GitHub 100MB 제한으로 저장소에 커밋하지 않는다(`.gitignore` 등록).

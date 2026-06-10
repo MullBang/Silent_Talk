@@ -18,6 +18,9 @@ logs/
 # 평가 산출물 (CSV/그래프는 디스크에만 보존, 저장소 제외)
 results/
 
+# 학습 데이터 캐시 (영상 파생 ROI/라벨 npz)
+data_cache/
+
 # 프론트엔드
 node_modules/
 dist/
