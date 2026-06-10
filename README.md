@@ -63,10 +63,19 @@ python scripts/prepare_data.py \
     --label "<라벨링데이터>/lip_..._001.json" \
     --out data_cache/clips
 
-# ② 학습: 캐시 npz로 3D-CNN+BiLSTM+CTC 학습 (GPU 자동 감지)
-python scripts/train.py --data data_cache/clips --epochs 50 --batch-size 2 --lr 1e-4
-# → backend/models/weights/baseline.pt 저장
+# ①-b 대량 준비: 여러 영상을 라벨 tar와 매칭해 일괄 처리 (규모는 상한으로 조절)
+python scripts/prepare_batch.py \
+    --source-root "<원천데이터>/TS1/TS1" --label-tar "<라벨링데이터>/TL1.tar" \
+    --out data_cache/clips --max-videos 15 --max-sentences 6 --scale 480
+
+# ② 학습: 캐시 npz로 3D-CNN+BiLSTM+CTC 학습 (GPU 자동, train/val 분리·val CER·best 저장)
+python scripts/train.py --data data_cache/clips --epochs 150 \
+    --batch-size 2 --lr 1e-4 --val-split 0.15 --eval-every 10
+# → backend/models/weights/baseline.pt 저장 (best val CER)
 ```
+
+> 데이터 준비(MediaPipe)가 병목이다. 대량 준비는 상한을 늘려 백그라운드/야간 실행을 권장한다.
+> 립리딩은 본래 대량 데이터가 필요하므로, 소규모로는 train loss는 내려가도 val CER은 높게 머문다.
 
 - 라벨 텍스트는 자모(초성/중성/종성) 인덱스로 인코딩(41클래스 CTC).
 - CTC 제약상 입력 프레임 길이 T ≥ 라벨 길이여야 하며, 문장이 길면 충분한 프레임이 필요하다.
