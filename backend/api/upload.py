@@ -7,6 +7,7 @@ POST /api/upload — 영상 업로드, python-magic MIME 2중 검증(확장자 +
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import uuid
 
@@ -30,12 +31,41 @@ _ALLOWED_EXT = {".mp4", ".avi", ".mov"}
 
 # python-magic을 우선 사용하되, libmagic 네이티브 라이브러리 부재(주로 Windows)
 # 시에는 파일 시그니처(매직바이트) 기반 폴백으로 동일한 2중 검증을 수행한다.
-try:
-    import magic as _magic
+#
+# 주의: libmagic DLL 부재 시 `import magic`이 native access violation을 일으키며,
+# cv2(OpenCV)가 이미 로드된 서버 프로세스에서는 이 크래시가 try/except로 잡히지
+# 않는 하드 segfault로 번져 프로세스를 죽인다. 따라서 본 프로세스에서 바로
+# import하지 않고, 격리된 서브프로세스에서 import 가능 여부를 먼저 검증한 뒤
+# 안전이 확인된 경우에만 in-process로 import한다.
+def _probe_magic_safe() -> bool:
+    """별도 프로세스에서 python-magic import 가능 여부를 안전하게 검증한다.
 
-    _magic.from_buffer(b"\x00" * 16, mime=True)  # 실제 로드 가능 여부 확인
-    _MAGIC_AVAILABLE = True
-except Exception:  # noqa: BLE001 - libmagic 미설치/로드 실패 모두 폴백
+    Returns:
+        서브프로세스에서 magic import + from_buffer 호출이 정상 종료하면 True.
+        libmagic 부재로 인한 비정상 종료(OSError/segfault)면 False.
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import magic; magic.from_buffer(b'\\x00' * 16, mime=True)"],
+            capture_output=True,
+            timeout=15,
+        )
+        return result.returncode == 0
+    except Exception:  # noqa: BLE001 - 프로브 실패는 곧 폴백
+        return False
+
+
+if _probe_magic_safe():
+    try:
+        import magic as _magic
+
+        _magic.from_buffer(b"\x00" * 16, mime=True)
+        _MAGIC_AVAILABLE = True
+    except Exception:  # noqa: BLE001 - 프로브 통과 후에도 방어적 폴백
+        _magic = None
+        _MAGIC_AVAILABLE = False
+else:
     _magic = None
     _MAGIC_AVAILABLE = False
 
