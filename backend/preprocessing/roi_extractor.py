@@ -119,6 +119,36 @@ def _crop_roi(frame: np.ndarray, face_landmarks) -> np.ndarray:
     return cv2.resize(crop, ROI_SIZE, interpolation=cv2.INTER_LINEAR)
 
 
+def crop_roi_from_box(
+    frame: np.ndarray,
+    box_xyxy,
+    margin: float = ROI_MARGIN,
+    size: tuple[int, int] = ROI_SIZE,
+) -> np.ndarray:
+    """이미 계산된 입술 바운딩 박스로 ROI를 크롭·리사이즈한다.
+
+    AI Hub 라벨의 프레임별 Lip_bounding_box처럼 사전 제공된 입술 박스를 쓸 때
+    사용한다. MediaPipe 경로(_crop_roi)와 동일하게 _compute_bbox_with_margin으로
+    상하좌우 margin을 적용하고 INTER_LINEAR로 리사이즈하여, 학습/추론 ROI 정의를
+    일치시킨다.
+
+    Args:
+        frame: 단일 프레임 (H, W, 3). MediaPipe 경로와 동일하게 RGB를 가정한다.
+        box_xyxy: 입술 박스 [xtl, ytl, xbr, ybr] (원본 픽셀 좌표).
+        margin: 상하좌우 margin 비율 (기본 ROI_MARGIN=0.20).
+        size: 출력 ROI 크기 (기본 ROI_SIZE=96×96).
+
+    Returns:
+        (size[1], size[0], 3) uint8 ROI.
+    """
+    h, w = frame.shape[:2]
+    xtl, ytl, xbr, ybr = box_xyxy
+    corners = np.array([[xtl, ytl], [xbr, ybr]], dtype=np.float32)
+    x1, y1, x2, y2 = _compute_bbox_with_margin(corners, w, h, margin)
+    crop = frame[y1:y2, x1:x2]
+    return cv2.resize(crop, size, interpolation=cv2.INTER_LINEAR)
+
+
 def extract_roi_from_segment(frames: np.ndarray) -> np.ndarray | None:
     """세그먼트 프레임 시퀀스에서 입 ROI 시퀀스를 추출한다.
 

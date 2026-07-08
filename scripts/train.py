@@ -215,6 +215,8 @@ def train(args) -> None:
             loss = ctc(log_probs, targets, in_lens, tgt_lens)
             opt.zero_grad()
             loss.backward()
+            if args.grad_clip > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
             opt.step()
             total += loss.item()
         avg = total / len(loader)
@@ -253,6 +255,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eval-every", type=int, default=10, help="검증 주기(epoch)")
     p.add_argument("--max-frames", type=int, default=0,
                    help="학습에 쓸 클립 최대 프레임 상한(0=무제한). 초과 클립 제외")
+    p.add_argument("--grad-clip", type=float, default=1.0,
+                   help="gradient clipping max-norm(0=비활성). CTC 학습 안정화")
     return p.parse_args()
 
 

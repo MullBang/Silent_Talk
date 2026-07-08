@@ -29,6 +29,7 @@ from preprocessing.roi_extractor import (  # noqa: E402
     MAX_CONSECUTIVE_MISS,
     _compute_bbox_with_margin,
     _fill_missing_rois,
+    crop_roi_from_box,
     extract_roi_from_segment,
     normalize_roi,
     to_model_tensor,
@@ -45,6 +46,21 @@ def test_bbox_margin_applied() -> None:
     assert y1 == 36
     assert x2 == 64  # 60 + 4
     assert y2 == 64
+
+
+def test_crop_roi_from_box_shape_and_margin() -> None:
+    """라벨 입술 박스 크롭이 96×96 uint8을 반환하고 MediaPipe와 동일한 margin
+    규약(_compute_bbox_with_margin)을 쓰는지 검증한다."""
+    frame = np.zeros((200, 200, 3), dtype=np.uint8)
+    frame[40:60, 40:60] = 255  # 입술 영역 표식
+    roi = crop_roi_from_box(frame, [40, 40, 60, 60])
+
+    assert roi.shape == (ROI_SIZE[1], ROI_SIZE[0], 3)
+    assert roi.dtype == np.uint8
+    # box 4개 코너로 계산한 margin bbox가 _compute_bbox_with_margin과 일치
+    corners = np.array([[40, 40], [60, 60]], dtype=np.float32)
+    x1, y1, x2, y2 = _compute_bbox_with_margin(corners, 200, 200)
+    assert (x1, y1, x2, y2) == (36, 36, 64, 64)
 
 
 def test_bbox_clamped_to_image_bounds() -> None:

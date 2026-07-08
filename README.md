@@ -65,9 +65,10 @@ python scripts/prepare_data.py \
 
 # ①-b 대량 준비: 여러 영상을 라벨 tar와 매칭해 일괄 처리 (규모는 상한으로 조절)
 #     --max-sentences 기본값 None = 영상당 전체 51문장(긴 문장 포함)을 학습에 사용
+#     --roi bbox = 라벨의 Lip_bounding_box 좌표로 ROI 추출(MediaPipe 미사용, ~2.4배 빠름)
 python scripts/prepare_batch.py \
     --source-root "<원천데이터>/TS1/TS1" --label-tar "<라벨링데이터>/TL1.tar" \
-    --out data_cache/clips --max-videos 15 --scale 480
+    --out data_cache/clips --max-videos 15 --scale 480 --roi bbox
 #     짧게 스모크 테스트만 하려면 --max-sentences 6 처럼 상한을 준다.
 #     메모리가 빠듯하면 --max-frames 250 (10초) 등으로 초과 클립을 스킵한다.
 
@@ -88,7 +89,17 @@ python scripts/train.py --data data_cache/clips --epochs 150 \
 학습한다. `SEQ_LEN=75`는 명목 기준값일 뿐 하드코딩 가정이 아니다.
 - 준비 단계에서 CTC 정렬 최소 길이(라벨 길이 + 인접 중복 자모 수)를 만족하지 못하는
   클립은 자동 스킵한다.
-- 학습 단계는 길이 버킷 배치 샘플러로 last-frame 패딩 낭비를 최소화한다.
+- 학습 단계는 길이 버킷 배치 샘플러로 last-frame 패딩 낭비를 최소화하고, gradient
+  clipping(기본 max-norm 1.0)으로 CTC 학습을 안정화한다.
+
+**ROI 추출 방식(`--roi`)**: 라벨 JSON에는 프레임별 입술 좌표(`Bounding_box_info.
+Lip_bounding_box`)가 원본 30fps 기준으로 들어 있다. `--roi bbox`는 이 좌표로 ROI를
+잘라 MediaPipe를 생략한다(약 2.4배 빠르고 미검출 없음).
+- AI Hub 영상은 세로로 촬영·라벨링됐으나 파일은 가로(1920×1080)로 저장되어 라벨
+  좌표계와 90° 어긋난다. bbox 경로는 이를 자동 감지해 프레임을 반시계 90° 회전 후
+  라벨 좌표로 크롭하므로, 옆으로 누운 얼굴에서도 정확한 입술 ROI를 얻는다.
+- margin/리사이즈 규약은 MediaPipe 경로와 동일(`crop_roi_from_box`, 입술 bbox +
+  20% margin → 96×96)하여 ROI 정의를 일치시킨다.
 
 ### 학습 모델 성능 테스트
 ```bash

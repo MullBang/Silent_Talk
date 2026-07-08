@@ -51,6 +51,8 @@ def main() -> None:
     p.add_argument("--scale", type=int, default=480, help="다운스케일 폭(px)")
     p.add_argument("--max-frames", type=int, default=0,
                    help="클립 최대 프레임 상한(0=무제한). 초과 클립은 스킵")
+    p.add_argument("--roi", choices=["mediapipe", "bbox", "auto"], default="mediapipe",
+                   help="ROI 추출: mediapipe(기본) | bbox(라벨 입술좌표, 빠름) | auto")
     args = p.parse_args()
 
     videos = sorted(glob.glob(os.path.join(args.source_root, "**", "*.mp4"), recursive=True))
@@ -82,7 +84,7 @@ def main() -> None:
                 n = prepare_video(
                     video, tmp_json, args.out,
                     max_sentences=args.max_sentences, scale_w=args.scale,
-                    max_frames=args.max_frames,
+                    max_frames=args.max_frames, roi_mode=args.roi,
                 )
                 total_clips += n
                 processed += 1
