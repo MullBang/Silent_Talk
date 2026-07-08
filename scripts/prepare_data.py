@@ -56,6 +56,25 @@ def encode_text(text: str) -> list[int]:
     return indices
 
 
+def ctc_min_input_len(label_idx: list[int]) -> int:
+    """CTC가 해당 라벨을 정렬 가능하게 하는 최소 입력 길이(T)를 계산한다.
+
+    CTC는 인접한 동일 라벨 사이에 blank가 반드시 있어야 하므로, 필요한 최소
+    타임스텝은 len(label) + (인접 중복 라벨 쌍의 수)이다. 단순 T>=L 검사보다
+    엄밀하여, 긴 문장에서 조용히 그래디언트가 0이 되는 표본을 걸러낸다.
+
+    Args:
+        label_idx: 자모 인덱스 시퀀스.
+
+    Returns:
+        정렬 가능 최소 입력 길이.
+    """
+    if not label_idx:
+        return 0
+    repeats = sum(1 for i in range(1, len(label_idx)) if label_idx[i] == label_idx[i - 1])
+    return len(label_idx) + repeats
+
+
 def _cut_sentence_clip(video_path: str, start_sec: float, end_sec: float,
                        dst: str, scale_w: int) -> bool:
     """영상에서 [start,end] 구간을 잘라 scale_w로 축소해 임시 mp4로 저장한다."""
@@ -85,15 +104,18 @@ def _cut_sentence_clip(video_path: str, start_sec: float, end_sec: float,
 
 
 def prepare_video(video_path: str, label_path: str, out_dir: str,
-                  max_sentences: int | None = None, scale_w: int = 640) -> int:
+                  max_sentences: int | None = None, scale_w: int = 640,
+                  max_frames: int = 0) -> int:
     """단일 영상+라벨을 문장 단위 npz로 변환한다.
 
     Args:
         video_path: 원본 영상 경로.
         label_path: 라벨 JSON 경로(Sentence_info 포함).
         out_dir: npz 저장 디렉토리.
-        max_sentences: 처리할 최대 문장 수(None=전체).
+        max_sentences: 처리할 최대 문장 수(None=전체 문장, 긴 문장 포함).
         scale_w: 전처리 가속을 위한 다운스케일 폭(px).
+        max_frames: 클립 최대 프레임 수 상한(0=무제한). 초과 클립은 학습 시
+            메모리 스파이크를 유발하므로 스킵한다(25fps 리샘플 후 기준).
 
     Returns:
         저장된 문장 클립 수.
@@ -130,9 +152,15 @@ def prepare_video(video_path: str, label_path: str, out_dir: str,
             if roi is None:
                 print(f"  [skip] id={s['ID']} 얼굴 미검출")
                 continue
-            # CTC 제약: 입력 길이(T) >= 라벨 길이
-            if roi.shape[0] < len(label_idx):
-                print(f"  [skip] id={s['ID']} T({roi.shape[0]}) < label({len(label_idx)})")
+            # 메모리 보호: 과도하게 긴 클립은 스킵(0=무제한)
+            if max_frames and roi.shape[0] > max_frames:
+                print(f"  [skip] id={s['ID']} T({roi.shape[0]}) > max_frames({max_frames})")
+                continue
+            # CTC 제약: 입력 길이(T) >= 라벨 정렬 최소 길이(인접 중복 자모 고려)
+            min_t = ctc_min_input_len(label_idx)
+            if roi.shape[0] < min_t:
+                print(f"  [skip] id={s['ID']} T({roi.shape[0]}) < CTC_min({min_t}) "
+                      f"[label={len(label_idx)}]")
                 continue
             out = os.path.join(out_dir, f"{base}_{s['ID']:03d}.npz")
             np.savez_compressed(
@@ -158,15 +186,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--video", required=True, help="원본 영상 경로")
     p.add_argument("--label", required=True, help="라벨 JSON 경로")
     p.add_argument("--out", default="data_cache/clips", help="npz 출력 디렉토리")
-    p.add_argument("--max-sentences", type=int, default=None, help="최대 문장 수")
+    p.add_argument("--max-sentences", type=int, default=None,
+                   help="최대 문장 수(기본 None=전체 문장, 긴 문장 포함)")
     p.add_argument("--scale", type=int, default=640, help="다운스케일 폭(px)")
+    p.add_argument("--max-frames", type=int, default=0,
+                   help="클립 최대 프레임 상한(0=무제한). 초과 클립은 스킵")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     print(f"[준비] {os.path.basename(args.video)}")
-    n = prepare_video(args.video, args.label, args.out, args.max_sentences, args.scale)
+    n = prepare_video(args.video, args.label, args.out, args.max_sentences,
+                      args.scale, args.max_frames)
     print(f"[완료] {n}개 문장 클립 저장 → {args.out}")
 
 

@@ -46,8 +46,11 @@ def main() -> None:
     p.add_argument("--out", default="data_cache/clips", help="npz 출력 디렉토리")
     p.add_argument("--max-videos", type=int, default=15, help="처리 최대 영상 수")
     p.add_argument("--offset", type=int, default=0, help="정렬 순서에서 건너뛸 앞 영상 수")
-    p.add_argument("--max-sentences", type=int, default=6, help="영상당 최대 문장 수")
+    p.add_argument("--max-sentences", type=int, default=None,
+                   help="영상당 최대 문장 수(기본 None=전체 51문장, 긴 문장 포함)")
     p.add_argument("--scale", type=int, default=480, help="다운스케일 폭(px)")
+    p.add_argument("--max-frames", type=int, default=0,
+                   help="클립 최대 프레임 상한(0=무제한). 초과 클립은 스킵")
     args = p.parse_args()
 
     videos = sorted(glob.glob(os.path.join(args.source_root, "**", "*.mp4"), recursive=True))
@@ -79,6 +82,7 @@ def main() -> None:
                 n = prepare_video(
                     video, tmp_json, args.out,
                     max_sentences=args.max_sentences, scale_w=args.scale,
+                    max_frames=args.max_frames,
                 )
                 total_clips += n
                 processed += 1

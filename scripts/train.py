@@ -16,13 +16,14 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import random
 import sys
 
 import numpy as np
 import torch
 import torch.nn as nn
 from jamo import h2j
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 # backend 루트 경로 추가
 _BACKEND = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
@@ -67,6 +68,22 @@ def _cer(reference: str, hypothesis: str) -> float:
     return _levenshtein(ref, hyp) / len(ref)
 
 
+def clip_length(path: str) -> int:
+    """npz 클립의 프레임 수(T)를 반환한다.
+
+    Args:
+        path: 문장 클립 .npz 경로.
+
+    Returns:
+        프레임 수 T. 읽기 실패 시 0.
+    """
+    try:
+        with np.load(path, allow_pickle=True) as d:
+            return int(d["frames"].shape[0])
+    except Exception:  # noqa: BLE001 - 손상 파일은 길이 0으로 제외 대상 표시
+        return 0
+
+
 class ClipDataset(Dataset):
     """문장별 .npz(frames, label, text) 데이터셋."""
 
@@ -79,6 +96,34 @@ class ClipDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         d = np.load(self.files[idx], allow_pickle=True)
         return {"frames": d["frames"], "label": d["label"], "text": str(d["text"])}
+
+
+class LengthBucketBatchSampler(Sampler):
+    """길이가 비슷한 클립끼리 묶는 배치 샘플러.
+
+    가변 길이(짧은 42프레임 ~ 긴 294프레임) 클립을 무작위로 섞어 배치화하면,
+    collate의 last-frame 패딩이 짧은 클립을 배치 내 최대 길이까지 늘려 계산·
+    메모리를 크게 낭비한다. 길이순으로 정렬해 인접 클립끼리 배치를 구성하면
+    패딩량이 최소화되어 긴 문장 학습이 안정적이다. 배치 '순서'는 매 epoch
+    섞어 학습 편향을 막는다.
+    """
+
+    def __init__(self, lengths: list[int], batch_size: int, shuffle: bool = True) -> None:
+        self._order = sorted(range(len(lengths)), key=lambda i: lengths[i])
+        self._batches = [
+            self._order[i:i + batch_size]
+            for i in range(0, len(self._order), batch_size)
+        ]
+        self._shuffle = shuffle
+
+    def __iter__(self):
+        batches = list(self._batches)
+        if self._shuffle:
+            random.shuffle(batches)
+        yield from batches
+
+    def __len__(self) -> int:
+        return len(self._batches)
 
 
 def collate(batch: list[dict]):
@@ -126,6 +171,16 @@ def train(args) -> None:
     if not files:
         raise FileNotFoundError(f"학습 데이터(.npz)가 없습니다: {args.data}")
 
+    # 메모리 보호: 과도하게 긴 클립 제외(0=무제한)
+    if args.max_frames:
+        kept = [f for f in files if 0 < clip_length(f) <= args.max_frames]
+        skipped = len(files) - len(kept)
+        if skipped:
+            print(f"[필터] max_frames={args.max_frames} 초과 {skipped}개 클립 제외")
+        files = kept
+        if not files:
+            raise FileNotFoundError(f"max_frames={args.max_frames} 조건을 만족하는 클립이 없습니다.")
+
     # train/val 분리 (마지막 비율을 val로)
     n_val = int(len(files) * args.val_split)
     val_files = files[len(files) - n_val:] if n_val > 0 else []
@@ -133,9 +188,17 @@ def train(args) -> None:
     print(f"[데이터] 총 {len(files)} (train {len(train_files)} / val {len(val_files)}) "
           f"· device={device} · batch={args.batch_size}")
 
+    # 길이 버킷 배치 샘플러: 비슷한 길이끼리 묶어 패딩·메모리 낭비 최소화
+    train_lengths = [clip_length(f) for f in train_files]
+    train_ds = ClipDataset(train_files)
     loader = DataLoader(
-        ClipDataset(train_files), batch_size=args.batch_size, shuffle=True, collate_fn=collate
+        train_ds,
+        batch_sampler=LengthBucketBatchSampler(train_lengths, args.batch_size, shuffle=True),
+        collate_fn=collate,
     )
+    if train_lengths:
+        print(f"[길이] train T 범위 {min(train_lengths)}~{max(train_lengths)} "
+              f"(평균 {sum(train_lengths) // len(train_lengths)})")
 
     model = LipNetBaseline().to(device)
     ctc = nn.CTCLoss(blank=0, zero_infinity=True)
@@ -188,6 +251,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default=None, help="cuda | cpu (기본: 자동)")
     p.add_argument("--val-split", type=float, default=0.15, help="검증셋 비율")
     p.add_argument("--eval-every", type=int, default=10, help="검증 주기(epoch)")
+    p.add_argument("--max-frames", type=int, default=0,
+                   help="학습에 쓸 클립 최대 프레임 상한(0=무제한). 초과 클립 제외")
     return p.parse_args()
 
 
