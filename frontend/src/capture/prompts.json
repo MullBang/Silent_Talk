@@ -1,0 +1,40 @@
+{
+  "version": "pilot-prompts-v1",
+  "created": "2026-10-20",
+  "note": "지정 20문장: A01~A10은 AI Hub 학습 화자(8명) 대본에서 1.9~2.7초 길이로 고른 문장(OLKAVS가 학습했을 가능성 있음), N01~N10은 비슷한 길이의 새 문장. 두 묶음을 나눠 보고한다.",
+  "fixed": [
+    { "id": "A01", "text": "선생님 차는 무슨 차에요", "source": "lip_J_1_F_03_C297_A_002_010", "seconds": 1.89 },
+    { "id": "A02", "text": "나 직장에서 말 상대가 없어", "source": "lip_J_1_F_02_C004_A_005_046", "seconds": 1.96 },
+    { "id": "A03", "text": "오늘 아침은 기분도 마음도 좋아", "source": "lip_J_1_F_02_C032_A_002_002", "seconds": 2.03 },
+    { "id": "A04", "text": "버스를 탔는데 자리가 없었어", "source": "lip_J_1_F_03_C293_A_008_025", "seconds": 2.19 },
+    { "id": "A05", "text": "코로나 때문에 취업이 힘들어", "source": "lip_J_1_F_02_C002_A_012_005", "seconds": 2.22 },
+    { "id": "A06", "text": "지금 버스 타면 지각하지 않을까", "source": "lip_J_1_F_03_C297_A_002_013", "seconds": 2.22 },
+    { "id": "A07", "text": "기차 타고 멀리 떠나보고 싶어", "source": "lip_J_1_F_03_C312_A_003_049", "seconds": 2.26 },
+    { "id": "A08", "text": "오늘 반가운 소식을 들어서 기분이 좋아", "source": "lip_J_1_F_02_C004_A_004_038", "seconds": 2.38 },
+    { "id": "A09", "text": "택시가 아빠 차보다 편한 것 같아", "source": "lip_J_1_F_03_C312_A_003_048", "seconds": 2.47 },
+    { "id": "A10", "text": "어제 친구의 전화를 받고 걱정이 생겼어", "source": "lip_J_1_F_02_C032_A_004_007", "seconds": 2.68 },
+    { "id": "N01", "text": "오늘 점심은 뭐 먹을까", "source": "new", "seconds": null },
+    { "id": "N02", "text": "내일 아침에 일찍 일어나야 해", "source": "new", "seconds": null },
+    { "id": "N03", "text": "이번 주말에 영화 보러 갈래", "source": "new", "seconds": null },
+    { "id": "N04", "text": "날씨가 추우니까 옷 따뜻하게 입어", "source": "new", "seconds": null },
+    { "id": "N05", "text": "회의가 세 시로 바뀌었어", "source": "new", "seconds": null },
+    { "id": "N06", "text": "우유랑 계란 좀 사다 줄래", "source": "new", "seconds": null },
+    { "id": "N07", "text": "도서관에서 책을 빌렸어", "source": "new", "seconds": null },
+    { "id": "N08", "text": "지금 출발하면 늦지 않을 거야", "source": "new", "seconds": null },
+    { "id": "N09", "text": "어제 밤에 잠을 잘 못 잤어", "source": "new", "seconds": null },
+    { "id": "N10", "text": "커피 한 잔 마시고 시작하자", "source": "new", "seconds": null }
+  ],
+  "free": [
+    { "id": "F01", "text": "자유 문장 1: 아무 말이나 짧게 한 문장 (3초 안에). 말한 내용을 기록지에 적어 주세요." },
+    { "id": "F02", "text": "자유 문장 2: 오늘 한 일을 한 문장으로" },
+    { "id": "F03", "text": "자유 문장 3: 좋아하는 음식을 한 문장으로" },
+    { "id": "F04", "text": "자유 문장 4: 내일 계획을 한 문장으로" },
+    { "id": "F05", "text": "자유 문장 5: 지금 기분을 한 문장으로" },
+    { "id": "F06", "text": "자유 문장 6: 자주 가는 곳을 한 문장으로" },
+    { "id": "F07", "text": "자유 문장 7: 최근에 본 영상을 한 문장으로" },
+    { "id": "F08", "text": "자유 문장 8: 날씨에 대해 한 문장으로" },
+    { "id": "F09", "text": "자유 문장 9: 친구에게 할 말을 한 문장으로" },
+    { "id": "F10", "text": "자유 문장 10: 아무 말이나 짧게 한 문장" }
+  ],
+  "nonspeech": 10
+}

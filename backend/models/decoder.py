@@ -1,6 +1,6 @@
 """CTC 디코더: Prefix Beam Search + 자모음 → 음절 복원.
 
-모델의 CTC log-prob 출력을 prefix beam search로 디코딩하고, python-jamo로
+모델의 CTC log-prob 출력을 prefix beam search로 디코딩하고, 위치별 Unicode 자모로
 자모(초성/중성/종성)를 완성형 한글 음절로 복원한다. confidence(0~1)와
 raw_score(CTC log-prob 원본)를 분리 반환한다.
 """
@@ -10,15 +10,10 @@ from __future__ import annotations
 from collections import defaultdict
 
 import numpy as np
-from jamo import j2h
 
-from . import (
-    BLANK_IDX,
-    IDX_TO_GRAPHEME,
-    VALID_TAILS,
-    is_consonant,
-    is_vowel,
-)
+from . import BLANK_IDX, IDX_TO_GRAPHEME, NUM_CLASSES
+from .tokenizer import TokenizerMismatchError, compose_jamos
+
 
 _NEG_INF = -1e30
 
@@ -36,46 +31,6 @@ def _to_numpy(log_probs) -> np.ndarray:
     return arr
 
 
-def compose_jamos(graphemes: list[str]) -> str:
-    """자모 시퀀스를 완성형 한글 문자열로 복원한다.
-
-    초성(자음) + 중성(모음) [+ 종성(자음)] 패턴으로 그리디 결합한다.
-    - 자음 뒤 자음이 오면, 다음이 모음이면 그 자음은 다음 음절 초성(종성 아님).
-    - 종성으로 불가능한 쌍자음(ㄸ/ㅃ/ㅉ)은 종성으로 쓰지 않는다.
-
-    Args:
-        graphemes: 디코딩된 자모 문자 리스트.
-
-    Returns:
-        복원된 한글 텍스트 (결합 불가 자모는 제외).
-    """
-    out: list[str] = []
-    i = 0
-    n = len(graphemes)
-    while i < n:
-        lead = graphemes[i]
-        # 초성(자음) + 중성(모음) 필요
-        if is_consonant(lead) and i + 1 < n and is_vowel(graphemes[i + 1]):
-            vowel = graphemes[i + 1]
-            i += 2
-            tail = ""
-            # 종성 후보: 다음 자음이 (끝이거나 그 다음이 자음일 때) 종성
-            if i < n and is_consonant(graphemes[i]) and graphemes[i] in VALID_TAILS:
-                is_last = i + 1 >= n
-                next_is_consonant = (not is_last) and is_consonant(graphemes[i + 1])
-                if is_last or next_is_consonant:
-                    tail = graphemes[i]
-                    i += 1
-            try:
-                out.append(j2h(lead, vowel, tail) if tail else j2h(lead, vowel))
-            except Exception:  # noqa: BLE001 - 잘못된 조합은 건너뜀
-                pass
-        else:
-            # 단독 자모/특수 토큰 제거
-            i += 1
-    return "".join(out)
-
-
 def ctc_beam_search_decode(log_probs, beam_width: int = 10) -> str:
     """CTC prefix beam search 디코딩 후 한글로 복원한다.
 
@@ -88,6 +43,10 @@ def ctc_beam_search_decode(log_probs, beam_width: int = 10) -> str:
     """
     lp = _to_numpy(log_probs)
     t_len, n_class = lp.shape
+    if n_class != NUM_CLASSES:
+        raise TokenizerMismatchError(f"모델 출력은 {NUM_CLASSES}클래스여야 합니다 (수신 {n_class}).")
+    if beam_width < 1:
+        raise ValueError("beam_width는 1 이상이어야 합니다.")
 
     # prefix(tuple[int]) -> (log p_blank, log p_nonblank)
     beams: dict[tuple, tuple[float, float]] = {(): (0.0, _NEG_INF)}
@@ -130,6 +89,20 @@ def ctc_beam_search_decode(log_probs, beam_width: int = 10) -> str:
     )[0]
     graphemes = [IDX_TO_GRAPHEME[i] for i in best_prefix]
     return compose_jamos(graphemes)
+
+
+def ctc_greedy_decode(log_probs) -> str:
+    """프레임별 최댓값의 연속 반복을 접고 blank를 제거한다(학습 중 빠른 확인용)."""
+    lp = _to_numpy(log_probs)
+    if lp.shape[1] != NUM_CLASSES:
+        raise TokenizerMismatchError(f"모델 출력은 {NUM_CLASSES}클래스여야 합니다.")
+    tokens = []
+    previous = None
+    for value in lp.argmax(axis=-1).tolist():
+        if value != previous and value != BLANK_IDX:
+            tokens.append(IDX_TO_GRAPHEME[value])
+        previous = value  # blank도 기록해야 blank 사이의 같은 토큰 두 개를 보존한다.
+    return compose_jamos(tokens)
 
 
 def get_confidence(log_probs) -> tuple[float, float]:

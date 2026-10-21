@@ -1,0 +1,254 @@
+{
+  "stage": 4,
+  "date": "2026-09-17",
+  "scope": "Compact model and isolated CUDA training environment; not recognition accuracy",
+  "gpu_longest_train_batch": {
+    "purpose": "GPU execution smoke test; no recognition accuracy evaluation",
+    "architecture_version": "lipnet-compact-v1",
+    "torch": "2.10.0+cu128",
+    "cuda_runtime": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3080",
+    "gpu_total_mib": 10239.375,
+    "parameters": 3287781,
+    "old_parameters": 115714213,
+    "parameter_reduction_percent": 97.15870599232265,
+    "manifest_sha256": "c2a1699c87e20249e90981fc253d47b0be47793d41b3099b1bcc452c5cbbd427",
+    "split": "train",
+    "files": [
+      "C:\\Users\\HyunE\\Desktop\\lipnet_project\\data_cache\\datasets\\aihub_pilot_v2\\clips\\lip_J_1_F_02_C032_A_010_021.npz",
+      "C:\\Users\\HyunE\\Desktop\\lipnet_project\\data_cache\\datasets\\aihub_pilot_v2\\clips\\lip_J_1_F_03_C297_A_012_017.npz"
+    ],
+    "actual_lengths": [
+      200,
+      181
+    ],
+    "input_shape": [
+      2,
+      3,
+      200,
+      96,
+      96
+    ],
+    "output_shape": [
+      200,
+      2,
+      69
+    ],
+    "precision": "AMP FP16; log-softmax/CTC FP32",
+    "optimizer": "Adam",
+    "steps": [
+      {
+        "step": 1,
+        "warmup": true,
+        "loss": 5.946283340454102,
+        "grad_norm": 2.5888333320617676,
+        "seconds": 0.451854099999764
+      },
+      {
+        "step": 2,
+        "warmup": false,
+        "loss": 5.826687335968018,
+        "grad_norm": 2.1123597621917725,
+        "seconds": 0.08127369999965595
+      },
+      {
+        "step": 3,
+        "warmup": false,
+        "loss": 5.732863426208496,
+        "grad_norm": 1.9429676532745361,
+        "seconds": 0.0827235999995537
+      },
+      {
+        "step": 4,
+        "warmup": false,
+        "loss": 5.649627208709717,
+        "grad_norm": 1.9815922975540161,
+        "seconds": 0.08518830000048183
+      }
+    ],
+    "weights_changed": true,
+    "all_weights_finite": true,
+    "peak_allocated_mib": 760.53466796875,
+    "peak_reserved_mib": 1150.0,
+    "mean_step_seconds_after_warmup": 0.08306186666656383,
+    "checkpoint_bytes": 13160607,
+    "cpu_reload_max_abs_difference": 6.628036499023438e-05,
+    "cpu_reload_passed": true,
+    "checkpoint": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\tmp\\step4-gpu.pt",
+    "additional_training_data_required_for_this_check": false
+  },
+  "training_cli_smoke": {
+    "architecture_version": "lipnet-compact-v1",
+    "torch": "2.10.0+cu128",
+    "cuda_runtime": "12.8",
+    "device": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 3080",
+    "precision": "amp_fp16_ctc_fp32",
+    "seed": 42,
+    "parameters": 3287781,
+    "batch_size": 2,
+    "accum_steps": 2,
+    "learning_rate": 0.0001,
+    "max_steps": 3,
+    "epochs_requested": 150,
+    "bounded_smoke": true,
+    "training_data": {
+      "mode": "smoke_only",
+      "manifest_sha256": "c2a1699c87e20249e90981fc253d47b0be47793d41b3099b1bcc452c5cbbd427",
+      "policy": {
+        "seed": 42,
+        "official_validation_role": "local_frozen_test",
+        "training_val_speaker_fraction": 0.2,
+        "angle": "A",
+        "clips_per_speaker": 10,
+        "videos_per_speaker": 2,
+        "max_frames": 200,
+        "split_unit": "speaker_id",
+        "roi_method": "aihub-bbox-yxyx-v2"
+      },
+      "splits": {
+        "train": {
+          "clips": 80,
+          "speaker_count": 8,
+          "speaker_ids": [
+            "C002",
+            "C004",
+            "C017",
+            "C032",
+            "C282",
+            "C293",
+            "C297",
+            "C312"
+          ],
+          "unique_texts": 80,
+          "duration_seconds": 366.44
+        },
+        "val": {
+          "clips": 20,
+          "speaker_count": 2,
+          "speaker_ids": [
+            "C025",
+            "C294"
+          ],
+          "unique_texts": 20,
+          "duration_seconds": 85.76
+        },
+        "test": {
+          "clips": 50,
+          "speaker_count": 5,
+          "speaker_ids": [
+            "C138",
+            "C281",
+            "C334",
+            "C428",
+            "C558"
+          ],
+          "unique_texts": 50,
+          "duration_seconds": 242.4
+        }
+      },
+      "source_mode": "speaker_disjoint",
+      "generalization_evaluation": false
+    },
+    "steps": [
+      {
+        "epoch": 1,
+        "loss": 6.435136795043945,
+        "frames": [
+          85,
+          86
+        ],
+        "seconds": 0.33498019999933604,
+        "grad_norm": null
+      },
+      {
+        "epoch": 1,
+        "loss": 5.661764144897461,
+        "frames": [
+          73,
+          73
+        ],
+        "seconds": 0.07705789999999979,
+        "grad_norm": 2.4332449436187744
+      },
+      {
+        "epoch": 1,
+        "loss": 5.18006706237793,
+        "frames": [
+          87,
+          89
+        ],
+        "seconds": 0.050812400000722846,
+        "grad_norm": 1.7060885429382324
+      }
+    ],
+    "optimizer_steps": 2,
+    "skipped_optimizer_steps": 0,
+    "peak_allocated_mib": 395.4599609375,
+    "peak_reserved_mib": 658.0,
+    "elapsed_seconds": 0.6001121999997849,
+    "best_val_cer": null,
+    "checkpoint": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\tmp\\step4-train.pt"
+  },
+  "regression_tests": {
+    "cpu_backend": {
+      "tests": "191",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "1",
+      "time": "7.510",
+      "passed": 190,
+      "deselected": 2,
+      "deselected_reason": "MediaPipe is not installed in this test environment"
+    },
+    "gpu_model_and_training": {
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "4.456",
+      "passed": 21
+    },
+    "focused_after_final_training_edit": {
+      "cpu_passed": 9,
+      "cpu_cuda_skipped": 1,
+      "gpu_passed": 5
+    }
+  },
+  "environment": {
+    "python": "3.12.14",
+    "driver": "596.49",
+    "isolated_system_site_packages": false,
+    "pip_check": "No broken requirements found.",
+    "package_freeze": "04_GPU환경_패키지.txt",
+    "powershell_setup_syntax": "passed",
+    "setup_note": "The installation commands ran successfully; setup script syntax checked separately."
+  },
+  "commands": [
+    ".\\.venv-gpu\\Scripts\\python.exe scripts/verify_gpu_training.py --report tmp/step4-gpu.json",
+    ".\\.venv-gpu\\Scripts\\python.exe scripts/train.py --device cuda --precision amp --batch-size 2 --accum-steps 2 --max-steps 3 --out tmp/step4-train.pt --report tmp/step4-train.json",
+    ".\\.venv-tokenizer\\Scripts\\python.exe -m pytest backend/tests -q -k \"not test_no_face_segment_returns_none and not test_extract_empty_raises\"",
+    ".\\.venv-gpu\\Scripts\\python.exe -m pytest backend/tests/test_baseline.py backend/tests/test_training_precision.py -q"
+  ],
+  "data_unchanged": {
+    "manifest_sha256": "c2a1699c87e20249e90981fc253d47b0be47793d41b3099b1bcc452c5cbbd427",
+    "source_videos_modified": false,
+    "additional_data_needed": false
+  },
+  "deployment": {
+    "old_baseline_bytes": 462810666,
+    "new_production_weights_created": false,
+    "temporary_checkpoints_only": true,
+    "server_inference_device_changed": false
+  },
+  "limits": [
+    "No CER/WER evaluation",
+    "No webcam accuracy or latency measurement",
+    "No long-duration training",
+    "Training checkpoint resume not implemented"
+  ],
+  "primary_sources": [
+    "https://pytorch.org/get-started/previous-versions/#v2100",
+    "https://docs.pytorch.org/docs/2.10/notes/amp_examples.html"
+  ]
+}

@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sys
 import time
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -22,7 +24,7 @@ _BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
 
-from config import LOG_DIR, TMP_UPLOAD_DIR  # noqa: E402
+from config import LOG_DIR, TMP_ROI_DIR, TMP_UPLOAD_DIR  # noqa: E402
 
 # 정리 기준: 1시간(3600초) 이상 경과한 임시 파일
 _MAX_AGE_SEC = 3600
@@ -105,6 +107,29 @@ def _cleanup_expired_files(max_age_sec: int = _MAX_AGE_SEC) -> tuple[int, int]:
     return deleted, failed
 
 
+def _cleanup_expired_roi_dirs(max_age_sec: int = _MAX_AGE_SEC) -> tuple[int, int]:
+    """TMP_ROI_DIR의 세션별 입술 프레임 폴더 중 오래된 것을 지운다 (작업 중 서버가 죽은 경우 대비).
+
+    Returns:
+        (삭제 성공 수, 삭제 실패 수).
+    """
+    deleted = failed = 0
+    if not os.path.isdir(TMP_ROI_DIR):
+        return deleted, failed
+    now = time.time()
+    for name in os.listdir(TMP_ROI_DIR):
+        path = os.path.join(TMP_ROI_DIR, name)
+        try:
+            if not os.path.isdir(path) or (max_age_sec > 0 and now - os.path.getmtime(path) < max_age_sec):
+                continue
+            shutil.rmtree(path)
+            deleted += 1
+        except OSError as exc:
+            _logger.error("입술 프레임 폴더 삭제 실패: %s (%s)", path, exc)
+            failed += 1
+    return deleted, failed
+
+
 def _run_cleanup() -> None:
     """스케줄러가 주기적으로 호출하는 정리 작업.
 
@@ -115,6 +140,8 @@ def _run_cleanup() -> None:
     global _consecutive_failures
     try:
         deleted, failed = _cleanup_expired_files()
+        roi_deleted, roi_failed = _cleanup_expired_roi_dirs()
+        deleted, failed = deleted + roi_deleted, failed + roi_failed
         if failed > 0:
             _consecutive_failures += 1
             _logger.error(
@@ -159,9 +186,29 @@ def start_cleanup_scheduler() -> BackgroundScheduler:
         hours=1,
         id="tmp_upload_cleanup",
         replace_existing=True,
+        # 시작하자마자 한 번 실행한다. 서버를 1시간 넘게 띄우지 않는 사용(개발·시연)에서도
+        # 이전 실행이 남긴 파일이 정리되게 한다.
+        next_run_time=datetime.now(),
     )
     _scheduler.start()
     return _scheduler
+
+
+def purge_roi_dirs_on_startup() -> tuple[int, int]:
+    """서버 시작 시 TMP_ROI_DIR의 세션 폴더를 나이와 관계없이 모두 지운다.
+
+    단일 서버 프로세스 전제: 시작 시점에 진행 중인 Job은 없으므로 남은 폴더는 이전 실행이 비정상
+    종료되며 남긴 입술 crop이다. 업로드 원본은 재시작 직후에도 /api/infer로 쓸 수 있으므로
+    기존 1시간 기준(_cleanup_expired_files)을 그대로 따른다.
+
+    Returns:
+        (삭제 성공 수, 삭제 실패 수).
+    """
+    try:
+        return _cleanup_expired_roi_dirs(max_age_sec=0)
+    except Exception as exc:  # noqa: BLE001 - 시작 정리 실패가 서버 기동을 막지 않게 한다
+        _logger.error("시작 시 입술 프레임 폴더 정리 실패: %s", exc)
+        return 0, 1
 
 
 def shutdown_cleanup_scheduler() -> None:

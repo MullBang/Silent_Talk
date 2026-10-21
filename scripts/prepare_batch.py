@@ -3,14 +3,14 @@
 원천 영상(*.mp4)을 순회하며, 동일 basename의 라벨 JSON을 라벨 tar에서 추출해
 prepare_data.prepare_video로 문장별 .npz를 생성한다.
 
-병목은 MediaPipe(CPU) ROI 추출이므로 --max-videos / --max-sentences로 규모를
-제한한다. 더 큰 규모는 같은 명령을 상한만 늘려 (야간 등) 실행한다.
+단순 변환/디버깅 도구이며 화자 분리를 하지 않는다. 정식 학습용 데이터는
+build_speaker_dataset.py의 고정 명세로 준비한다. 기존 출력은 덮어쓰지 않는다.
 
 사용:
   python scripts/prepare_batch.py \
       --source-root "D:\\...\\1.Training\\원천데이터\\TS1\\TS1" \
       --label-tar   "D:\\...\\1.Training\\라벨링데이터\\TL1.tar" \
-      --out data_cache/clips --max-videos 15 --max-sentences 6 --scale 480
+      --out data_cache/jamo_v2/clips --max-videos 15 --max-sentences 6 --scale 480
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="대량 학습 데이터 준비")
     p.add_argument("--source-root", required=True, help="원천 영상 루트 디렉토리")
     p.add_argument("--label-tar", required=True, help="라벨 tar 경로(TL*.tar)")
-    p.add_argument("--out", default="data_cache/clips", help="npz 출력 디렉토리")
+    p.add_argument("--out", default="data_cache/jamo_v2/clips", help="npz 출력 디렉토리")
     p.add_argument("--max-videos", type=int, default=15, help="처리 최대 영상 수")
     p.add_argument("--offset", type=int, default=0, help="정렬 순서에서 건너뛸 앞 영상 수")
     p.add_argument("--max-sentences", type=int, default=None,
@@ -53,6 +53,7 @@ def main() -> None:
                    help="클립 최대 프레임 상한(0=무제한). 초과 클립은 스킵")
     p.add_argument("--roi", choices=["mediapipe", "bbox", "auto"], default="mediapipe",
                    help="ROI 추출: mediapipe(기본) | bbox(라벨 입술좌표, 빠름) | auto")
+    p.add_argument("--bbox-coordinate-order", choices=["yxyx", "xyxy"], default="yxyx")
     args = p.parse_args()
 
     videos = sorted(glob.glob(os.path.join(args.source_root, "**", "*.mp4"), recursive=True))
@@ -85,6 +86,7 @@ def main() -> None:
                     video, tmp_json, args.out,
                     max_sentences=args.max_sentences, scale_w=args.scale,
                     max_frames=args.max_frames, roi_mode=args.roi,
+                    bbox_coordinate_order=args.bbox_coordinate_order,
                 )
                 total_clips += n
                 processed += 1

@@ -3,6 +3,8 @@
 
 import axios from 'axios';
 
+import { baseMimeType, recordingFileName, validateBlob } from '../record/recordFlow';
+
 /** 서비스 제한값 (설계문서 F-MVP-01). 클라이언트 1차 검증용. */
 export const MAX_UPLOAD_SIZE_MB = 500;
 export const MAX_DURATION_SEC = 180; // 3분
@@ -12,6 +14,17 @@ export const apiClient = axios.create({
   baseURL: import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000',
   timeout: 600000, // 대용량 업로드 대비 10분
 });
+
+/**
+ * 클라이언트 1차 검증 오류(고정 한국어 문구)를 만든다. errorMessageFrom이 문구를 그대로 쓴다.
+ * @param {string} message
+ * @returns {Error & {isClientCheck: true}}
+ */
+function clientCheckError(message) {
+  const err = new Error(message);
+  err.isClientCheck = true;
+  return err;
+}
 
 /**
  * File 객체의 재생 길이(초)를 메타데이터로 읽는다.
@@ -47,7 +60,7 @@ export async function uploadVideo(file, onProgress) {
   // ① 크기 검증 (500MB)
   const sizeMb = file.size / 1024 / 1024;
   if (sizeMb > MAX_UPLOAD_SIZE_MB) {
-    throw new Error(`${MAX_UPLOAD_SIZE_MB}MB 이하만 업로드 가능합니다.`);
+    throw clientCheckError(`${MAX_UPLOAD_SIZE_MB}MB 이하만 업로드 가능합니다.`);
   }
 
   // ② 길이 검증 (3분)
@@ -55,10 +68,10 @@ export async function uploadVideo(file, onProgress) {
   try {
     duration = await getVideoDurationSec(file);
   } catch {
-    throw new Error('영상 파일을 읽을 수 없습니다. 지원 형식(MP4/AVI/MOV)을 확인해 주세요.');
+    throw clientCheckError('영상 파일을 읽을 수 없습니다. 지원 형식(MP4/AVI/MOV)을 확인해 주세요.');
   }
   if (duration > MAX_DURATION_SEC) {
-    throw new Error('3분 이하의 영상만 업로드 가능합니다.');
+    throw clientCheckError('3분 이하의 영상만 업로드 가능합니다.');
   }
 
   // ③ 업로드 (multipart/form-data)
@@ -66,6 +79,39 @@ export async function uploadVideo(file, onProgress) {
   form.append('file', file);
   const { data } = await apiClient.post('/api/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (typeof onProgress === 'function' && e.total) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    },
+  });
+  return data;
+}
+
+/**
+ * 브라우저 녹화 영상을 올리고 분석 Job을 시작한다. (POST /api/record, 6단계)
+ * 서버가 실제 길이를 재서 30초 미만만 접수하고 즉시 결과 대신 {job_id, session_id, status:'processing',
+ * duration_sec}를 돌려준다. 결과는 getResult(session_id) 폴링으로 받는다.
+ * 파일 파트의 MIME은 코덱 매개변수를 뗀 기본형(video/webm|video/mp4), 파일명은 recording.webm|.mp4다.
+ * @param {Blob} blob 녹화 Blob.
+ * @param {string} mime MediaRecorder MIME (예: 'video/webm;codecs=vp9').
+ * @param {(percent: number) => void} [onProgress] 업로드 진행률(0~100) 콜백.
+ * @returns {Promise<{ job_id: string, session_id: string, status: string, duration_sec: number }>}
+ * @throws {Error} 빈 Blob(isClientCheck=true) 또는 axios 오류(서버 400/503 detail 포함).
+ */
+export async function uploadRecording(blob, mime, onProgress) {
+  const check = validateBlob(blob);
+  if (!check.ok) {
+    const err = new Error(check.message);
+    err.isClientCheck = true;
+    throw err;
+  }
+  const type = baseMimeType(mime || blob.type);
+  const part = blob.type === type ? blob : new Blob([blob], { type });
+  const form = new FormData();
+  form.append('file', part, recordingFileName(type));
+  const { data } = await apiClient.post('/api/record', form, {
+    timeout: 120000,
     onUploadProgress: (e) => {
       if (typeof onProgress === 'function' && e.total) {
         onProgress(Math.round((e.loaded / e.total) * 100));

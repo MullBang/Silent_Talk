@@ -1,0 +1,87 @@
+{
+  "date": "2026-09-17",
+  "tokenizer": {
+    "tokenizer_version": "ko-jamo-v2",
+    "normalization_version": "ko-text-v1",
+    "vocab_sha256": "3ab81291a1892a4aece2d41bce634ff54663c4b93e3d56aef81f6783c822ff62",
+    "num_classes": 69
+  },
+  "modern_hangul_roundtrip_syllables": 11172,
+  "migration": {
+    "total": 234,
+    "converted": 215,
+    "excluded": 19,
+    "source_files_unchanged": true,
+    "converted_frames_unchanged": true
+  },
+  "excluded_unique_texts": 9,
+  "tests": [
+    {
+      "source": "tmp/step1-tests.xml",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "109",
+      "time": "14.986",
+      "timestamp": "2026-09-17T12:23:50.037735+09:00",
+      "hostname": "DESKTOP-FO3MT83"
+    },
+    {
+      "source": "tmp/step1-integration-tests.xml",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "4",
+      "time": "1.883",
+      "timestamp": "2026-09-17T12:26:55.237042+09:00",
+      "hostname": "DESKTOP-FO3MT83"
+    }
+  ],
+  "not_run": [
+    "test_no_face_segment_returns_none",
+    "test_extract_empty_raises"
+  ],
+  "not_run_reason": "MediaPipe is not installed in isolated verification environment.",
+  "python_files_syntax_checked": 44,
+  "examples": [
+    {
+      "source": "나이가 많다고.",
+      "normalized": "나이가 많다고",
+      "roundtrip": "나이가 많다고"
+    },
+    {
+      "source": "인상은 없었어.",
+      "normalized": "인상은 없었어",
+      "roundtrip": "인상은 없었어"
+    },
+    {
+      "source": "값이 비싸다!",
+      "normalized": "값이 비싸다",
+      "roundtrip": "값이 비싸다"
+    },
+    {
+      "source": "책을 읽다.",
+      "normalized": "책을 읽다",
+      "roundtrip": "책을 읽다"
+    }
+  ],
+  "legacy_checkpoint_preserved": {
+    "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\backend\\models\\weights\\baseline.pt",
+    "bytes": 462810666,
+    "sha256_observed_after": "71c256dee6ed09adc82e208b5de5f38bbd80aa036f26fe903c7cc634e5a18925"
+  },
+  "new_checkpoint_exists": false,
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "torch_cuda_available": false,
+    "packages": {
+      "numpy": "2.3.5",
+      "torch": "2.14.0",
+      "pytest": "9.1.1",
+      "fastapi": "0.141.1",
+      "opencv-python-headless": "5.0.0.93"
+    }
+  }
+}

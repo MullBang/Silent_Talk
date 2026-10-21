@@ -25,6 +25,7 @@ from config import (  # noqa: E402
     ROI_SIZE,
     SEQ_LEN,
 )
+from preprocessing import roi_extractor as roi_extractor_module  # noqa: E402
 from preprocessing.roi_extractor import (  # noqa: E402
     MAX_CONSECUTIVE_MISS,
     _compute_bbox_with_margin,
@@ -131,6 +132,7 @@ def test_fill_missing_all_none_returns_none() -> None:
     assert _fill_missing_rois([None, None, None]) is None
 
 
+@pytest.mark.skipif(roi_extractor_module.mp is None, reason="mediapipe 미설치 환경")
 def test_no_face_segment_returns_none() -> None:
     """얼굴이 없는(단색) 세그먼트는 연속 미검출 한계 초과로 None을 반환한다."""
     # MAX_CONSECUTIVE_MISS 이상 연속 미검출 → 폐기
@@ -139,6 +141,7 @@ def test_no_face_segment_returns_none() -> None:
     assert result is None
 
 
+@pytest.mark.skipif(roi_extractor_module.mp is None, reason="mediapipe 미설치 환경")
 def test_extract_empty_raises() -> None:
     """빈 세그먼트는 예외를 발생시킨다."""
     with pytest.raises(ValueError):

@@ -1,0 +1,61 @@
+{
+  "schema": "lipnet-strategy-audit-observations-v1",
+  "date_kst": "2026-09-24",
+  "scope": "Research, source-code and existing results review, filesystem metadata, Google Drive visible file information. No training, model installation or bulk download.",
+  "project_status": "Implementation and training paused at user request; strategy and storage audit only",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3080",
+    "vram_mib": 10240,
+    "source": "nvidia-smi query",
+    "free_disk_bytes_at_check": {"C": 217324847104, "D": 450703523840}
+  },
+  "google_drive_cache": {
+    "examined_parent": "C:\\Users\\HyunE\\AppData\\Local\\Google\\DriveFS",
+    "content_cache_directory_count": 1,
+    "files_count": 428,
+    "file_logical_sizes_sum_bytes": 23541684109,
+    "stat_errors": 0,
+    "file_contents_read": false,
+    "credentials_read": false,
+    "cache_deleted_or_moved": false,
+    "ContentCachePath_HKCU": "not configured",
+    "ContentCachePath_HKLM": "not configured",
+    "limits": "Metadata sum is not allocated-disk-space measurement or the upload queue size; historical disk-exhaustion events and all per-account settings were not examined."
+  },
+  "google_drive_web_file_details": [
+    {
+      "file": "lip_J_1_F_02_C040_A_001.mp4",
+      "display_size": "18MB",
+      "display_storage_used": "18MB",
+      "prior_G_file_bytes": 18874368,
+      "prior_declared_mdat_end": 348888707,
+      "previous_version_observation": "Earlier task inspected this file and saw only its current version"
+    },
+    {
+      "file": "lip_J_1_F_02_C040_A_002.mp4",
+      "display_size": "8MB",
+      "display_storage_used": "8MB",
+      "prior_G_file_bytes": 8388608
+    }
+  ],
+  "cloud_file_limits": "Displayed rounded sizes only, not exact-byte metadata or a separately downloaded cloud SHA. These two web files are also much smaller than the first file's declared mdat length; this does not establish the original failure stage or all other cloud files' state.",
+  "existing_v4_cache_metadata": {
+    "train": {"clips":1000,"frames":112420,"duration_seconds":4497.7779981239955,"cache_bytes":1888001047},
+    "val": {"clips":20,"frames":2144,"duration_seconds":85.83921149786097,"cache_bytes":35396914},
+    "test": {"clips":50,"frames":6060,"duration_seconds":242.4113160268177,"cache_bytes":95293004},
+    "measurement": "Manifest fields and file stat only; no frame payloads loaded and no new inference",
+    "duration_definition": "duration_seconds is the sum of labeled end_time minus start_time. Cache frame playback duration is frames / 25 (train 4496.8s, val 85.76s, test 242.4s), slightly different due to resampling.",
+    "raw_uint8_rgb_96x96_25fps_bytes_per_hour": 2488320000
+  },
+  "official_olkavs_weights_visible": {
+    "author_repository": "https://github.com/IIP-Sogang/olkavs-avspeech",
+    "author_linked_folder": "https://drive.google.com/drive/folders/1sElJn4efJdMRabMqk7-p6L7_3Dii5bW8",
+    "visible_files": ["audio_visual.pt", "multiview_lip.pt"],
+    "multiview_lip_display_size": "290.1MB",
+    "multiview_lip_display_created_and_modified": "2023-01-18",
+    "downloaded": false,
+    "checkpoint_loaded_or_executed": false,
+    "limits": "File presence and display size do not verify checkpoint format, integrity, licensing or local runtime compatibility."
+  },
+  "unchanged": ["source videos", "Drive files", "Drive cache/settings", "existing model weights", "fixed dataset/experiment selections", "final test inference status"]
+}

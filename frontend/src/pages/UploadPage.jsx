@@ -2,62 +2,28 @@
 // 상태 흐름(8.1.3): IDLE → FILE_SELECTED → UPLOADING → INFERRING → DONE/TIMEOUT/ERROR
 // Tailwind CSS만 사용.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 
-import { getResult, startInfer, uploadVideo } from '../api/client';
+import { startInfer, uploadVideo } from '../api/client';
+import { START_ERROR, errorMessageFrom } from '../api/pollOutcome';
 import DropZone from '../components/DropZone';
 import ErrorModal from '../components/ErrorModal';
 import ProgressBar from '../components/ProgressBar';
-import usePolling from '../hooks/usePolling';
-
-// 폴링 전체 타임아웃 (설계 5분)
-const POLL_TIMEOUT_MS = 300000;
-// 추론 종료(터미널) 상태. 백엔드: pending→processing→done/error/timeout.
-// (명세의 status!=='processing'은 초기 pending에서 조기 종료되므로 터미널 기준으로 보정)
-const TERMINAL = ['done', 'error', 'timeout'];
-
-/**
- * INFERRING 단계에서만 마운트되는 결과 폴러.
- * usePolling으로 1초 간격 getResult를 호출하고, 5분 타임아웃을 감시한다.
- */
-function ResultPoller({ sessionId, onProgress, onDone, onTimeout, onError }) {
-  const fetchFn = useCallback(() => getResult(sessionId), [sessionId]);
-  const { data, error } = usePolling(
-    fetchFn,
-    1000,
-    (d) => TERMINAL.includes(d?.status),
-  );
-
-  // 5분 전체 타임아웃
-  useEffect(() => {
-    const t = setTimeout(() => onTimeout(), POLL_TIMEOUT_MS);
-    return () => clearTimeout(t);
-  }, [onTimeout]);
-
-  useEffect(() => {
-    if (!data) return;
-    if (typeof data.progress === 'number') onProgress(data.progress);
-    if (data.status === 'done') onDone(data.results || []);
-    else if (data.status === 'timeout') onTimeout();
-    else if (data.status === 'error') onError(data.error_message || '추론 중 오류가 발생했습니다.');
-  }, [data, onProgress, onDone, onTimeout, onError]);
-
-  useEffect(() => {
-    if (error) onError(error.message || '네트워크 오류가 발생했습니다.');
-  }, [error, onError]);
-
-  return null;
-}
+import ResultPoller from '../components/ResultPoller';
 
 /**
  * 업로드 페이지 (SCR-01).
  *
  * @param {object} props
- * @param {(payload: {sessionId: string, fileName: string, results: Array}) => void} [props.onComplete]
+ * @param {(payload: {sessionId: string, fileName: string, results: Array, warnings: string[],
+ *   model: object|null, origin: 'upload'}) => void} [props.onComplete]
  *   추론 완료 시 결과 화면으로 전환하기 위한 콜백 (App 라우팅에서 연결).
+ * @param {() => void} [props.onWebcam] 웹캠 실시간 모드로 전환.
+ * @param {() => void} [props.onCapture] 파일럿 촬영 화면으로 전환.
+ * @param {() => void} [props.onRecord] 녹화→분석 화면으로 전환 (6단계).
  * @returns {JSX.Element}
  */
-export default function UploadPage({ onComplete, onWebcam }) {
+export default function UploadPage({ onComplete, onWebcam, onCapture, onRecord }) {
   const [phase, setPhase] = useState('IDLE');
   const [file, setFile] = useState(null);
   const [agreed, setAgreed] = useState(false);
@@ -80,14 +46,14 @@ export default function UploadPage({ onComplete, onWebcam }) {
     setUploadPct(0);
     try {
       const up = await uploadVideo(file, setUploadPct);
+      if (!up?.session_id) throw new Error('missing session_id');
+      // Job은 POST /api/infer가 만든다. 응답을 받은 뒤에 폴러를 마운트해야 첫 폴링이 404가 되지 않는다.
+      await startInfer(up.session_id);
       setSessionId(up.session_id);
       setInferPct(0);
       setPhase('INFERRING');
-      await startInfer(up.session_id);
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail || err?.message || '업로드/추론 시작에 실패했습니다.';
-      setModal({ type: 'UPLOAD_ERROR', message: msg });
+      setModal({ type: 'UPLOAD_ERROR', message: errorMessageFrom(err, START_ERROR) });
       setPhase('ERROR');
     }
   };
@@ -103,34 +69,58 @@ export default function UploadPage({ onComplete, onWebcam }) {
   // 폴러 콜백
   const onProgress = useCallback((p) => setInferPct(p), []);
   const onDone = useCallback(
-    (results) => {
+    (results, warnings, model) => {
       setInferPct(100);
       setPhase('DONE');
       if (typeof onComplete === 'function') {
-        onComplete({ sessionId, fileName: file?.name, results });
+        onComplete({
+          sessionId, fileName: file?.name, results, warnings: warnings || [], model: model || null, origin: 'upload',
+        });
       }
     },
     [onComplete, sessionId, file],
   );
   const onTimeout = useCallback(() => setPhase('TIMEOUT'), []);
-  const onError = useCallback((message) => {
-    setModal({ type: 'UPLOAD_ERROR', message });
+  const onError = useCallback((message, err) => {
+    setModal({ type: 'UPLOAD_ERROR', message: err ? errorMessageFrom(err, message) : message });
     setPhase('ERROR');
   }, []);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
       {/* 헤더 */}
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-gray-900">🎤 립리딩 텍스트 변환</h1>
-        <button
-          type="button"
-          onClick={onWebcam}
-          aria-label="웹캠 모드로 전환"
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
-        >
-          웹캠 모드로 전환 →
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {onRecord && (
+            <button
+              type="button"
+              onClick={onRecord}
+              aria-label="녹화해서 분석 화면으로 전환"
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              녹화해서 분석 →
+            </button>
+          )}
+          {onCapture && (
+            <button
+              type="button"
+              onClick={onCapture}
+              aria-label="파일럿 촬영 화면으로 전환"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+            >
+              파일럿 촬영 →
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onWebcam}
+            aria-label="웹캠 모드로 전환"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+          >
+            웹캠 모드로 전환 →
+          </button>
+        </div>
       </header>
 
       {/* 개인정보 안내 (항상 표시) */}

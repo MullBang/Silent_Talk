@@ -55,6 +55,8 @@ class JobRecord:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     results: list | None = None  # [{start_ms, end_ms, text, confidence}]
+    warnings: list[str] | None = None  # 사용자에게 보여 줄 품질 경고(낮은 프레임률 등)
+    model_info: dict | None = None  # 완료 시점의 인식 모델 정보(olkavs). compact는 None
 
 
 # session_id -> JobRecord. 다중 스레드(백그라운드 추론) 접근을 Lock으로 보호한다.
@@ -108,27 +110,32 @@ def update_progress(session_id: str, progress: float) -> None:
     """
     with _lock:
         record = _jobs.get(session_id)
-        if record is None:
-            return
+        if record is None or record.status in _TERMINAL_STATES:
+            return  # 이미 끝난(타임아웃 등) Job은 되살리지 않는다
         record.progress = max(0.0, min(100.0, float(progress)))
         if record.status == STATUS_PENDING:
             record.status = STATUS_PROCESSING
 
 
-def complete_job(session_id: str, results: list) -> None:
+def complete_job(session_id: str, results: list, warnings: list[str] | None = None,
+                 model_info: dict | None = None) -> None:
     """Job을 완료 처리한다 (status='done').
 
     Args:
         session_id: 세션 식별자.
         results: [{start_ms, end_ms, text, confidence}] 결과 리스트.
+        warnings: 결과와 함께 보여 줄 품질 경고 문구 (없으면 None).
+        model_info: 결과를 낸 인식 모델 정보 (없으면 None).
     """
     with _lock:
         record = _jobs.get(session_id)
-        if record is None:
-            return
+        if record is None or record.status == STATUS_TIMEOUT:
+            return  # 타임아웃으로 응답한 Job을 늦게 끝난 결과로 덮어쓰지 않는다
         record.status = STATUS_DONE
         record.progress = 100.0
         record.results = results
+        record.warnings = list(warnings) if warnings else None
+        record.model_info = dict(model_info) if model_info else None
         record.error_message = None
         record.finished_at = datetime.now()
 
@@ -142,8 +149,8 @@ def fail_job(session_id: str, error_message: str) -> None:
     """
     with _lock:
         record = _jobs.get(session_id)
-        if record is None:
-            return
+        if record is None or record.status == STATUS_TIMEOUT:
+            return  # 타임아웃 상태를 유지한다
         record.status = STATUS_ERROR
         record.error_message = error_message
         record.finished_at = datetime.now()
@@ -157,8 +164,8 @@ def timeout_job(session_id: str) -> None:
     """
     with _lock:
         record = _jobs.get(session_id)
-        if record is None:
-            return
+        if record is None or record.status in _TERMINAL_STATES:
+            return  # 판정과 적용 사이에 끝난 Job(done/error)을 timeout으로 덮지 않는다
         record.status = STATUS_TIMEOUT
         record.error_message = "Job timed out"
         record.finished_at = datetime.now()

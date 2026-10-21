@@ -3,7 +3,8 @@
 
 import React, { useMemo, useState } from 'react';
 
-import ResultList, { isNonRecognition, msToClock } from '../components/ResultList';
+import ResultList, { msToClock } from '../components/ResultList';
+import { UNSEEN_PERSON_NOTICE, isNonRecognition, modelInfoLine } from '../results/markers';
 
 /**
  * 결과 페이지 (SCR-02).
@@ -11,12 +12,21 @@ import ResultList, { isNonRecognition, msToClock } from '../components/ResultLis
  * @param {object} props
  * @param {string} [props.fileName] - 분석한 파일명.
  * @param {Array<{start_ms:number,end_ms:number,text:string,confidence:number|null}>} [props.results]
- * @param {() => void} [props.onNewFile] - '새 파일' 클릭 시 업로드 화면으로 이동.
+ * @param {string[]} [props.warnings] - 서버가 보낸 결과 품질 경고(낮은 프레임률 등).
+ * @param {object|null} [props.model] - 결과를 만든 모델 정보 (GET /api/result 의 model). 없으면 표시하지 않는다.
+ * @param {'upload'|'record'} [props.origin] - 'record'이면 돌아가기 버튼이 '다시 녹화'가 된다.
+ * @param {() => void} [props.onNewFile] - '새 파일'/'다시 녹화' 클릭 시 이전 입력 화면으로 이동.
  * @returns {JSX.Element}
  */
-export default function ResultPage({ fileName, results, onNewFile }) {
+export default function ResultPage({ fileName, results, warnings, model, origin, onNewFile }) {
   const items = useMemo(() => results || [], [results]);
+  const notices = useMemo(
+    () => (Array.isArray(warnings) ? warnings.filter((w) => typeof w === 'string' && w.trim()) : []),
+    [warnings],
+  );
   const [toast, setToast] = useState(null);
+  const modelLine = useMemo(() => modelInfoLine(model), [model]);
+  const backLabel = origin === 'record' ? '다시 녹화' : '새 파일';
 
   // 요약 집계
   const summary = useMemo(() => {
@@ -52,16 +62,34 @@ export default function ResultPage({ fileName, results, onNewFile }) {
         <button
           type="button"
           onClick={onNewFile}
-          aria-label="새 파일"
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+          aria-label={backLabel}
+          className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
         >
-          ← 새 파일
+          ← {backLabel}
         </button>
         <span className="truncate text-sm text-gray-600">{fileName || '영상'}</span>
         <span className="ml-auto shrink-0 text-sm font-medium text-green-600">
           분석 완료 ✅
         </span>
       </header>
+
+      {/* 성능 미검증 안내 (항상 표시) + 모델 정보 */}
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <p>ℹ {UNSEEN_PERSON_NOTICE}</p>
+        {modelLine && <p className="mt-1 break-words text-xs text-blue-600">모델: {modelLine}</p>}
+      </div>
+
+      {/* 품질 경고 (낮은 프레임률 등) */}
+      {notices.length > 0 && (
+        <div
+          role="status"
+          className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          {notices.map((w) => (
+            <p key={w}>⚠ {w}</p>
+          ))}
+        </div>
+      )}
 
       {/* 요약 카드 3개 */}
       <div className="mb-6 grid grid-cols-3 gap-3">
@@ -76,7 +104,7 @@ export default function ResultPage({ fileName, results, onNewFile }) {
       </div>
 
       {/* 버튼 바 */}
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={handleCopy}

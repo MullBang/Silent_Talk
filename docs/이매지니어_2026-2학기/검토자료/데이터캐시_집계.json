@@ -1,0 +1,76 @@
+[
+  {
+    "folder": "data_cache\\clips",
+    "npz_count": 180,
+    "frame_min": 42,
+    "frame_max": 294,
+    "unique_texts": 72,
+    "dtype": [
+      "uint8"
+    ],
+    "spatial_shapes": [
+      "(96, 96, 3)"
+    ],
+    "filename_C_token": [
+      "C002"
+    ]
+  },
+  {
+    "folder": "data_cache\\clips_one",
+    "npz_count": 1,
+    "frame_min": 294,
+    "frame_max": 294,
+    "unique_texts": 1,
+    "dtype": [
+      "uint8"
+    ],
+    "spatial_shapes": [
+      "(96, 96, 3)"
+    ],
+    "filename_C_token": [
+      "C002"
+    ]
+  },
+  {
+    "folder": "data_cache\\labels",
+    "npz_count": 0,
+    "frame_min": null,
+    "frame_max": null,
+    "unique_texts": 0,
+    "dtype": [],
+    "spatial_shapes": [],
+    "filename_C_token": []
+  },
+  {
+    "folder": "data_cache\\test_all51",
+    "npz_count": 51,
+    "frame_min": 43,
+    "frame_max": 294,
+    "unique_texts": 51,
+    "dtype": [
+      "uint8"
+    ],
+    "spatial_shapes": [
+      "(96, 96, 3)"
+    ],
+    "filename_C_token": [
+      "C002"
+    ]
+  },
+  {
+    "folder": "data_cache\\test_bbox",
+    "npz_count": 2,
+    "frame_min": 144,
+    "frame_max": 293,
+    "unique_texts": 2,
+    "dtype": [
+      "uint8"
+    ],
+    "spatial_shapes": [
+      "(96, 96, 3)"
+    ],
+    "filename_C_token": [
+      "C002"
+    ]
+  }
+]

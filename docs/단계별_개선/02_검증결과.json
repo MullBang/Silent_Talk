@@ -1,0 +1,132 @@
+{
+  "stage": 2,
+  "date": "2026-09-17",
+  "status": "completed_for_pilot_data_preparation",
+  "manifest_path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\data_cache\\datasets\\aihub_pilot_v2\\manifest.json",
+  "splits": {
+    "train": {
+      "clips": 80,
+      "speaker_count": 8,
+      "speaker_ids": [
+        "C002",
+        "C004",
+        "C017",
+        "C032",
+        "C282",
+        "C293",
+        "C297",
+        "C312"
+      ],
+      "unique_texts": 80,
+      "duration_seconds": 366.44
+    },
+    "val": {
+      "clips": 20,
+      "speaker_count": 2,
+      "speaker_ids": [
+        "C025",
+        "C294"
+      ],
+      "unique_texts": 20,
+      "duration_seconds": 85.76
+    },
+    "test": {
+      "clips": 50,
+      "speaker_count": 5,
+      "speaker_ids": [
+        "C138",
+        "C281",
+        "C334",
+        "C428",
+        "C558"
+      ],
+      "unique_texts": 50,
+      "duration_seconds": 242.4
+    }
+  },
+  "speaker_overlap": 0,
+  "utterance_overlap": 0,
+  "normalized_text_overlap": {
+    "train_val": 0,
+    "train_test": 0,
+    "val_test": 0
+  },
+  "manifest_sha256": "c2a1699c87e20249e90981fc253d47b0be47793d41b3099b1bcc452c5cbbd427",
+  "cache_bytes": 285930827,
+  "inventory": {
+    "Training": {
+      "video_count_all_angles": 600,
+      "frontal_video_count": 120,
+      "label_file_count": 600,
+      "speakers": [
+        "C002",
+        "C004",
+        "C017",
+        "C025",
+        "C032",
+        "C282",
+        "C293",
+        "C294",
+        "C297",
+        "C312"
+      ],
+      "videos_in_tar_only": 300
+    },
+    "Validation": {
+      "video_count_all_angles": 300,
+      "frontal_video_count": 60,
+      "label_file_count": 300,
+      "speakers": [
+        "C138",
+        "C281",
+        "C334",
+        "C428",
+        "C558"
+      ],
+      "videos_in_tar_only": 0
+    }
+  },
+  "eligible_sentences": 7067,
+  "excluded_sentences": 733,
+  "exclusion_categories": {
+    "over_200_frames": 521,
+    "unsupported_text": 191,
+    "missing_bbox_coverage": 20,
+    "ctc_too_short": 1
+  },
+  "visual_qa": {
+    "clips_inspected": 150,
+    "frames_per_clip": 3,
+    "sampled_frames": 450,
+    "positions": [
+      "first",
+      "middle",
+      "last"
+    ],
+    "result": "sampled frames show upright lip regions; not a review of every video frame",
+    "sheets": [
+      "visual_qa/roi_samples_1.png",
+      "visual_qa/roi_samples_2.png",
+      "visual_qa/roi_samples_3.png",
+      "visual_qa/roi_samples_4.png",
+      "visual_qa/roi_samples_5.png",
+      "visual_qa/roi_samples_6.png"
+    ]
+  },
+  "tests": {
+    "passed": 143,
+    "deselected_mediapipe_tests": 2,
+    "failures": 0,
+    "errors": 0
+  },
+  "training_performed": false,
+  "inference_metrics_measured": false,
+  "limitations": [
+    "female speakers only",
+    "frontal angle A only",
+    "noise condition 1 only",
+    "max 8 second clips",
+    "small pilot, not a sufficient training corpus",
+    "bbox and webcam MediaPipe crop distributions require later verification"
+  ]
+}

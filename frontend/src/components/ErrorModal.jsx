@@ -21,10 +21,8 @@ const TYPE_MESSAGES = {
  * @returns {JSX.Element}
  */
 export default function ErrorModal({ type, message, onRetry, onClose }) {
-  const text =
-    type === 'UPLOAD_ERROR'
-      ? message || '업로드 중 오류가 발생했습니다.'
-      : TYPE_MESSAGES[type] || '오류가 발생했습니다.';
+  const text = message || TYPE_MESSAGES[type] ||
+    (type === 'UPLOAD_ERROR' ? '업로드 중 오류가 발생했습니다.' : '오류가 발생했습니다.');
 
   return (
     <div

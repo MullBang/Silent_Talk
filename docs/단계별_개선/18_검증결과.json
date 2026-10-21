@@ -1,0 +1,250 @@
+{
+  "schema": "lipnet-stage18-integrity-validation-v1",
+  "created_utc": "2026-09-23T18:59:09.010908+00:00",
+  "status": "audit_verified_awaiting_user_download",
+  "integrity_audit_complete": true,
+  "data_preparation_complete": false,
+  "model_training_performed": false,
+  "model_forward_performed": false,
+  "preparation": {
+    "planned_clips": 120,
+    "metadata_candidate_clips": 6255,
+    "planned_videos": 30,
+    "planned_new_speakers": 15,
+    "train_clips": 96,
+    "development_clips": 24,
+    "prepared_npz_files": 0,
+    "completed_manifest_exists": false,
+    "completed_receipts_exist": false,
+    "local_failed_source_copy_files": 1,
+    "restored_videos": 0,
+    "actual_recovery_or_download_completed_by_agent": false,
+    "user_download_status": "pending; user stated they will download directly"
+  },
+  "container_audit": {
+    "inspected_videos": 180,
+    "counts": {
+      "box_extends_past_eof": 161,
+      "structural_screen_pass": 17,
+      "missing_initial_ftyp": 2
+    },
+    "zero_byte_files": 2,
+    "failed_mdat_boxes": 161,
+    "failed_nonzero_files_are_exact_MiB_multiples": true,
+    "structural_pass_means_decodable": false,
+    "selected_video_counts": {
+      "box_extends_past_eof": 28,
+      "structural_screen_pass": 2
+    },
+    "selected_clips_on_failed_videos": 112,
+    "selected_clips_on_structure_pass_videos": 8,
+    "program_header_bytes_read": 4408,
+    "cloud_network_bytes_measured": false,
+    "reexecuted_during_this_audit": false,
+    "source_payload_reread_during_this_audit": false,
+    "probe_source_index_and_script_hashes_match": true
+  },
+  "preservation": {
+    "selection_recomputed_and_verified": true,
+    "frozen_anchor_count": 17,
+    "frozen_anchors_unchanged": true,
+    "protected_parent_hash_checks": {
+      "manifest": {
+        "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\data_cache\\datasets\\aihub_timed_v4\\manifest.json",
+        "sha256": "214ce935150b367a15f24f0896901d34c54c6d4fe73d493a9d397c4c94fe59a6",
+        "matches": true
+      },
+      "stage15_plan": {
+        "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\results\\step15-generalization\\run01\\plan.json",
+        "sha256": "0000b112bff8d003db54aa1267606a841fd86c8282bfadd21cc4b13574ff8d27",
+        "matches": true
+      },
+      "stage16_plan": {
+        "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\results\\step16-diversity\\run01\\plan.json",
+        "sha256": "1dca4f4ed88ca820e53e3dda47306baed6d68c7a1c217b49ae37cf4c4ad4c5bd",
+        "matches": true
+      },
+      "stage17_plan": {
+        "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\results\\step17-expansion\\run01\\plan.json",
+        "sha256": "c81183aede87182d6a7b8be37dafec848b375be667e9e62de88805c4d50f5e75",
+        "matches": true
+      },
+      "source_index": {
+        "path": "C:\\Users\\HyunE\\Desktop\\lipnet_project\\data_cache\\datasets\\aihub_pilot_v2\\source_index.json",
+        "sha256": "906d8aac3719fd9aff22380748833552af9538ebcd600b384f9c95c3e177e9ac",
+        "matches": true
+      }
+    },
+    "existing_manifest_sha256": "214ce935150b367a15f24f0896901d34c54c6d4fe73d493a9d397c4c94fe59a6",
+    "scope_of_hash_recheck": "17 frozen plan anchors and 5 protected parent metadata/index files; no historical model or cache payloads were rehashed",
+    "past_model_or_cache_payloads_opened_by_this_audit": false,
+    "test_cache_payload_accessed_by_this_audit": false,
+    "old_sources_or_results_modified_by_this_audit": false
+  },
+  "report_cross_checks": {
+    "reacquisition_rows": 163,
+    "reacquisition_ids_exactly_match_failed_probe_ids": true,
+    "reacquisition_fields_match_probe_index_and_selection": true,
+    "pilot_failed_reacquisition_rows": 28,
+    "structural_candidate_rows": 17,
+    "structural_candidates_exactly_match_pass_ids": true,
+    "recovery_report_referenced_hashes_match": true,
+    "first_source_evidence_matches_failure_record": true,
+    "main_report_review": "No material numeric or scope mismatch found. It distinguishes top-level structure from decoding, first-file Drive history from other files, observed display sizes from exact bytes, and code tests from data recovery."
+  },
+  "tests": {
+    "passed": 186,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "runtime": ".venv-tokenizer/Scripts/python.exe",
+    "suites": [
+      {
+        "path": "tmp/step18-intake-selection-tests.xml",
+        "sha256": "28577637401b2b02aa247b648248480497d1a6f00f659c69effd13f47a1c0474",
+        "size_bytes": 10469,
+        "tests": 70,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 70,
+        "rerun_during_this_audit": false
+      },
+      {
+        "path": "tmp/step18-intake-tests.xml",
+        "sha256": "9c607c5d3eed7a8e0deb306d64d7bcc44365ddfad3025347320fc85f7cc5ecd8",
+        "size_bytes": 7866,
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 52,
+        "rerun_during_this_audit": false
+      },
+      {
+        "path": "tmp/step18-preprocessing-tests.xml",
+        "sha256": "3cd76f1431035cf3044abe7a790bca739915fd40420c894c66fd4c4ac9854367",
+        "size_bytes": 4808,
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 34,
+        "rerun_during_this_audit": false
+      },
+      {
+        "path": "tmp/step18-container-tests.xml",
+        "sha256": "b1cf25763d2d82e1d6fc919c7346519879b287e0ce475a8070bb1b544e669772",
+        "size_bytes": 4814,
+        "tests": 30,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 30,
+        "rerun_during_this_audit": false
+      }
+    ],
+    "meaning": "Synthetic/contract code tests, not proof of restored videos or recognition performance"
+  },
+  "external_access_observations": {
+    "evidence_file": "results/step18-intake/run01/recovery_access.json",
+    "scope": "Root-recorded UI and disk observations; not independently revisited during this metadata audit",
+    "drive_older_version_check": "Only lip_J_1_F_02_C040_A_001.mp4; one visible current version, zero visible older versions",
+    "aihub_dataset_key": 538,
+    "aihub_source_url": "https://aihub.or.kr/aihubdata/data/view.do?dataSetSn=538",
+    "aihub_files_as_observed_by_root": [
+      {
+        "name": "TS2.tar",
+        "display_size": "78.83 GB",
+        "file_key": 54972
+      },
+      {
+        "name": "TS20.tar",
+        "display_size": "86.80 GB",
+        "file_key": 54973
+      },
+      {
+        "name": "TS200.tar",
+        "display_size": "88.50 GB",
+        "file_key": 54974
+      }
+    ],
+    "exact_server_bytes_or_checksums_verified": false,
+    "download_started_by_agent": false,
+    "download_complete_verified": false
+  },
+  "limitations": [
+    "The point at which source files became incomplete is undetermined; MiB-aligned truncation is evidence of a pattern, not proof of a particular service failure.",
+    "Seventeen structural passes have not undergone decoding, timing/label alignment or ROI review.",
+    "Declared missing-byte sums are conditional on correct size headers, not actual full archive download budgets or recoverable byte ranges.",
+    "No restored video or prepared clip exists from this run. The frozen failed run must be retained when a new intake run is created."
+  ],
+  "next_gate": "After the user completes TS2.tar and supplies its path, verify the archive and extract representative selected videos into a separate recovery directory before further preparation.",
+  "artifact_inventory": [
+    {
+      "path": "results/step18-intake/run01/inventory.json",
+      "sha256": "9f8bf628dc3f54224139858866259c73b2e374134bf4d1c20e3626678add7611",
+      "size_bytes": 2227344
+    },
+    {
+      "path": "results/step18-intake/run01/source_index.json",
+      "sha256": "83877f8dd15232e9e4e00f59d7fa1a793d225d78f622ecf5d3c6e280b9bd850c",
+      "size_bytes": 11557432
+    },
+    {
+      "path": "results/step18-intake/run01/protected_reference.json",
+      "sha256": "ec0a308c0b6b1c98f4104615fbf50f0f5291a94c612c97ec1707b6023aa096cb",
+      "size_bytes": 240307
+    },
+    {
+      "path": "results/step18-intake/run01/selection.json",
+      "sha256": "abadd58b0fdf15197c1ced38b01033b464e87f439b8ae2bd43405098be07cc9c",
+      "size_bytes": 472995
+    },
+    {
+      "path": "results/step18-intake/run01/container_probe.json",
+      "sha256": "41f62aecee8d0ab0d8c09b68bf14aaddb0a53dd66357bb3cb81cefd94f5c6464",
+      "size_bytes": 203190
+    },
+    {
+      "path": "results/step18-intake/run01/preparation_failure.json",
+      "sha256": "5666857b1376eaee4b6003a5b6ca01f078826e1a64400202e16226d9d9bb203a",
+      "size_bytes": 3901
+    },
+    {
+      "path": "results/step18-intake/run01/recovery_summary.json",
+      "sha256": "b0cb920c2c8fdd3272e05391b34e88a986984759cc0503cead8b6afaabf72253",
+      "size_bytes": 221771
+    },
+    {
+      "path": "results/step18-intake/run01/recovery_access.json",
+      "sha256": "8d045931268de255bf571280137adc50eb14492c10d2aaa9ba16bf0935c560d9",
+      "size_bytes": 2039
+    },
+    {
+      "path": "tmp/step18-first-source-evidence.json",
+      "sha256": "7d158530c4f0094ba45496a6d4c3d16c270385d27e7e356ca3e78bffa90972ba",
+      "size_bytes": 3101
+    },
+    {
+      "path": "scripts/probe_intake_containers.py",
+      "sha256": "2f0fb7d2e0334dd193bfd4041196719f0073512ce4d3ca567455c7b292717677",
+      "size_bytes": 5592
+    },
+    {
+      "path": "docs/단계별_개선/18_재확보_필요파일.txt",
+      "sha256": "c4193dc67586afe4e4725997bd13d9218a1e49685fddd79881f38cfea86e023a",
+      "size_bytes": 102778
+    },
+    {
+      "path": "docs/단계별_개선/18_정상구조_후보.md",
+      "sha256": "ea7e7156f13d72bcec848f826904544d0b9c247a74e2298f586b2df442f1dd60",
+      "size_bytes": 9447
+    },
+    {
+      "path": "docs/단계별_개선/18_신규자료_무결성점검_및_복구.md",
+      "sha256": "a5b11ce5ea5837c31a028276ceb0f636452019363200e946b1f3195494bc9b24",
+      "size_bytes": 9057
+    }
+  ]
+}

@@ -8,6 +8,6 @@ set -euo pipefail
 # WEIGHTS_URL="..."
 # OUTPUT_DIR="backend/models/weights"
 # mkdir -p "${OUTPUT_DIR}"
-# curl -L "${WEIGHTS_URL}" -o "${OUTPUT_DIR}/baseline.pt"
+# curl -L "${WEIGHTS_URL}" -o "${OUTPUT_DIR}/baseline_jamo_v2.pt"
 
 echo "TODO: implement weight download"

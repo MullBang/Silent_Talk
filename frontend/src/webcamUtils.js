@@ -10,7 +10,7 @@ import {
   ROI_SIZE,
   VVAD_IDX_BOT,
   VVAD_IDX_TOP,
-} from './constants';
+} from './constants.js';
 
 /** 랜드마크 idx 집합의 평균 좌표(정규화 [0,1]). */
 function avgPoint(landmarks, idxs) {
@@ -30,13 +30,13 @@ function avgPoint(landmarks, idxs) {
  * @param {Array<{x:number,y:number}>} landmarks - 정규화 랜드마크.
  * @returns {number}
  */
-export function computeMouthRatio(landmarks) {
+export function computeMouthRatio(landmarks, videoW = 1, videoH = 1) {
   const top = avgPoint(landmarks, VVAD_IDX_TOP);
   const bot = avgPoint(landmarks, VVAD_IDX_BOT);
-  const dRaw = Math.hypot(top.x - bot.x, top.y - bot.y);
+  const dRaw = Math.hypot((top.x - bot.x) * videoW, (top.y - bot.y) * videoH);
   const w = Math.abs(
     landmarks[FACE_WIDTH_IDX[0]].x - landmarks[FACE_WIDTH_IDX[1]].x,
-  );
+  ) * videoW;
   return w > 0 ? dRaw / w : 0;
 }
 
@@ -66,10 +66,10 @@ export function computeRoiBBox(landmarks, videoW, videoH, margin = ROI_MARGIN) {
   y1 -= bh * margin;
   x2 += bw * margin;
   y2 += bh * margin;
-  x1 = Math.max(0, Math.min(x1, videoW - 1));
-  y1 = Math.max(0, Math.min(y1, videoH - 1));
-  x2 = Math.max(x1 + 1, Math.min(x2, videoW));
-  y2 = Math.max(y1 + 1, Math.min(y2, videoH));
+  x1 = Math.max(0, Math.min(Math.floor(x1), videoW - 1));
+  y1 = Math.max(0, Math.min(Math.floor(y1), videoH - 1));
+  x2 = Math.max(x1 + 1, Math.min(Math.ceil(x2), videoW));
+  y2 = Math.max(y1 + 1, Math.min(Math.ceil(y2), videoH));
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 
@@ -98,6 +98,10 @@ export function extractRoiBytes(video, bbox, canvas) {
  * @returns {ArrayBuffer}
  */
 export function buildBinaryFrame(chunkId, roiBytes) {
+  if (!Number.isInteger(chunkId) || chunkId < 1 || chunkId > 0xffffffff ||
+      !(roiBytes instanceof Uint8Array) || roiBytes.length !== ROI_BYTES) {
+    throw new Error('청크 ID 또는 RGB Uint8 프레임 규격이 잘못되었습니다.');
+  }
   const buf = new ArrayBuffer(HEADER_BYTES + roiBytes.length);
   const dv = new DataView(buf);
   dv.setUint32(0, chunkId >>> 0, false); // Big-Endian

@@ -1,0 +1,81 @@
+{
+  "stage": 3,
+  "date": "2026-09-17",
+  "status": "implemented_and_verified_with_test_doubles",
+  "protocol_version": 2,
+  "python_tests_passed": 175,
+  "python_tests_deselected": 2,
+  "frontend_tests_passed": 19,
+  "frontend_build": "passed",
+  "wire_probe": {
+    "passed": true,
+    "model": "sha256_stub",
+    "final_results": [
+      {
+        "utterance_id": 1,
+        "frames": 11,
+        "hash_matches": true
+      },
+      {
+        "utterance_id": 2,
+        "frames": 16,
+        "hash_matches": true
+      }
+    ],
+    "session_end": {
+      "type": "SESSION_END",
+      "total_segments": 2,
+      "total_frames": 27
+    },
+    "server_inference_calls": [
+      {
+        "frames": 11,
+        "final": false,
+        "sha256": "1c08912ea28bb23af65faa0f11e0e78e4c7aa41e4871900f7678f919443ccbb6"
+      },
+      {
+        "frames": 11,
+        "final": true,
+        "sha256": "1c08912ea28bb23af65faa0f11e0e78e4c7aa41e4871900f7678f919443ccbb6"
+      },
+      {
+        "frames": 11,
+        "final": false,
+        "sha256": "d21811e7c085cc5fefd87adc38f6334ec6316834d3c4d971bf29c8aacc7cb96e"
+      },
+      {
+        "frames": 16,
+        "final": true,
+        "sha256": "220c01b7057dd3b965e78f14c01fb106a1f9c3d9fe7bb43af1a7c787f00991db"
+      }
+    ]
+  },
+  "browser_probe": {
+    "passed": true,
+    "checks": [
+      "missing-model reason displayed before camera request",
+      "calibration, partial subtitle, graceful stop, final subtitle, resource cleanup",
+      "restart resets state; disconnect removes unfinished subtitle and displays reason",
+      "stop during permission setup closes late-arriving camera tracks",
+      "unmount during model setup closes late-created detector and camera"
+    ],
+    "page_errors": [],
+    "kind": "headless Edge; camera, landmark detector and responses mocked"
+  },
+  "real_webcam_accuracy_measured": false,
+  "real_model_latency_measured": false,
+  "trained_v2_weights_present": false,
+  "additional_training_data_needed_for_this_stage": false,
+  "limits": {
+    "fps": 25,
+    "chunk_frames": 11,
+    "utterance_frames": 200,
+    "pending_frames": 200,
+    "source_gap_ms": 200,
+    "ack_timeout_ms": 30000
+  },
+  "source_references": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback",
+    "https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js"
+  ]
+}

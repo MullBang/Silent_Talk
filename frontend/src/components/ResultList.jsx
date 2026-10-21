@@ -3,14 +3,10 @@
 
 import React from 'react';
 
-// 인식 불가/검출 실패 마커 (취소선 처리 대상).
-// 백엔드는 비검출 세그먼트에 '[검출 실패 구간]'을 사용하므로 함께 포함한다.
-export const NON_RECOGNITION_MARKERS = ['[인식 불가]', '[검출 실패 구간]'];
+import { isNonRecognition, lowConfidenceCandidate } from '../results/markers';
 
-/** 비인식(마커) 텍스트 여부. */
-export function isNonRecognition(text) {
-  return NON_RECOGNITION_MARKERS.includes((text || '').trim());
-}
+// 인식 불가/검출 실패/발화 없음 마커 (취소선 처리 대상). 정의는 순수 모듈 results/markers.js.
+export { NON_RECOGNITION_MARKERS, isNonRecognition } from '../results/markers';
 
 /** ms → "MM:SS" (null이면 "--:--"). */
 export function msToClock(ms) {
@@ -26,7 +22,8 @@ export function msToClock(ms) {
  * 인식 결과 리스트.
  *
  * @param {object} props
- * @param {Array<{start_ms:number, end_ms:number, text:string, confidence:number|null}>} props.results
+ * @param {Array<{start_ms:number, end_ms:number, text:string, confidence:number|null,
+ *   candidate?:string|null}>} props.results '[인식 불가]' 항목의 candidate는 낮은 신뢰도 추정으로 흐리게 표시한다.
  * @returns {JSX.Element}
  */
 export default function ResultList({ results }) {
@@ -42,6 +39,7 @@ export default function ResultList({ results }) {
     <ul className="divide-y divide-gray-100">
       {items.map((item, idx) => {
         const marker = isNonRecognition(item.text);
+        const candidate = lowConfidenceCandidate(item);
         // confidence < 0.5 → 회색 이탤릭 (초기 표시 기준; 검증 데이터로 CER/WER
         // 상관관계 확인 후 조정 가능)
         const lowConf =
@@ -58,7 +56,15 @@ export default function ResultList({ results }) {
             <span className="shrink-0 font-mono text-xs text-gray-400">
               [{msToClock(item.start_ms)}~{msToClock(item.end_ms)}]
             </span>
-            <span className={`flex-1 text-sm ${textCls}`}>{item.text}</span>
+            <span className="min-w-0 flex-1 text-sm">
+              <span className={textCls}>{item.text}</span>
+              {candidate && (
+                <span className="mt-0.5 block break-words text-xs text-gray-400">
+                  낮은 신뢰도 추정: {candidate}
+                  {typeof item.confidence === 'number' && ` (${item.confidence.toFixed(2)})`}
+                </span>
+              )}
+            </span>
             {typeof item.confidence === 'number' && !marker && (
               <span className="shrink-0 text-xs text-gray-300">
                 {item.confidence.toFixed(2)}

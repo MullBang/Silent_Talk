@@ -4,6 +4,14 @@
 export const ROI_SIZE = 96;
 export const ROI_BYTES = ROI_SIZE * ROI_SIZE * 3; // 27,648 (Uint8 RGB)
 export const ROI_MARGIN = 0.2;
+export const FPS = 25;
+export const FRAME_MS = 1000 / FPS;
+export const WS_PROTOCOL_VERSION = 2;
+export const PRE_ROLL_FRAMES = 8;
+export const MAX_UTTERANCE_FRAMES = 200;
+export const MAX_PENDING_FRAMES = 200;
+export const MAX_SOURCE_GAP_MS = 200;
+export const ACK_TIMEOUT_MS = 30000;
 
 // MediaPipe Face Mesh 랜드마크 인덱스
 export const ROI_CROP_IDX = [
@@ -28,13 +36,14 @@ export const CHUNK_FRAMES = 11; // 10~12프레임마다 청크 전송
 export const HEADER_BYTES = 8;
 export const MSG_TYPE_FRAME_DATA = 0x01;
 export const SUBTITLE_MAX = 5;
-export const MAX_RECONNECT = 3;
-export const RECONNECT_DELAY_MS = 1000;
+// 연결 유실 시 진행 중 발화를 이어붙이지 않고 종료한다. 사용자가 다시 시작한다.
 export const WS_URL =
-  import.meta.env?.VITE_WS_URL || 'ws://localhost:8000/ws/stream';
+  import.meta.env?.VITE_WS_URL || `${globalThis.location?.protocol === 'https:' ? 'wss' : 'ws'}://${globalThis.location?.hostname || 'localhost'}:8000/ws/stream`;
 
-// MediaPipe 모델 (CDN)
-export const MEDIAPIPE_WASM =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm';
+// MediaPipe 웹 파일 (6단계: 오프라인 시연 대비 로컬 제공)
+// wasm은 vite.config.js의 mediapipe-local 플러그인이 node_modules에서 /mediapipe/wasm 으로 제공·빌드 복사한다.
+export const MEDIAPIPE_WASM = `${import.meta.env?.BASE_URL || '/'}mediapipe/wasm`;
+// 얼굴 랜드마크 모델: frontend/public/mediapipe/face_landmarker.task 가 있으면 그 파일을 쓰고
+// (mediapipeAssets.resolveFaceLandmarkerModel), 없을 때만 아래 CDN 주소를 쓴다 (WebcamPage 전용).
 export const FACE_LANDMARKER_MODEL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';

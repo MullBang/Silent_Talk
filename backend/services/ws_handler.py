@@ -1,249 +1,265 @@
-"""WebSocket 연결 핸들러 (설계문서 4절 — 실시간 스트리밍, 2차 목표).
+"""웹캠 프로토콜 v2: 명시된 프레임을 모두 받은 청크만 한 번 추론한다.
 
-업링크 규격:
-  - JSON 제어 메시지 선행 → Binary ArrayBuffer.
-  - 제어: SESSION_START / CHUNK_START / SESSION_END.
-  - 바이너리 프레임: [0~3]=chunk_id(Uint32 BE) [4]=0x01(FRAME_DATA) [5~7]=reserved
-                     [8~]=ROI 픽셀 Uint8 27,648 bytes (96×96×3).
-다운링크: JSON {type:'PARTIAL'|'ERROR'|'SESSION_END', ...}.
-
-세션별 프레임을 누적(슬라이딩 윈도우)하고, is_final=True 청크에서 전체 누적
-프레임으로 최종 추론 후 버퍼를 비운다.
-
-정규화는 파일 추론 파이프라인과 동일하게 normalize_roi(÷255 + ImageNet)를
-적용하여 학습·추론 전처리 일관성을 유지한다(설계 4.2의 '[0,1]'은 단순 표기).
+SESSION_START → SESSION_READY → (CHUNK_START + frame_count개의 binary) → PARTIAL.
+frame_count=0인 final은 누적 발화를 확정한다. SESSION_END도 남은 발화를 확정한다.
+모델 작업은 별도 스레드에서 직렬화하며 한 발화의 메모리/길이를 제한한다.
 """
-
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass, field
 import json
+import logging
+import math
 import os
-import sys
+import threading
 
 import numpy as np
+from starlette.websockets import WebSocketDisconnect
 
-# backend 루트 부트스트랩
-_BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if _BACKEND_ROOT not in sys.path:
-    sys.path.insert(0, _BACKEND_ROOT)
+from config import (
+    CORS_ORIGINS, FPS, MODEL_BACKEND, MODEL_WEIGHTS_PATH, NORMALIZE_MEAN, NORMALIZE_STD,
+    ROI_SIZE, WS_CHUNK_FRAMES, WS_MAX_UTTERANCE_FRAMES, WS_PROTOCOL_VERSION,
+)
 
-from config import CORS_ORIGINS, MODEL_WEIGHTS_PATH, ROI_SIZE  # noqa: E402
-
-# 허용 바이너리 ROI 페이로드 크기 (Uint8). Float32(110,592) 직접 전송은 거부.
-EXPECTED_ROI_BYTES: int = ROI_SIZE[0] * ROI_SIZE[1] * 3  # 27,648
-HEADER_BYTES: int = 8
-MSG_TYPE_FRAME_DATA: int = 0x01
-
-# 정책 위반(허용 외 Origin) 종료 코드 — WebSocket의 403 대응
-_WS_POLICY_VIOLATION = 1008
-
-# 지연 로딩 모델 캐시
+EXPECTED_ROI_BYTES = ROI_SIZE[0] * ROI_SIZE[1] * 3
+HEADER_BYTES = 8
+MSG_TYPE_FRAME_DATA = 0x01
+FRAME_MS = 1000 // FPS
 _model = None
+_model_lock = threading.Lock()
+_infer_lock = threading.Lock()
+logger = logging.getLogger(__name__)
+
+
+class ProtocolError(ValueError):
+    """누적 상태를 재사용하지 않고 연결을 종료해야 하는 규격 오류."""
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+@dataclass
+class StreamSession:
+    """연결별 한 발화 버퍼 및 단조 증가 식별자."""
+    session_id: str | None = None
+    chunk: dict | None = None
+    frames: list[np.ndarray] = field(default_factory=list)
+    utterance_id: int | None = None
+    last_utterance_id: int = 0
+    last_chunk_id: int = 0
+    next_ms: int | None = None
+    last_end_ms: int = 0
+    total_segments: int = 0
+    total_frames: int = 0
+
+    def clear_utterance(self) -> None:
+        """확정/중단된 발화의 영상 메모리만 해제한다."""
+        self.frames.clear()
+        self.utterance_id = None
+        self.next_ms = None
 
 
 def _get_model():
-    """모델을 지연 로딩한다 (가중치 있으면 로드, 없으면 미학습 모델 폴백).
-
-    Returns:
-        eval 모드 LipNetBaseline 인스턴스.
-    """
+    """호환되는 학습 가중치만 한 번 로드한다. 무작위 가중치로 대체하지 않는다."""
     global _model
-    if _model is None:
-        from models.baseline import LipNetBaseline
-
-        if os.path.exists(MODEL_WEIGHTS_PATH):
+    with _model_lock:
+        if _model is None:
+            from models.baseline import LipNetBaseline
+            if not os.path.exists(MODEL_WEIGHTS_PATH):
+                raise FileNotFoundError(
+                    f"v2 가중치가 없습니다. 새 토큰 사전으로 학습하세요: {MODEL_WEIGHTS_PATH}"
+                )
             _model = LipNetBaseline.load_from_checkpoint(MODEL_WEIGHTS_PATH)
-        else:
-            _model = LipNetBaseline().eval()  # 미학습 폴백 (구조 검증용)
     return _model
 
 
 def _infer(frames: list[np.ndarray], with_confidence: bool) -> tuple[str, float | None]:
-    """누적된 ROI 프레임으로 추론한다.
-
-    Args:
-        frames: (96, 96, 3) uint8 ROI 프레임 리스트 (가변 길이 T).
-        with_confidence: True면 confidence 산출(최종), False면 None(중간 예측).
-
-    Returns:
-        (transcript, confidence | None).
-    """
+    """별도 스레드에서 정규화/추론한다. 동시 모델 실행의 메모리 폭증을 막는다."""
     import torch
-
     from models.decoder import decode
-    from preprocessing.roi_extractor import normalize_roi, to_model_tensor
+    with _infer_lock:
+        arr = np.stack(frames).astype(np.float32) / 255.0
+        arr = (arr - np.asarray(NORMALIZE_MEAN, dtype=np.float32)) / np.asarray(NORMALIZE_STD, dtype=np.float32)
+        tensor = torch.from_numpy(arr).permute(3, 0, 1, 2).unsqueeze(0)
+        with torch.no_grad():
+            log_probs = _get_model()(tensor)
+        text, confidence, _raw = decode(log_probs)
+        return text, confidence if with_confidence else None
 
-    arr = np.stack(frames, axis=0)  # (T, 96, 96, 3)
-    tensor = to_model_tensor(normalize_roi(arr))  # (1, 3, T, 96, 96)
-    model = _get_model()
-    with torch.no_grad():
-        log_probs = model(tensor)  # (T, 1, num_classes)
-    text, confidence, _raw = decode(log_probs)
-    return text, (confidence if with_confidence else None)
+
+def _integer(message: dict, key: str, minimum: int, maximum: int) -> int:
+    """bool/실수/음수 등 잘못된 ID 및 프레임 수를 거부한다."""
+    value = message.get(key)
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ProtocolError("PROTOCOL", f"잘못된 {key}")
+    return value
+
+
+async def _predict(websocket, state: StreamSession, chunk: dict) -> None:
+    """완성 청크 또는 세션 종료의 누적 발화를 한 번만 추론한다."""
+    final = chunk["is_final"]
+    text, confidence = "", None
+    if state.frames:
+        text, confidence = await asyncio.to_thread(_infer, list(state.frames), final)
+    await websocket.send_json({
+        "type": "PARTIAL", "session_id": state.session_id,
+        "utterance_id": state.utterance_id, "chunk_id": chunk["chunk_id"],
+        "text": text, "confidence": confidence, "is_final": final,
+        "frame_count": len(state.frames), "window_end_ms": state.next_ms,
+    })
+    if final:
+        state.total_segments += bool(state.frames)
+        state.clear_utterance()
+
+
+async def handle_control_message(websocket, raw: str, state: StreamSession) -> bool:
+    """제어 메시지를 검증한다. 반환 True이면 정상 종료한 연결이다."""
+    try:
+        message = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ProtocolError("BAD_JSON", "제어 메시지 파싱 실패") from exc
+    if not isinstance(message, dict):
+        raise ProtocolError("BAD_JSON", "제어 메시지는 JSON 객체여야 합니다.")
+    kind = message.get("type")
+    if kind == "SESSION_START":
+        if state.session_id is not None:
+            raise ProtocolError("PROTOCOL", "이미 시작한 세션입니다.")
+        if message.get("protocol_version") != WS_PROTOCOL_VERSION:
+            raise ProtocolError("PROTOCOL_VERSION", "웹캠 화면과 서버를 함께 업데이트하세요.")
+        sid = message.get("session_id")
+        timestamp = message.get("client_ts")
+        if not isinstance(sid, str) or not sid or len(sid) > 128:
+            raise ProtocolError("PROTOCOL", "올바른 session_id가 필요합니다.")
+        if type(timestamp) not in (int, float) or not math.isfinite(timestamp) or timestamp < 0:
+            raise ProtocolError("PROTOCOL", "올바른 client_ts가 필요합니다.")
+        try:
+            await asyncio.to_thread(_get_model)
+        except FileNotFoundError as exc:
+            if MODEL_BACKEND == "olkavs":
+                raise ProtocolError("MODEL_NOT_READY", "웹캠 실시간 인식은 공식 모델에서 아직 지원하지 않습니다. "
+                                    "영상을 녹화해 업로드하면 공식 모델로 분석합니다.") from exc
+            raise ProtocolError("MODEL_NOT_READY", "학습된 v2 모델이 아직 없습니다. 모델 학습을 완료한 뒤 웹캠 인식을 시작하세요.") from exc
+        state.session_id = sid
+        await websocket.send_json({"type": "SESSION_READY", "session_id": sid,
+                                   "protocol_version": WS_PROTOCOL_VERSION, "fps": FPS,
+                                   "chunk_frames": WS_CHUNK_FRAMES,
+                                   "max_utterance_frames": WS_MAX_UTTERANCE_FRAMES})
+        return False
+    if state.session_id is None:
+        raise ProtocolError("PROTOCOL", "SESSION_START 선행 필요")
+    if state.chunk is not None:
+        raise ProtocolError("INCOMPLETE_CHUNK", "선언한 청크의 모든 프레임을 먼저 보내세요.")
+    if kind == "CHUNK_START":
+        chunk_id = _integer(message, "chunk_id", 1, 2**32 - 1)
+        utterance_id = _integer(message, "utterance_id", 1, 2**32 - 1)
+        count = _integer(message, "frame_count", 0, WS_CHUNK_FRAMES)
+        start = _integer(message, "window_start_ms", 0, 2**53 - 1)
+        end = _integer(message, "window_end_ms", 0, 2**53 - 1)
+        final = message.get("is_final")
+        if type(final) is not bool or (count == 0 and not final):
+            raise ProtocolError("PROTOCOL", "빈 청크는 발화 종료에만 사용합니다.")
+        if chunk_id != state.last_chunk_id + 1:
+            raise ProtocolError("CHUNK_ORDER", "중복 또는 순서가 바뀐 chunk_id")
+        if start % FRAME_MS or end - start != count * FRAME_MS:
+            raise ProtocolError("TIMELINE", "청크 시간과 25fps 프레임 수가 일치하지 않습니다.")
+        if state.utterance_id is None:
+            if utterance_id <= state.last_utterance_id or start < state.last_end_ms or count == 0:
+                raise ProtocolError("UTTERANCE_ORDER", "새 발화 ID/시작 시간 또는 빈 종료가 올바르지 않습니다.")
+            state.utterance_id = utterance_id
+            state.last_utterance_id = utterance_id
+        elif utterance_id != state.utterance_id or start != state.next_ms:
+            raise ProtocolError("TIMELINE", "발화 중 프레임 누락·중복 또는 다른 발화 혼입")
+        if len(state.frames) + count > WS_MAX_UTTERANCE_FRAMES:
+            raise ProtocolError("BUFFER_LIMIT", "한 발화는 8초 이내로 보내세요.")
+        state.last_chunk_id = chunk_id
+        state.chunk = {**message, "received": 0}
+        if count == 0:
+            await _predict(websocket, state, state.chunk)
+            state.chunk = None
+        return False
+    if kind == "UTTERANCE_ABORT":
+        utterance_id = _integer(message, "utterance_id", 1, 2**32 - 1)
+        if state.utterance_id != utterance_id:
+            raise ProtocolError("UTTERANCE_ORDER", "중단할 발화 ID가 일치하지 않습니다.")
+        state.clear_utterance()
+        await websocket.send_json({"type": "ABORTED", "utterance_id": utterance_id})
+        return False
+    if kind == "SESSION_END":
+        if state.frames:
+            await _predict(websocket, state, {"is_final": True, "chunk_id": state.last_chunk_id})
+        await websocket.send_json({"type": "SESSION_END", "total_segments": state.total_segments,
+                                   "total_frames": state.total_frames})
+        await websocket.close(code=1000)
+        return True
+    raise ProtocolError("UNKNOWN_TYPE", f"알 수 없는 제어 타입: {kind}")
+
+
+async def handle_binary_chunk(websocket, data: bytes, state: StreamSession) -> None:
+    """binary 헤더/청크 ID를 확인하고 마지막 프레임에서만 추론한다."""
+    chunk = state.chunk
+    if state.session_id is None or chunk is None:
+        raise ProtocolError("PROTOCOL", "SESSION_START/CHUNK_START 선행 필요")
+    if len(data) < HEADER_BYTES:
+        raise ProtocolError("BAD_HEADER", "헤더 길이 부족")
+    if data[4] != MSG_TYPE_FRAME_DATA:
+        raise ProtocolError("BAD_MSG_TYPE", "미지원 바이너리 메시지 종류")
+    if data[5:8] != b"\x00\x00\x00":
+        raise ProtocolError("BAD_HEADER", "예약 헤더는 0이어야 합니다.")
+    if int.from_bytes(data[:4], "big") != chunk["chunk_id"]:
+        raise ProtocolError("CHUNK_ID", "제어 메시지와 바이너리 chunk_id 불일치")
+    if len(data) != HEADER_BYTES + EXPECTED_ROI_BYTES:
+        raise ProtocolError("BAD_SIZE", f"ROI는 RGB Uint8 {EXPECTED_ROI_BYTES}바이트여야 합니다.")
+    frame = np.frombuffer(data, dtype=np.uint8, offset=HEADER_BYTES).reshape(*ROI_SIZE, 3)
+    state.frames.append(frame.copy())
+    state.total_frames += 1
+    chunk["received"] += 1
+    if chunk["received"] == chunk["frame_count"]:
+        state.next_ms = chunk["window_end_ms"]
+        state.last_end_ms = state.next_ms
+        await _predict(websocket, state, chunk)
+        state.chunk = None
 
 
 async def handle_connection(websocket) -> None:
-    """WebSocket 연결 수명주기를 처리한다.
-
-    Origin 화이트리스트 검사 → accept → 제어/바이너리 메시지 루프.
-
-    Args:
-        websocket: 수신된 WebSocket 연결.
-    """
-    # ① Origin 화이트리스트 검사 (브라우저 교차출처 방어; Origin 없으면 비브라우저로 허용)
+    """Origin 확인 후 세션을 처리하고 오류/종료에서 모든 버퍼를 해제한다."""
     origin = websocket.headers.get("origin")
     if origin is not None and origin not in CORS_ORIGINS:
-        await websocket.close(code=_WS_POLICY_VIOLATION)  # ≈ 403
+        await websocket.close(code=1008)
         return
-
     await websocket.accept()
-
-    # 세션 상태 / 누적 버퍼
-    state: dict = {"session_id": None, "client_ts": None, "chunk": None}
-    buffers: dict[str, list[np.ndarray]] = {}
-
+    state = StreamSession()
     try:
         while True:
-            message = await websocket.receive()
+            receive = websocket.receive()
+            message = await asyncio.wait_for(receive, timeout=30) if state.chunk else await receive
             if message.get("type") == "websocket.disconnect":
                 break
             if message.get("text") is not None:
-                closed = await handle_control_message(
-                    websocket, message["text"], state, buffers
-                )
-                if closed:
+                if await handle_control_message(websocket, message["text"], state):
                     break
             elif message.get("bytes") is not None:
-                await handle_binary_chunk(websocket, message["bytes"], state, buffers)
-    except Exception:  # noqa: BLE001 - 연결 종료/오류 시 정리
+                await handle_binary_chunk(websocket, message["bytes"], state)
+    except WebSocketDisconnect:
         pass
+    except Exception as exc:
+        code = exc.code if isinstance(exc, ProtocolError) else "INFERENCE_FAILED"
+        if isinstance(exc, asyncio.TimeoutError):
+            code, detail = "CHUNK_TIMEOUT", "청크 프레임 수신 시간이 초과되었습니다."
+        elif isinstance(exc, ProtocolError):
+            detail = str(exc)
+        else:
+            from models.tokenizer import TokenizerMismatchError
+            if isinstance(exc, TokenizerMismatchError):
+                code, detail = "MODEL_INCOMPATIBLE", "모델의 한글 사전이 현재 코드와 다릅니다. v2 모델을 학습하세요."
+            else:
+                detail = "모델 처리에 실패했습니다. 서버 상태와 가중치를 확인하세요."
+                logger.exception("Webcam inference failed")
+        try:
+            await websocket.send_json({"type": "ERROR", "code": code, "message": detail, "fatal": True})
+            await websocket.close(code=1008 if isinstance(exc, ProtocolError) else 1011)
+        except (RuntimeError, WebSocketDisconnect):
+            pass
     finally:
-        sid = state.get("session_id")
-        if sid is not None:
-            buffers.pop(sid, None)
-
-
-async def handle_control_message(websocket, raw: str, state: dict, buffers: dict) -> bool:
-    """JSON 제어 메시지를 처리한다.
-
-    Args:
-        websocket: WebSocket 연결.
-        raw: JSON 텍스트.
-        state: 세션 상태 dict.
-        buffers: 세션별 프레임 버퍼.
-
-    Returns:
-        연결을 종료해야 하면 True (SESSION_END).
-    """
-    try:
-        message = json.loads(raw)
-    except json.JSONDecodeError:
-        await websocket.send_json(
-            {"type": "ERROR", "code": "BAD_JSON", "message": "제어 메시지 파싱 실패"}
-        )
-        return False
-
-    mtype = message.get("type")
-
-    if mtype == "SESSION_START":
-        sid = message.get("session_id")
-        state["session_id"] = sid
-        state["client_ts"] = message.get("client_ts")
-        if sid is not None:
-            buffers.setdefault(sid, [])
-        return False
-
-    if mtype == "CHUNK_START":
-        state["chunk"] = {
-            "chunk_id": message.get("chunk_id"),
-            "window_start_ms": message.get("window_start_ms"),
-            "window_end_ms": message.get("window_end_ms"),
-            "is_final": bool(message.get("is_final", False)),
-        }
-        return False
-
-    if mtype == "SESSION_END":
-        sid = state.get("session_id")
-        total = len(buffers.get(sid, [])) if sid else 0
-        await websocket.send_json({"type": "SESSION_END", "total_segments": total})
-        if sid is not None:
-            buffers.pop(sid, None)
-        await websocket.close()
-        return True
-
-    await websocket.send_json(
-        {"type": "ERROR", "code": "UNKNOWN_TYPE", "message": f"알 수 없는 제어 타입: {mtype}"}
-    )
-    return False
-
-
-async def handle_binary_chunk(websocket, data: bytes, state: dict, buffers: dict) -> None:
-    """바이너리 ROI 프레임을 검증/누적하고 추론 결과를 전송한다.
-
-    Args:
-        websocket: WebSocket 연결.
-        data: [8B 헤더 + 27,648B Uint8] 바이너리 프레임.
-        state: 세션 상태.
-        buffers: 세션별 프레임 버퍼.
-    """
-    chunk = state.get("chunk")
-    sid = state.get("session_id")
-    if sid is None or chunk is None:
-        await websocket.send_json(
-            {"type": "ERROR", "code": "PROTOCOL", "message": "SESSION_START/CHUNK_START 선행 필요"}
-        )
-        return
-
-    # 헤더 검증
-    if len(data) < HEADER_BYTES:
-        await websocket.send_json(
-            {"type": "ERROR", "code": "BAD_HEADER", "message": "헤더 길이 부족"}
-        )
-        return
-    chunk_id = int.from_bytes(data[0:4], "big")
-    msg_type = data[4]
-    if msg_type != MSG_TYPE_FRAME_DATA:
-        await websocket.send_json(
-            {"type": "ERROR", "code": "BAD_MSG_TYPE", "message": f"미지원 msg_type: {msg_type}"}
-        )
-        return
-
-    payload = data[HEADER_BYTES:]
-    # Uint8 27,648 bytes만 허용 (Float32 110,592 등 거부)
-    if len(payload) != EXPECTED_ROI_BYTES:
-        await websocket.send_json(
-            {
-                "type": "ERROR",
-                "code": "BAD_SIZE",
-                "message": f"ROI 페이로드는 {EXPECTED_ROI_BYTES}B여야 합니다 (수신 {len(payload)}B)",
-            }
-        )
-        return
-
-    # Uint8 → (96,96,3) 프레임 누적
-    frame = np.frombuffer(payload, dtype=np.uint8).reshape(ROI_SIZE[0], ROI_SIZE[1], 3)
-    buffers.setdefault(sid, []).append(frame.copy())
-
-    is_final = chunk["is_final"]
-    try:
-        text, confidence = _infer(buffers[sid], with_confidence=is_final)
-    except Exception as exc:  # noqa: BLE001
-        await websocket.send_json(
-            {"type": "ERROR", "code": "DETECTION_FAILED", "message": str(exc)}
-        )
-        return
-
-    await websocket.send_json(
-        {
-            "type": "PARTIAL",
-            "text": text,
-            "confidence": confidence,
-            "is_final": is_final,
-            "chunk_id": chunk_id,
-        }
-    )
-
-    if is_final:
-        # 최종 추론 완료 → 버퍼 클리어, 청크 리셋
-        buffers[sid].clear()
-        state["chunk"] = None
+        state.clear_utterance()
+        state.chunk = None

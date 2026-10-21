@@ -37,7 +37,7 @@ if _BACKEND_ROOT not in sys.path:
 
 from config import MODEL_WEIGHTS_PATH, TEST_SETS  # noqa: E402
 
-from jamo import h2j  # noqa: E402
+from models.tokenizer import cer, wer  # noqa: E402
 
 # 평가 결과 출력 디렉토리 (테스트에서 monkeypatch 가능)
 RESULTS_DIR = os.path.join(os.getcwd(), "results")
@@ -46,57 +46,6 @@ RESULTS_DIR = os.path.join(os.getcwd(), "results")
 # ---------------------------------------------------------------------------
 # 편집 거리 / 지표
 # ---------------------------------------------------------------------------
-
-def _levenshtein(a, b) -> int:
-    """두 시퀀스 간 Levenshtein 편집 거리."""
-    n, m = len(a), len(b)
-    if n == 0:
-        return m
-    if m == 0:
-        return n
-    prev = list(range(m + 1))
-    for i in range(1, n + 1):
-        cur = [i] + [0] * m
-        for j in range(1, m + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
-        prev = cur
-    return prev[m]
-
-
-def cer(reference: str, hypothesis: str) -> float:
-    """문자 오류율 (CER) — python-jamo 자모 단위 편집 거리.
-
-    Args:
-        reference: 정답 텍스트.
-        hypothesis: 예측 텍스트.
-
-    Returns:
-        CER (0.0~). 정답이 비고 예측이 있으면 1.0.
-    """
-    ref = list("".join(h2j(reference)))
-    hyp = list("".join(h2j(hypothesis)))
-    if not ref:
-        return 0.0 if not hyp else 1.0
-    return _levenshtein(ref, hyp) / len(ref)
-
-
-def wer(reference: str, hypothesis: str) -> float:
-    """단어(어절) 오류율 (WER) — 공백 분리 후 편집 거리.
-
-    Args:
-        reference: 정답 텍스트.
-        hypothesis: 예측 텍스트.
-
-    Returns:
-        WER (0.0~). 정답이 비고 예측이 있으면 1.0.
-    """
-    ref = reference.split()
-    hyp = hypothesis.split()
-    if not ref:
-        return 0.0 if not hyp else 1.0
-    return _levenshtein(ref, hyp) / len(ref)
-
 
 def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
@@ -134,12 +83,12 @@ def load_test_set(test_set_id: str) -> list[dict]:
 
 
 def _load_model():
-    """가중치가 있으면 로드, 없으면 미학습 모델로 폴백한다."""
+    """호환되는 v2 가중치만 로드하며, 없으면 학습 필요 오류를 반환한다."""
     from models.baseline import LipNetBaseline
 
     if os.path.exists(MODEL_WEIGHTS_PATH):
         return LipNetBaseline.load_from_checkpoint(MODEL_WEIGHTS_PATH)
-    return LipNetBaseline().eval()
+    raise FileNotFoundError(f"v2 가중치가 없습니다. 새 토큰 사전으로 학습하세요: {MODEL_WEIGHTS_PATH}")
 
 
 def predict_video(video_path: str, model) -> tuple[str, float, bool]:

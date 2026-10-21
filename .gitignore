@@ -2,24 +2,101 @@
 *.pt
 *.pth
 *.onnx
+*.ckpt
+*.safetensors
+*.bin
+models/asr_audit/
 
 # Python
 __pycache__/
 *.py[cod]
 .env
-.venv/
+.venv*/
 venv/
+.pytest_cache/
 
 # 임시/로그 (루트·하위 디렉토리 모두)
 tmp/
+_tmp/
 logs/
 *.log
+
+# pytest 임시 폴더 잔재 (실험 폴더 하위 포함)
+**/test_temp_*/
+**/_test_tmp*/
+**/pytest-of-*/
+
+# 영상·음성·배열 데이터 (개인 영상·AI Hub 파생 — 위치 무관 전역 차단)
+*.mp4
+*.webm
+*.avi
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.npz
+*.npy
+
+# 얼굴·입술 프레임 이미지·검수 화면 캡처 (결과 그래프 PNG는 유지)
+experiments/**/*contact*.png
+experiments/**/*frame*.png
+experiments/**/*crop*.png
+experiments/**/*roi*.png
+experiments/**/*screen*.png
+
+# 생성 문서 출력물 (학번 등 개인정보 포함 가능)
+output/
 
 # 평가 산출물 (CSV/그래프는 디스크에만 보존, 저장소 제외)
 results/
 
 # 학습 데이터 캐시 (영상 파생 ROI/라벨 npz)
 data_cache/
+
+# 공식 모델 검증의 다운로드·개인 영상 산출물 (재현 스크립트는 보존)
+experiments/olkavs_official/upstream/
+experiments/olkavs_official/download_tools/
+experiments/olkavs_official/weights/
+experiments/olkavs_official/inputs/
+experiments/olkavs_official/inputs_step02/
+experiments/olkavs_official/inputs_step03/
+experiments/olkavs_official/inputs_step03_recovery/
+experiments/olkavs_official/inputs_step03_recovery02/
+experiments/olkavs_official/inputs_step04/
+experiments/olkavs_official/inputs_step04_aligned/
+experiments/olkavs_official/runtime_cache/
+experiments/olkavs_official/audio_tools/
+experiments/olkavs_official/step04_listening/
+experiments/olkavs_official/step04_audio_alignment/
+experiments/legacy_recheck_step05/inputs/
+models/alignment_audit/
+experiments/offline_alignment_step02_20261012/media/
+experiments/offline_boundary_review_step02b_20261013/questions/
+experiments/offline_boundary_review_step02c_20261013/questions/
+experiments/offline_boundary_review_step02c_20261013/visual_review/*.png
+experiments/offline_boundary_finalize_step02d_20261013/questions/
+experiments/offline_boundary_finalize_step02d_20261013/visual_review/*.png
+experiments/offline_boundary_finalize_step02d_20261013/results/*.png
+experiments/offline_boundary_finalize_step02d_20261013/results/*.jpg
+experiments/offline_boundary_remaining_step02f_20261013/questions/
+experiments/offline_boundary_remaining_step02f_20261013/native_check/**/*.npz
+experiments/offline_boundary_remaining_step02f_20261013/native_check/**/*.png
+experiments/offline_boundary_remaining_step02f_20261013/native_check/tmp/
+experiments/offline_boundary_remaining_step02f_20261013/native_check/_tmp/
+experiments/offline_phrase_review_step02g_20261013/media/
+experiments/offline_phrase_review_step02g_20261013/visual_review/**/*.png
+experiments/offline_phrase_review_step02g_20261013/visual_review/**/*.jpg
+experiments/offline_phrase_review_step02g_20261013/visual_review/**/*.mp4
+experiments/offline_phrase_review_step02g_20261013/visual_review_r2/**/*.png
+experiments/offline_phrase_review_step02g_20261013/visual_review_r2/**/*.jpg
+experiments/offline_phrase_review_step02g_20261013/visual_review_r2/**/*.mp4
+experiments/offline_dataset_step03_20261013/**/*.npz
+experiments/offline_dataset_step03_20261013/**/*.png
+experiments/offline_dataset_step03_20261013/**/*.jpg
+experiments/offline_dataset_step03_20261013/**/*.mp4
+experiments/offline_dataset_step03_20261013/**/_tmp/
 
 # 프론트엔드
 node_modules/
@@ -33,3 +110,87 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# ---- 공개 저장소 보호 (2026-10-21) ----
+# 저장소는 사업단 확인을 위해 공개로 둔다. AI Hub 정답 문장·녹화별 결과가 든 파일은 이 PC에만 둔다.
+# 실험 폴더는 코드(.py)만 올리고 결과·검수 파일은 올리지 않는다.
+experiments/**/*.json
+experiments/**/*.jsonl
+experiments/**/*.html
+experiments/**/*.txt
+experiments/**/*.md
+experiments/**/*.png
+experiments/**/*.js
+experiments/**/*.csv
+experiments/**/*.tar
+experiments/**/*.response
+experiments/**/*.response2
+!experiments/stage6_vad_calibration_20261020/README.md
+# 정답 문장이 들어 있는 실험 코드
+experiments/new_data_step06_20261007/build_review.py
+experiments/new_inputs_step09_20261007/test_prepare_inputs.py
+experiments/offline_budget_diversity_step05j_20261019/screening/screen_whole_audio.py
+experiments/offline_dataset_step03_20261013/audit/audit_source_times.py
+experiments/offline_phrase_boundary_step05g_20261018/prepare_q05_q06_revisions.py
+experiments/offline_phrase_design_step05e_20261018/design/select_review_queue.py
+experiments/offline_phrase_review_step05f_20261018/media_prepare/repair_q02.py
+experiments/offline_phrase_review_step05f_20261018/record_parent_answers.py
+experiments/review_step08_20261007/build_difference_findings.py
+experiments/transcript_step07_20261007/test_label_policy.py
+# 정답 문장이 들어 있는 문서·검증 결과와 논문 근거 자료(다른 논문 본문·저자 연락처 포함)
+docs/논문_기반자료_2026-10-08/
+docs/공식모델_도입검증/01_실행결과.md
+docs/공식모델_도입검증/02_실행결과.md
+docs/공식모델_도입검증/03_문장별_출력.md
+docs/공식모델_도입검증/03_실행결과.md
+docs/공식모델_도입검증/04_문장별_출력.md
+docs/공식모델_도입검증/05_문장별_출력.md
+docs/녹화형_단계학습_2026-10-12/02d_전체문장_확인과_시각경계_검수.md
+docs/녹화형_단계학습_2026-10-12/02f_전체16문장_확인과_원본프레임_대조.md
+docs/녹화형_단계학습_2026-10-12/02g_15구절_검수완료와_추출규칙.md
+docs/녹화형_단계학습_2026-10-12/03_구절문장_분할과_원본캐시_준비.md
+docs/녹화형_단계학습_2026-10-12/05_구절문장_비교학습.md
+docs/녹화형_단계학습_2026-10-12/05b_학습정체_진단과_구절학습_후속설계.md
+docs/녹화형_단계학습_2026-10-12/05d_미학습_구절_고정모델_평가.md
+docs/녹화형_단계학습_2026-10-12/05e_구절다양성_조사와_검수설계.md
+docs/녹화형_단계학습_2026-10-12/05f_첫8문장_전사확인과_구절정렬.md
+docs/녹화형_단계학습_2026-10-12/05h_확인구절_추가학습과_평가.md
+docs/녹화형_단계학습_2026-10-12/05i_표현확대와_움직임대조_학습.md
+docs/단계별_개선/01_한글_토큰화_v2.md
+docs/단계별_개선/05_검증결과.json
+docs/단계별_개선/05_소수문장_학습검증.md
+docs/단계별_개선/06_검증결과.json
+docs/단계별_개선/08_검증결과.json
+docs/단계별_개선/09_검증결과.json
+docs/단계별_개선/09_시간축교정_학습개선.md
+docs/단계별_개선/10_검증결과.json
+docs/단계별_개선/10_잔차모델_비교실험.md
+docs/단계별_개선/11_검증결과.json
+docs/단계별_개선/13_검증결과.json
+docs/단계별_개선/14_검증결과.json
+docs/단계별_개선/15_검증결과.json
+docs/단계별_개선/15_문장별_출력.md
+docs/단계별_개선/16_검증결과.json
+docs/단계별_개선/16_문장별_출력.md
+docs/단계별_개선/17_검증결과.json
+docs/단계별_개선/17_문장별_출력.md
+docs/실행계획_2026-10-07/05_AB본학습_및_성능비교.md
+docs/실행계획_2026-10-07/06_신규120문장_시간_전사_검수.md
+docs/실행계획_2026-10-07/07_전사정규화_및_문맥검수.md
+docs/실행계획_2026-10-07/08_전사차이_분석과_청취기록_연결.md
+docs/실행계획_2026-10-07/11_소집합_암기와_특징손실_진단.md
+docs/실행계획_2026-10-07/12_다문장_학습과_내부검증.md
+docs/실행계획_2026-10-07/13_동일녹화_미학습문장_비교.md
+docs/실행계획_2026-10-07/14_정답과_학습문장_확률_진단.md
+docs/프로젝트_구조분석_2026-10-18.md
+docs/프로젝트_점검_2026-09-17/검토자료/audit_evidence.json
+# 정답 문장 예시가 들어 있는 다른 도구용 지침
+AGENTS.md
+# 내부 검토 문서: 팀 활동·계획서 목표 정정 같은 내부 판단, 공유 채팅 링크가 들어 있다
+docs/목표기준_개선제안_2026-10-18.md
+docs/공식모델_전환_실행계획_2026-10-20.md
+docs/이매지니어_2026-2학기/02_작성근거와_확인사항.txt
+docs/이매지니어_2026-2학기/02_작성근거와_확인사항.docx
+# 공식 모델 워커 가상환경의 패키지 고정 목록은 재현에 필요하다 (데이터 없음)
+!experiments/olkavs_official/requirements-lock.txt
+!experiments/olkavs_official/requirements-lock-roi.txt

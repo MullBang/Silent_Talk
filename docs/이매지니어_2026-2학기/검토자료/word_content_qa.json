@@ -1,0 +1,26 @@
+[
+  {
+    "file": "01_서식기입용_작성안.docx",
+    "source_content_verified": true,
+    "tables": 3,
+    "a4_margins_verified": true,
+    "package_valid": true,
+    "visual_render_verified": false
+  },
+  {
+    "file": "02_작성근거와_확인사항.docx",
+    "source_content_verified": true,
+    "tables": 1,
+    "a4_margins_verified": true,
+    "package_valid": true,
+    "visual_render_verified": false
+  },
+  {
+    "file": "03_핵심항목_요약본.docx",
+    "source_content_verified": true,
+    "tables": 0,
+    "a4_margins_verified": true,
+    "package_valid": true,
+    "visual_render_verified": false
+  }
+]
