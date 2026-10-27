@@ -3,11 +3,13 @@
 입력 폴더에는 CapturePage가 저장한 `{가명}_{조건}_{문장ID}_{회차}.webm|mp4` 와 같은 이름의 `.json`(정답
 문장·조건·프레임 로그)이 있다. 두 가상환경을 서브프로세스로 묶는다.
 
+  check   : 아무 Python      모델 없이 폴더 점검(문장 목록 일치, 촬영 묶음 섞임, 참가자별 클립 수, 자유 문장 받아쓰기)
   roi-all : .venv-olkavs-roi  모든 클립 → 입술 프레임 NPZ (실패 사유 기록)
   score   : .venv-olkavs      모델 1회 로드 → CTC/hybrid 텍스트, 지정 20문장 후보 점수, 집계표
   run     : 위 둘을 순서대로 실행
 
 사용 예:
+  py -3.11 scripts/pilot_evaluate.py check --clips D:/silent_talk_webcam/eval
   python scripts/pilot_evaluate.py run --clips D:/silent_talk_webcam/pilot --out experiments/webcam_pilot_20261022 --device cpu
 
 보고 지표(조건별·문장 묶음별): NFC 문자 CER, 완전 일치, 지정 문장 후보 top-1(길이만 보는 분류기와 비교),
@@ -53,8 +55,70 @@ def load_clips(clips_dir: Path) -> list[dict[str, Any]]:
                      "condition": meta.get("condition"), "sentence_id": meta.get("sentenceId"), "kind": meta.get("kind"),
                      "rep": meta.get("rep"), "text": meta.get("text"), "spoken": meta.get("spoken"),
                      "duration_ms": meta.get("durationMs"), "frame_callbacks": meta.get("frameCallbacks"),
-                     "estimated_fps": meta.get("estimatedFps"), "track": meta.get("trackSettings")})
+                     "estimated_fps": meta.get("estimatedFps"), "track": meta.get("trackSettings"),
+                     "session": meta.get("session"), "repeats": meta.get("repeats"),
+                     "prompts_version": meta.get("promptsVersion")})
     return rows
+
+
+def check_clip_prompts(rows: list[dict[str, Any]], fixed: list[dict[str, Any]]) -> None:
+    """클립을 찍을 때의 지정 문장이 지금 prompts.json과 같은지, 촬영 묶음이 섞이지 않았는지 확인한다.
+
+    후보 점수는 지금 prompts.json의 20문장으로 매기므로, 문장 목록이 바뀐 뒤의 옛 클립을 섞으면 조용히 틀린 표가 나온다.
+    파일럿·조정용과 최종 평가용(봉인)을 한 번에 돌리면 조정 자료와 평가 자료가 섞이므로 거부한다.
+    """
+    try:
+        fixed_text = {p["id"]: p["text"] for p in fixed}
+        stale = sorted(r["file"] for r in rows
+                       if r.get("kind") == "fixed" and fixed_text.get(r.get("sentence_id")) != r.get("text"))
+        sessions = sorted({r["session"] for r in rows if r.get("session")})
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"클립 목록 형식 오류: {exc}") from exc
+    if stale:
+        raise ValueError(f"촬영 당시 지정 문장이 지금 prompts.json과 다른 클립 {len(stale)}개: {stale[:5]}")
+    if len(sessions) > 1:
+        raise ValueError(f"촬영 묶음이 섞여 있습니다({', '.join(sessions)}). 묶음별 폴더를 따로 평가하세요.")
+
+
+def folder_report(rows: list[dict[str, Any]], prompts: dict[str, Any]) -> dict[str, Any]:
+    """모델 없이 촬영 폴더를 점검한 결과. problems가 있으면 평가에 쓸 수 없고, warnings는 채워야 할 것이다."""
+    problems: list[str] = []
+    try:
+        check_clip_prompts(rows, prompts["fixed"])
+    except ValueError as exc:
+        problems.append(str(exc))
+    ok = [r for r in rows if r.get("status") == "ok"]
+    problems += [f"메타 JSON 없음/깨짐: {r['file']}" for r in rows if r.get("status") != "ok"]
+    keys: dict[tuple, list[str]] = defaultdict(list)
+    for r in ok:
+        keys[(r.get("participant"), r.get("condition"), r.get("sentence_id"), r.get("rep"))].append(r["file"])
+    problems += [f"같은 클립이 여러 개: {files}" for files in keys.values() if len(files) > 1]
+    nonspeech = prompts.get("nonspeech") or 0
+    n_non = len(nonspeech) if isinstance(nonspeech, list) else int(nonspeech)
+    per_person: dict[str, dict[str, Any]] = {}
+    for person in sorted({str(r.get("participant")) for r in ok}):
+        mine = [r for r in ok if str(r.get("participant")) == person]
+        reps = max((int(r.get("repeats") or 2) for r in mine), default=2)
+        expected = len(prompts["fixed"]) * 2 * reps + len(prompts["free"]) + n_non
+        per_person[person] = {"clips": len(mine), "expected": expected,
+                              "by_kind": {k: sum(1 for r in mine if r.get("kind") == k) for k in ("fixed", "free", "nonspeech")}}
+    warnings = [f"{p}: {v['clips']}/{v['expected']}클립" for p, v in per_person.items() if v["clips"] != v["expected"]]
+    no_spoken = sorted(r["file"] for r in ok if r.get("kind") == "free" and not r.get("spoken"))
+    if no_spoken:
+        warnings.append(f"자유 문장 받아쓰기(spoken) 없음 {len(no_spoken)}개: {no_spoken[:5]}")
+    return {"ok": not problems, "clips": len(rows), "sessions": sorted({r["session"] for r in ok if r.get("session")}),
+            "prompts_version": prompts.get("version"), "participants": per_person, "problems": problems, "warnings": warnings}
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """모델 없이 촬영 폴더를 점검한다. 최종 평가용 폴더 동결(11/01) 때 인식 없이 확인하는 용도."""
+    try:
+        rows = load_clips(Path(args.clips).resolve())
+        report = folder_report(rows, json.loads(PROMPTS_PATH.read_text(encoding="utf-8")))
+    except (OSError, ValueError, KeyError) as exc:
+        report = {"ok": False, "problems": [f"점검 실패: {exc}"]}
+    print(json.dumps(report, ensure_ascii=False, indent=1))
+    return 0 if report["ok"] else 1
 
 
 def cmd_roi_all(args: argparse.Namespace) -> int:
@@ -62,6 +126,7 @@ def cmd_roi_all(args: argparse.Namespace) -> int:
     clips_dir, out = Path(args.clips).resolve(), Path(args.out).resolve()
     (out / "roi").mkdir(parents=True, exist_ok=True)
     rows = load_clips(clips_dir)
+    check_clip_prompts(rows, json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))["fixed"])
     results = []
     for row in rows:
         if row["status"] != "ok":
@@ -113,6 +178,7 @@ def cmd_score(args: argparse.Namespace) -> int:
     index = json.loads((out / "roi_index.json").read_text(encoding="utf-8"))
     prompts = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
     fixed = prompts["fixed"]
+    check_clip_prompts(index["rows"], fixed)
     device = args.device if (not args.device.startswith("cuda") or torch.cuda.is_available()) else "cpu"
     if device == "cpu":
         torch.set_num_threads(max(1, args.threads))
@@ -155,9 +221,12 @@ def cmd_score(args: argparse.Namespace) -> int:
                           "top1": ranked[0] if ranked else None}, ensure_ascii=False), flush=True)
 
     summary = summarize(records, fixed)
+    session = next((r["session"] for r in index["rows"] if r.get("session")), None)
+    who = "최종 평가용(조정에 참여하지 않은 참가자)" if session == "eval" else "튜닝 참가자 파일럿, 최종 평가 아님"
     summary.update({"device": device, "torch": torch.__version__, "checkpoint_sha256": ot.CHECKPOINT_SHA256,
                     "prompts_version": prompts.get("version"), "frames_per_token_baseline": args.frames_per_token,
-                    "note": "튜닝 참가자 파일럿. AI Hub 문장(A)은 OLKAVS 학습 문구일 수 있으므로 N과 나눠 본다. 최종 평가 아님."})
+                    "session": session,
+                    "note": f"{who}. AI Hub 문장(A)은 OLKAVS 학습 문구일 수 있으므로 N과 나눠 본다."})
     ot.save_json(out / "pilot_results.json", {"summary": summary, "records": records})
     ot.save_json(out / "pilot_summary.json", summary)
     print(json.dumps(summary["tables"], ensure_ascii=False, indent=1))
@@ -229,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         pass
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("check"); p.add_argument("--clips", required=True); p.set_defaults(func=cmd_check)
     p = sub.add_parser("roi-all"); p.add_argument("--clips", required=True); p.add_argument("--out", required=True); p.set_defaults(func=cmd_roi_all)
     p = sub.add_parser("score"); p.add_argument("--out", required=True); p.add_argument("--device", default="cuda:0")
     p.add_argument("--threads", type=int, default=4); p.add_argument("--frames-per-token", type=float, default=2.6); p.set_defaults(func=cmd_score)

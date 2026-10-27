@@ -31,6 +31,14 @@ export function summarizeFrameLog(log) {
   return { frameCallbacks: log.length, meanGapMs: meanGap, maxGapMs: maxGap, estimatedFps: meanGap > 0 ? 1000 / meanGap : null };
 }
 
+/** 카메라 트랙 설정에서 기기 고유값(deviceId·groupId)을 빼고 해상도·fps·카메라 이름만 남긴다 (클립 기록에 저장됨). */
+export function publicTrackSettings(settings, label) {
+  const out = { ...(settings || {}), label: label || '' };
+  delete out.deviceId;
+  delete out.groupId;
+  return out;
+}
+
 /**
  * 영상 전용 녹화 훅.
  *
@@ -160,7 +168,7 @@ export default function useRecorder({ maxSeconds = 8, video = { width: 1280, hei
       };
       if (track && typeof track.addEventListener === 'function') track.addEventListener('ended', onLost);
       if (typeof stream.addEventListener === 'function') stream.addEventListener('inactive', onLost);
-      setSettings({ ...track.getSettings(), label: track.label });
+      setSettings(publicTrackSettings(track.getSettings(), track.label));
       const v = videoRef.current;
       if (v) { v.srcObject = stream; v.muted = true; await v.play(); }
       if (stale()) return;

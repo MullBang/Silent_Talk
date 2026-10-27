@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { buildPlan, clipBaseName, safeName } from '../src/capture/plan.js';
-import { extensionFor, pickMimeType, summarizeFrameLog } from '../src/hooks/useRecorder.js';
+import { SESSIONS, buildPlan, clipBaseName, nonspeechItems, safeName, sessionFromMetas } from '../src/capture/plan.js';
+import { extensionFor, pickMimeType, publicTrackSettings, summarizeFrameLog } from '../src/hooks/useRecorder.js';
 
 const prompts = JSON.parse(readFileSync(new URL('../src/capture/prompts.json', import.meta.url), 'utf8'));
 
@@ -13,9 +13,24 @@ test('prompts: 지정 20(AI Hub 10 + 새 문장 10), 자유 10, 무발화 10', (
   assert.equal(prompts.fixed.filter((p) => p.id.startsWith('A')).length, 10);
   assert.equal(prompts.fixed.filter((p) => p.id.startsWith('N')).length, 10);
   assert.equal(prompts.free.length, 10);
-  assert.equal(prompts.nonspeech, 10);
+  assert.equal(prompts.nonspeech.length, 10);
+  assert.equal(new Set(prompts.nonspeech.map((p) => p.id)).size, 10);
   assert.equal(new Set(prompts.fixed.map((p) => p.id)).size, 20);
   assert.equal(new Set(prompts.fixed.map((p) => p.text)).size, 20);
+});
+
+test('prompts: 지정 문장은 한글·공백만, 새 문장(N)의 평균 음절 수는 AI Hub 문장(A)과 1음절 안쪽', () => {
+  const syllables = (t) => [...t].filter((ch) => ch >= '가' && ch <= '힣').length;
+  for (const p of prompts.fixed) assert.match(p.text, /^[가-힣]+( [가-힣]+)*$/, p.id);
+  const mean = (prefix) => {
+    const xs = prompts.fixed.filter((p) => p.id.startsWith(prefix)).map((p) => syllables(p.text));
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+  };
+  assert.ok(Math.abs(mean('A') - mean('N')) <= 1, `A ${mean('A')} / N ${mean('N')}`);
+  const firstWords = prompts.fixed.map((p) => p.text.split(' ')[0]);
+  const nFirst = firstWords.slice(10);
+  assert.equal(new Set(nFirst).size, 10, '새 문장끼리 첫 단어가 겹치지 않는다');
+  for (const w of nFirst) assert.ok(!firstWords.slice(0, 10).includes(w), `A와 첫 단어가 같다: ${w}`);
 });
 
 test('buildPlan: 20문장 × 2회 × 2조건 + 자유 10 + 무발화 10 = 100클립', () => {
@@ -28,6 +43,36 @@ test('buildPlan: 20문장 × 2회 × 2조건 + 자유 10 + 무발화 10 = 100클
   assert.equal(plan[0].rep, 1);
   assert.equal(plan[20].rep, 2);
   assert.equal(new Set(plan.map((x) => clipBaseName('P01', x))).size, 100, '파일명은 겹치지 않아야 한다');
+});
+
+test('buildPlan: 최종 평가용 묶음은 지정 문장 3회 = 140클립, 파일명이 겹치지 않는다', () => {
+  assert.deepEqual(SESSIONS.map((x) => [x.id, x.repeats]), [['pilot', 2], ['eval', 3]]);
+  const plan = buildPlan(prompts, 3);
+  assert.equal(plan.length, 140);
+  assert.equal(plan.filter((x) => x.kind === 'fixed' && x.rep === 3).length, 40);
+  assert.equal(new Set(plan.map((x) => clipBaseName('P05', x))).size, 140);
+  assert.deepEqual(plan.filter((x) => x.kind === 'nonspeech').map((x) => x.sentenceId), prompts.nonspeech.map((x) => x.id));
+});
+
+test('nonspeechItems: 구형 v1(숫자)도 같은 ID 규칙으로 읽는다', () => {
+  const items = nonspeechItems(3);
+  assert.deepEqual(items.map((x) => x.id), ['X01', 'X02', 'X03']);
+  assert.ok(items.every((x) => x.text.includes('말하지')));
+  assert.deepEqual(nonspeechItems(undefined), []);
+});
+
+test('sessionFromMetas: 폴더의 기존 클립 기록으로 촬영 묶음을 정하고, 섞여 있으면 mixed', () => {
+  assert.deepEqual(sessionFromMetas([]), { session: null, mixed: false, clips: 0 });
+  assert.deepEqual(sessionFromMetas([{ kind: 'fixed', session: 'eval' }, { kind: 'free', session: 'eval' }, { other: 1 }, null]),
+    { session: 'eval', mixed: false, clips: 2 });
+  assert.deepEqual(sessionFromMetas([{ kind: 'fixed' }]), { session: 'pilot', mixed: false, clips: 1 }, 'v1 클립은 파일럿');
+  assert.equal(sessionFromMetas([{ kind: 'fixed', session: 'pilot' }, { kind: 'fixed', session: 'eval' }]).mixed, true);
+});
+
+test('publicTrackSettings: 카메라 기기 고유값은 저장하지 않는다', () => {
+  const out = publicTrackSettings({ width: 1280, height: 720, frameRate: 30, deviceId: 'abc', groupId: 'g1' }, 'HD Webcam');
+  assert.deepEqual(out, { width: 1280, height: 720, frameRate: 30, label: 'HD Webcam' });
+  assert.deepEqual(publicTrackSettings(undefined, undefined), { label: '' });
 });
 
 test('safeName/clipBaseName: 파일명에 안전한 문자만 남긴다', () => {
