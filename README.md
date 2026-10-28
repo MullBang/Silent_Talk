@@ -240,7 +240,7 @@ py -3.11 -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 #### 데이터와 라이선스
 - 학습·평가 자료는 AI Hub 「립리딩(입모양) 음성인식 데이터」(한국지능정보사회진흥원)를 쓴다. 자료 이용은 [AI Hub 이용 정책](https://aihub.or.kr/intrcn/guid/usagepolicy.do)을 따른다.
-- 이 저장소에는 AI Hub 영상·음성·라벨 파일과 문장별 결과를 넣지 않는다. 문장별 출력, 검증 결과 JSON, 보정 원자료는 개발 PC에만 두므로 일부 문서의 링크는 GitHub에서 열리지 않는다. 예외로 파일럿 촬영 화면의 지정 문장 10개(`frontend/src/capture/prompts.json`)는 AI Hub 문장이다.
+- 이 저장소에는 AI Hub 영상·음성·라벨 파일과 문장별 결과를 넣지 않는다. 문장별 출력, 검증 결과 JSON, 보정 원자료는 개발 PC에만 두므로 일부 문서의 링크는 GitHub에서 열리지 않는다. 예외로 촬영 화면의 지정 문장 10개(`frontend/src/capture/prompts.json`, 같은 문장을 [촬영 따라하기 가이드](docs/공식모델_전환_웹캠촬영_따라하기_2026-10-28.md)의 대사표에도 실음)는 AI Hub 문장이다.
 - 인식 모델은 OLKAVS 공개 구현과 가중치를 쓴다. 스크립트는 MIT 라이선스이고, 가중치(`multiview_lip.pt`)는 라이선스가 명시돼 있지 않아 저장소에 포함하지 않는다.
 - OLKAVS 인용: J. Park et al., "OLKAVS: An Open Large-Scale Korean Audio-Visual Speech Dataset," ICASSP 2024, pp. 6385-6389, doi:10.1109/ICASSP48485.2024.10446901.
 - 공식 모델 워커 가상환경의 패키지 버전은 `experiments/olkavs_official/requirements-lock.txt`(인식)와 `requirements-lock-roi.txt`(입술 추출)에 있다.

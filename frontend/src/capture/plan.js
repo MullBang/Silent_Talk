@@ -15,8 +15,8 @@ export function safeName(value) {
  * 두 묶음은 저장 폴더를 나누고, 클립 .json의 session으로도 구분한다.
  */
 export const SESSIONS = [
-  { id: 'pilot', label: '파일럿·조정용 (지정 문장 2회, 100클립)', repeats: 2 },
-  { id: 'eval', label: '최종 평가용 (지정 문장 3회, 140클립)', repeats: 3 },
+  { id: 'pilot', label: '파일럿·조정용 (지정 문장 2회, 100클립)', short: '파일럿·조정용', repeats: 2 },
+  { id: 'eval', label: '최종 평가용 (지정 문장 3회, 140클립)', short: '최종 평가용', repeats: 3 },
 ];
 
 /**
@@ -63,4 +63,60 @@ export function buildPlan(prompts, repeats = 2) {
 /** 클립 파일 기본 이름: {가명ID}_{조건}_{문장ID}_{회차}. */
 export function clipBaseName(participant, item) {
   return `${safeName(participant)}_${item.cond}_${item.sentenceId}_${item.rep}`;
+}
+
+/**
+ * 폴더에 이미 있는 클립 이름으로 이 참가자가 이어 찍을 위치를 찾는다 (새로고침·창 닫힘 뒤 이어 찍기).
+ * @param {Array<object>} plan buildPlan 결과
+ * @param {string} participant 가명 ID
+ * @param {Iterable<string>} existingNames 폴더 안 영상 파일의 기본 이름(확장자 제외)
+ * @returns {{index:number, saved:number}} index = 아직 없는 첫 순번(모두 있으면 plan.length), saved = 이미 있는 클립 수
+ */
+export function resumePoint(plan, participant, existingNames) {
+  const names = new Set(existingNames || []);
+  let first = -1;
+  let savedCount = 0;
+  plan.forEach((item, i) => {
+    if (names.has(clipBaseName(participant, item))) savedCount += 1;
+    else if (first < 0) first = i;
+  });
+  return { index: first < 0 ? plan.length : first, saved: savedCount };
+}
+
+/**
+ * from 순번부터 이 참가자의 아직 저장되지 않은 첫 순번 (없으면 plan.length).
+ * 저장 뒤 다음 칸으로 갈 때 쓴다: '이전'으로 돌아가 다시 찍은 뒤 이미 저장된 다음 클립을 덮어쓰지 않게 한다.
+ * @param {Array<object>} plan buildPlan 결과
+ * @param {string} participant 가명 ID
+ * @param {Iterable<string>} existingNames 폴더 안 영상 파일의 기본 이름(확장자 제외)
+ * @param {number} from 찾기 시작할 순번
+ * @returns {number}
+ */
+export function nextUnsaved(plan, participant, existingNames, from) {
+  const names = new Set(existingNames || []);
+  for (let i = Math.max(0, from); i < plan.length; i += 1) {
+    if (!names.has(clipBaseName(participant, plan[i]))) return i;
+  }
+  return plan.length;
+}
+
+/**
+ * 방금 저장한 클립의 녹화 통계로 다시 찍을 필요가 있는지 알려 준다.
+ * 화면 옆의 카메라 fps는 요청값이라 어두울 때 실제로 줄어든 프레임을 보여 주지 않으므로 실제 프레임 간격으로 본다.
+ * @param {{durationMs?:number, estimatedFps?:number|null, maxGapMs?:number|null}|null} meta
+ * @returns {string[]} 경고 문구 (없으면 빈 배열)
+ */
+export function clipQualityWarnings(meta) {
+  const out = [];
+  if (!meta) return out;
+  if (typeof meta.durationMs === 'number' && meta.durationMs < 1000) {
+    out.push("녹화가 1초보다 짧습니다. 스페이스바를 두 번 누르지 않았는지 보고 '이전 (다시 찍기)'로 다시 찍으세요.");
+  }
+  if (typeof meta.estimatedFps === 'number' && meta.estimatedFps < 24) {
+    out.push(`실제 프레임이 초당 ${meta.estimatedFps.toFixed(1)}개로 적습니다. 조명을 밝게 하고 카메라를 쓰는 다른 프로그램을 끈 뒤 다시 찍으세요.`);
+  }
+  if (typeof meta.maxGapMs === 'number' && meta.maxGapMs > 200) {
+    out.push(`영상이 ${meta.maxGapMs.toFixed(0)}ms 동안 멈췄습니다. 다른 프로그램을 끄고 다시 찍으세요.`);
+  }
+  return out;
 }

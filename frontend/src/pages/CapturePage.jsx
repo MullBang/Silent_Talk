@@ -7,7 +7,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorModal from '../components/ErrorModal';
 import useRecorder from '../hooks/useRecorder';
 import PROMPTS from '../capture/prompts.json';
-import { CONDITIONS, SESSIONS, buildPlan, clipBaseName, safeName, sessionFromMetas } from '../capture/plan';
+import {
+  CONDITIONS, SESSIONS, buildPlan, clipBaseName, clipQualityWarnings, nextUnsaved, resumePoint, safeName, sessionFromMetas,
+} from '../capture/plan';
 
 const MAX_SECONDS = 8;
 const KIND_HINT = {
@@ -26,6 +28,8 @@ export default function CapturePage({ onBack }) {
   const [saving, setSaving] = useState(false);
   // 고른 폴더에 이미 있는 클립의 촬영 묶음 {session, clips}. 있으면 묶음을 그 값으로 고정한다.
   const [folderSession, setFolderSession] = useState(null);
+  // 고른 폴더에 이미 있는 영상 파일의 기본 이름(확장자 제외). 이어 찍을 위치를 찾는 데 쓴다.
+  const [existingNames, setExistingNames] = useState(() => new Set());
   const session = SESSIONS.find((x) => x.id === sessionId) || SESSIONS[0];
   const plan = useMemo(() => buildPlan(PROMPTS, session.repeats), [session.repeats]);
   const item = plan[Math.min(index, plan.length - 1)];
@@ -38,6 +42,14 @@ export default function CapturePage({ onBack }) {
   dirRef.current = dirHandle;
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const planRef = useRef(plan);
+  planRef.current = plan;
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const existingRef = useRef(existingNames);
+  existingRef.current = existingNames;
+  const modalOpenRef = useRef(false);
+  modalOpenRef.current = modal !== null;
 
   const persist = useCallback(async (result) => {
     setSaving(true);
@@ -67,7 +79,16 @@ export default function CapturePage({ onBack }) {
       }
       setSaved((s) => [...s, { file: videoName, bytes: result.blob.size, frames: result.meta.frameCallbacks, fps: result.meta.estimatedFps }]);
       setLastMeta(meta);
-      setIndex((i) => i + 1);
+      if (dirRef.current) {
+        // 폴더 저장: 다음 빈 순번으로 간다('이전'으로 다시 찍은 뒤 이미 저장된 다음 클립을 덮어쓰지 않게).
+        const names = new Set(existingRef.current).add(base);
+        existingRef.current = names;
+        setExistingNames(names);
+        setFolderSession({ session: sessionRef.current.id, clips: names.size });
+        setIndex(nextUnsaved(planRef.current, participantRef.current, names, indexRef.current + 1));
+      } else {
+        setIndex((i) => i + 1);
+      }
     } catch (e) {
       setModal({ type: 'UPLOAD_ERROR', message: `저장 실패: ${e.message}` });
     } finally {
@@ -88,8 +109,12 @@ export default function CapturePage({ onBack }) {
       if (!window.showDirectoryPicker) { setModal({ type: 'UPLOAD_ERROR', message: '이 브라우저는 폴더 저장을 지원하지 않습니다. 다운로드 폴더에 저장됩니다.' }); return; }
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
       const metas = [];
+      const names = new Set();
       for await (const entry of handle.values()) {
-        if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+        if (entry.kind !== 'file') continue;
+        const video = entry.name.match(/^(.*)\.(webm|mp4)$/i);
+        if (video) { names.add(video[1]); continue; }
+        if (!entry.name.endsWith('.json')) continue;
         try { metas.push(JSON.parse(await (await entry.getFile()).text())); } catch { /* 클립 기록이 아닌 파일은 건너뛴다 */ }
       }
       const found = sessionFromMetas(metas);
@@ -97,37 +122,67 @@ export default function CapturePage({ onBack }) {
         setModal({ type: 'UPLOAD_ERROR', message: '이 폴더에는 파일럿·조정용과 최종 평가용 클립이 섞여 있습니다. 묶음마다 다른 폴더를 고르세요.' });
         return;
       }
-      const startedHere = index > 0 || saved.length > 0;
-      if (found.session && startedHere && found.session !== sessionRef.current.id) {
-        setModal({ type: 'UPLOAD_ERROR', message: '이 폴더의 클립은 지금 고른 촬영 묶음과 다릅니다. 다른 폴더를 고르세요.' });
+      if (found.session && found.session !== sessionRef.current.id) {
+        const label = (id) => (SESSIONS.find((x) => x.id === id) || SESSIONS[0]).short;
+        setModal({ type: 'UPLOAD_ERROR', message: `이 폴더에는 '${label(found.session)}' 클립이 있는데 지금 고른 촬영 묶음은 '${label(sessionRef.current.id)}'입니다. 촬영 묶음과 폴더를 다시 확인하세요 (파일럿·조정용은 pilot 폴더, 최종 평가용은 eval 폴더).` });
         return;
       }
       setDirHandle(handle);
+      setExistingNames(names);
       setFolderSession(found.session ? { session: found.session, clips: found.clips } : null);
-      if (found.session) setSessionId(found.session);
     } catch (e) {
       if (e.name !== 'AbortError') setModal({ type: 'UPLOAD_ERROR', message: e.message });
     }
   };
 
+  // Chrome·Edge에서 폴더를 고르지 않고 찍으면 다운로드 폴더로 흩어지므로, 폴더를 고를 때까지 녹화를 막는다.
+  const needFolder = typeof window !== 'undefined' && Boolean(window.showDirectoryPicker) && !dirHandle;
+  // 가명 ID가 비면 파일 이름이 'anon'이 되어 사람을 구분할 수 없으므로 녹화를 막는다('다음 사람 촬영' 직후 등).
+  const needId = participant.trim() === '';
+  const blocked = needFolder || needId;
+
   const toggle = useCallback(() => {
     if (done || saving) return;
     if (status === 'recording') stop();
-    else if (status === 'ready') start();
-  }, [done, saving, status, start, stop]);
+    else if (status === 'ready' && !blocked) start();
+  }, [done, saving, status, start, stop, blocked]);
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); toggle(); }
+    // 스페이스바는 언제나 녹화 시작·정지다. 마우스로 누른 버튼(이전·카메라 열기 등)에 포커스가 남아도 그 버튼을
+    // 다시 누르지 않도록 keydown·keyup 기본 동작을 막는다. 글자 입력칸·선택 상자·오류 창에서는 원래 동작을 둔다.
+    const typing = (t) => Boolean(t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)));
+    const onKeyDown = (e) => {
+      if (e.code !== 'Space' || modalOpenRef.current || typing(e.target)) return;
+      e.preventDefault();
+      if (!e.repeat) toggle();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onKeyUp = (e) => {
+      if (e.code === 'Space' && !modalOpenRef.current && !typing(e.target)) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [toggle]);
+
+  const startNextPerson = () => {
+    // 같은 폴더·촬영 묶음으로 다음 사람을 처음부터 찍는다. 가명 ID는 새로 입력한다.
+    setParticipant('');
+    setIndex(0);
+    setSaved([]);
+    setLastMeta(null);
+  };
 
   const remaining = Math.max(0, MAX_SECONDS - elapsedMs / 1000);
   // 첫 클립을 저장하기 시작한 뒤, 또는 폴더에 이미 클립이 있으면 촬영 묶음을 바꿀 수 없다 ('이전'으로 처음에 돌아가도 유지).
   const sessionLocked = index > 0 || saved.length > 0 || saving || folderSession !== null || status === 'recording';
   const cond = CONDITIONS.find((c) => c.id === item?.cond);
+  const resume = useMemo(() => resumePoint(plan, participant, existingNames), [plan, participant, existingNames]);
+  const canResume = resume.saved > 0 && resume.index !== index && status !== 'recording' && !saving;
+  const currentSaved = !done && existingNames.has(clipBaseName(participant, item));
+  const warnings = clipQualityWarnings(lastMeta);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -170,6 +225,25 @@ export default function CapturePage({ onBack }) {
           이 폴더에 '{(SESSIONS.find((x) => x.id === folderSession.session) || SESSIONS[0]).label}' 클립 기록 {folderSession.clips}개가 있어 촬영 묶음을 고정했습니다. 같은 가명 ID로 이어 찍으면 같은 이름의 클립은 덮어씁니다.
         </p>
       )}
+      {resume.saved > 0 && (
+        <p className="mb-2 text-xs text-amber-700">
+          가명 ID '{safeName(participant)}'로 저장된 클립이 이 폴더에 {resume.saved}개 있습니다. 같은 사람이 이어 찍을 때만 계속하세요. 새 사람이면 다른 가명 ID를 입력하세요.
+        </p>
+      )}
+      {needId && (
+        <p className="mb-2 text-xs text-amber-700">가명 ID를 먼저 입력하세요. 입력하기 전에는 녹화되지 않습니다.</p>
+      )}
+      {needFolder && (
+        <p className="mb-2 text-xs text-amber-700">저장 폴더를 먼저 고르세요. 폴더를 고르기 전에는 녹화되지 않습니다.</p>
+      )}
+      {canResume && (
+        <button type="button" onClick={() => setIndex(resume.index)}
+          className="mb-3 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-800 hover:bg-blue-100">
+          {resume.index >= plan.length
+            ? `이 가명 ID의 클립 ${resume.saved}개가 모두 저장돼 있습니다 (끝으로 이동)`
+            : `이어 찍기: ${resume.index + 1}번부터 (이 가명 ID로 저장된 클립 ${resume.saved}개)`}
+        </button>
+      )}
 
       <div className="relative mb-3 overflow-hidden rounded-lg bg-black">
         <video ref={videoRef} className="w-full" style={{ transform: 'scaleX(-1)' }} playsInline muted />
@@ -181,14 +255,14 @@ export default function CapturePage({ onBack }) {
       {!done ? (
         <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
           <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
-            <span>{index + 1} / {plan.length} · {cond ? cond.label : '무발화'} · {item.sentenceId} · {item.rep}회차</span>
+            <span>{session.short} · {index + 1} / {plan.length} · {cond ? cond.label : '무발화'} · {item.sentenceId} · {item.rep}회차{currentSaved ? ' · 이미 저장됨(녹화하면 덮어씀)' : ''}</span>
             <span>{item.kind === 'fixed' ? '지정 문장' : item.kind === 'free' ? '자유 문장' : '무발화'}</span>
           </div>
           <p className="text-2xl font-semibold leading-relaxed text-gray-900">{item.text}</p>
           {cond && <p className="mt-1 text-sm text-gray-600">{cond.hint}</p>}
           {KIND_HINT[item.kind] && <p className="mt-1 text-sm text-gray-600">{KIND_HINT[item.kind]}</p>}
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={toggle} disabled={saving || (status !== 'ready' && status !== 'recording')}
+            <button type="button" onClick={toggle} disabled={saving || (status === 'ready' && blocked) || (status !== 'ready' && status !== 'recording')}
               className={`rounded px-4 py-2 text-white disabled:opacity-40 ${status === 'recording' ? 'bg-red-600' : 'bg-green-600'}`}>
               {status === 'recording' ? '정지 (Space)' : '녹화 시작 (Space)'}
             </button>
@@ -199,7 +273,13 @@ export default function CapturePage({ onBack }) {
           </div>
         </div>
       ) : (
-        <div className="mb-3 rounded-lg bg-green-50 p-4 text-green-800">촬영이 끝났습니다. 저장된 클립 {saved.length}개.</div>
+        <div className="mb-3 rounded-lg bg-green-50 p-4 text-green-800">
+          <p>촬영이 끝났습니다. 이번에 저장한 클립 {saved.length}개.</p>
+          <button type="button" onClick={startNextPerson} disabled={status === 'recording' || saving}
+            className="mt-2 rounded border border-green-300 bg-white px-3 py-1.5 text-sm text-green-800 hover:bg-green-100 disabled:opacity-40">
+            다음 사람 촬영 (같은 폴더·촬영 묶음, 가명 ID 새로 입력)
+          </button>
+        </div>
       )}
 
       {lastMeta && (
@@ -207,6 +287,7 @@ export default function CapturePage({ onBack }) {
           마지막 저장: {lastMeta.file} · {(lastMeta.bytes / 1024).toFixed(0)}KB · 프레임 {lastMeta.frameCallbacks}개 · 추정 {lastMeta.estimatedFps ? lastMeta.estimatedFps.toFixed(1) : '?'}fps · 최대 간격 {lastMeta.maxGapMs ? lastMeta.maxGapMs.toFixed(0) : '?'}ms
         </p>
       )}
+      {warnings.map((w) => <p key={w} className="mb-2 text-sm font-medium text-amber-700">⚠ {w}</p>)}
       {saved.length > 0 && (
         <details className="text-xs text-gray-600">
           <summary>저장 목록 ({saved.length})</summary>

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { SESSIONS, buildPlan, clipBaseName, nonspeechItems, safeName, sessionFromMetas } from '../src/capture/plan.js';
+import {
+  SESSIONS, buildPlan, clipBaseName, clipQualityWarnings, nextUnsaved, nonspeechItems, resumePoint, safeName, sessionFromMetas,
+} from '../src/capture/plan.js';
 import { extensionFor, pickMimeType, publicTrackSettings, summarizeFrameLog } from '../src/hooks/useRecorder.js';
 
 const prompts = JSON.parse(readFileSync(new URL('../src/capture/prompts.json', import.meta.url), 'utf8'));
@@ -67,6 +69,36 @@ test('sessionFromMetas: 폴더의 기존 클립 기록으로 촬영 묶음을 �
     { session: 'eval', mixed: false, clips: 2 });
   assert.deepEqual(sessionFromMetas([{ kind: 'fixed' }]), { session: 'pilot', mixed: false, clips: 1 }, 'v1 클립은 파일럿');
   assert.equal(sessionFromMetas([{ kind: 'fixed', session: 'pilot' }, { kind: 'fixed', session: 'eval' }]).mixed, true);
+});
+
+test('resumePoint: 저장된 클립 다음의 첫 빈 순번에서 이어 찍는다', () => {
+  const plan = buildPlan(prompts, 2);
+  const names = plan.slice(0, 3).map((x) => clipBaseName('P01', x));
+  assert.deepEqual(resumePoint(plan, 'P01', names), { index: 3, saved: 3 });
+  assert.deepEqual(resumePoint(plan, 'P02', names), { index: 0, saved: 0 }, '다른 가명 ID의 클립은 세지 않는다');
+  const gap = [...names, clipBaseName('P01', plan[5])];
+  assert.deepEqual(resumePoint(plan, 'P01', gap), { index: 3, saved: 4 }, '중간에 빠진 클립이 있으면 거기부터');
+  const all = plan.map((x) => clipBaseName('P01', x));
+  assert.deepEqual(resumePoint(plan, 'P01', all), { index: 100, saved: 100 });
+});
+
+test('nextUnsaved: 다시 찍은 뒤에는 이미 저장된 다음 클립을 건너뛰고 빈 순번으로 간다', () => {
+  const plan = buildPlan(prompts, 2);
+  const names = plan.slice(0, 10).map((x) => clipBaseName('P01', x));
+  assert.equal(nextUnsaved(plan, 'P01', names, 4), 10, '5번을 다시 찍은 뒤 6~10번을 덮어쓰지 않는다');
+  assert.equal(nextUnsaved(plan, 'P01', names, 10), 10);
+  assert.equal(nextUnsaved(plan, 'P02', names, 4), 4, '다른 가명 ID는 바로 다음 칸');
+  assert.equal(nextUnsaved(plan, 'P01', plan.map((x) => clipBaseName('P01', x)), 0), 100);
+});
+
+test('clipQualityWarnings: 너무 짧은 녹화·낮은 실제 fps·긴 멈춤을 알린다', () => {
+  assert.deepEqual(clipQualityWarnings(null), []);
+  assert.deepEqual(clipQualityWarnings({ durationMs: 3200, estimatedFps: 29.8, maxGapMs: 45 }), []);
+  const w = clipQualityWarnings({ durationMs: 400, estimatedFps: 14.9, maxGapMs: 350 });
+  assert.equal(w.length, 3);
+  assert.match(w[0], /1초보다 짧/);
+  assert.match(w[1], /14\.9/);
+  assert.match(w[2], /350ms/);
 });
 
 test('publicTrackSettings: 카메라 기기 고유값은 저장하지 않는다', () => {
