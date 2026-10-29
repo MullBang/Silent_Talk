@@ -112,11 +112,35 @@ export function clipQualityWarnings(meta) {
   if (typeof meta.durationMs === 'number' && meta.durationMs < 1000) {
     out.push("녹화가 1초보다 짧습니다. 스페이스바를 두 번 누르지 않았는지 보고 '이전 (다시 찍기)'로 다시 찍으세요.");
   }
-  if (typeof meta.estimatedFps === 'number' && meta.estimatedFps < 24) {
-    out.push(`실제 프레임이 초당 ${meta.estimatedFps.toFixed(1)}개로 적습니다. 조명을 밝게 하고 카메라를 쓰는 다른 프로그램을 끈 뒤 다시 찍으세요.`);
+  if (typeof meta.estimatedFps === 'number' && meta.estimatedFps < 20) {
+    out.push(`실제 프레임이 초당 ${meta.estimatedFps.toFixed(1)}개로 적습니다. 조명을 밝게 하고 카메라를 쓰는 다른 프로그램을 꺼 보세요. 그래도 같으면 이 카메라의 한계이니 그대로 계속 찍어도 됩니다.`);
   }
-  if (typeof meta.maxGapMs === 'number' && meta.maxGapMs > 200) {
-    out.push(`영상이 ${meta.maxGapMs.toFixed(0)}ms 동안 멈췄습니다. 다른 프로그램을 끄고 다시 찍으세요.`);
+  if (typeof meta.maxGapMs === 'number' && meta.maxGapMs > 300) {
+    out.push(`영상이 ${meta.maxGapMs.toFixed(0)}ms 동안 멈췄습니다. 다른 프로그램을 끄고 '이전 (다시 찍기)'로 다시 찍으세요.`);
   }
   return out;
+}
+
+/**
+ * 자유 문장으로 입력한 정답 문장을 정리한다 (앞뒤 공백 제거, 연속 공백 하나로).
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeSpoken(text) {
+  return String(text || '').trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * 자유 문장 정답으로 쓸 수 없는 입력이면 고칠 방법을 알려 준다. 쓸 수 있으면 null.
+ * 채점 사전(한글 자모)이 숫자·영어·기호를 받지 않으므로 소리 나는 대로 한글로 적게 한다.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function spokenProblem(text) {
+  const t = normalizeSpoken(text);
+  if (!t) return '말할 문장을 먼저 입력하세요.';
+  if (/[0-9]/.test(t)) return '숫자는 소리 나는 대로 한글로 적으세요 (예: 3시 → 세 시).';
+  if (/[A-Za-z]/.test(t)) return '영어는 쓰지 않습니다. 한국어로만 말하고 적으세요.';
+  if (!/^[가-힣]+( [가-힣]+)*$/.test(t)) return '한글과 띄어쓰기만 적으세요 (문장부호·특수문자·자음만 쓰기 없이).';
+  return null;
 }

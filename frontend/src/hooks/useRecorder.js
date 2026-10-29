@@ -31,11 +31,15 @@ export function summarizeFrameLog(log) {
   return { frameCallbacks: log.length, meanGapMs: meanGap, maxGapMs: maxGap, estimatedFps: meanGap > 0 ? 1000 / meanGap : null };
 }
 
-/** 카메라 트랙 설정에서 기기 고유값(deviceId·groupId)을 빼고 해상도·fps·카메라 이름만 남긴다 (클립 기록에 저장됨). */
-export function publicTrackSettings(settings, label) {
-  const out = { ...(settings || {}), label: label || '' };
+/**
+ * 클립 기록에 저장할 카메라 설정: 기기 고유값(deviceId·groupId)과 카메라 이름(label)을 뺀다.
+ * 휴대폰을 웹캠으로 쓰면 이름에 주인 이름이 들어갈 수 있다(예: '○○의 iPhone 카메라'). 이름은 화면에만 보여 준다.
+ */
+export function publicTrackSettings(settings) {
+  const out = { ...(settings || {}) };
   delete out.deviceId;
   delete out.groupId;
+  delete out.label;
   return out;
 }
 
@@ -168,7 +172,7 @@ export default function useRecorder({ maxSeconds = 8, video = { width: 1280, hei
       };
       if (track && typeof track.addEventListener === 'function') track.addEventListener('ended', onLost);
       if (typeof stream.addEventListener === 'function') stream.addEventListener('inactive', onLost);
-      setSettings(publicTrackSettings(track.getSettings(), track.label));
+      setSettings({ ...publicTrackSettings(track.getSettings()), label: track.label });
       const v = videoRef.current;
       if (v) { v.srcObject = stream; v.muted = true; await v.play(); }
       if (stale()) return;
@@ -223,7 +227,7 @@ export default function useRecorder({ maxSeconds = 8, video = { width: 1280, hei
         mime, extension: extensionFor(mime), bytes: blob.size,
         startedAt: new Date(Date.now() - (performance.now() - startedRef.current)).toISOString(),
         durationMs: performance.now() - startedRef.current,
-        trackSettings: settings,
+        trackSettings: publicTrackSettings(settings),
         ...summarizeFrameLog(log),
         mediaTimesMs: log,
         userAgent: navigator.userAgent,

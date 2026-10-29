@@ -80,3 +80,15 @@ def test_check_command_fails_on_duplicate_clip_and_passes_clean_folder(tmp_path:
     (tmp_path / "P01_voiced_N01_1.mp4").write_bytes(b"")
     assert pe.main(["check", "--clips", str(tmp_path)]) == 1
     assert "같은 클립이 여러 개" in capsys.readouterr().out
+
+
+def test_mac_sidecar_files_are_ignored_and_nested_clip_folder_is_reported(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    _clip(tmp_path, "P02_voiced_N01_1", participant="P02", repeats=2, **_fixed_meta("N01"))
+    (tmp_path / "._P02_voiced_N01_1.webm").write_bytes(b"\x00\x05\x16\x07")
+    (tmp_path / "._P02_voiced_N01_1.json").write_bytes(b"\x00\x05\x16\x07")
+    assert [r["file"] for r in pe.load_clips(tmp_path)] == ["P02_voiced_N01_1.webm"]
+    nested = tmp_path / "silent_talk_P03"
+    nested.mkdir()
+    _clip(nested, "P03_voiced_N01_1", participant="P03", repeats=2, **_fixed_meta("N01"))
+    assert pe.main(["check", "--clips", str(tmp_path)]) == 0
+    assert "하위 폴더 안의 클립은 세지 않았습니다" in capsys.readouterr().out

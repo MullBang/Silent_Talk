@@ -101,6 +101,8 @@ experiments/offline_dataset_step03_20261013/**/_tmp/
 # 프론트엔드
 node_modules/
 dist/
+# 조원용 단독 촬영 패키지 빌드 결과 (npm run build:capture-package)
+dist-capture/
 
 # Claude Code 로컬 세션/설정
 .claude/

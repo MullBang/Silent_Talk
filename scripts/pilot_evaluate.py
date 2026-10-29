@@ -40,7 +40,8 @@ def load_clips(clips_dir: Path) -> list[dict[str, Any]]:
     """영상과 짝이 맞는 메타 JSON을 읽어 클립 목록을 만든다."""
     rows = []
     for video in sorted(clips_dir.iterdir()):
-        if video.suffix.lower() not in VIDEO_SUFFIXES:
+        # macOS가 USB(exFAT/FAT32)에 만드는 '._이름' 보조 파일은 클립이 아니다.
+        if video.suffix.lower() not in VIDEO_SUFFIXES or video.name.startswith("._"):
             continue
         meta_path = video.with_suffix(".json")
         if not meta_path.exists():
@@ -113,8 +114,13 @@ def folder_report(rows: list[dict[str, Any]], prompts: dict[str, Any]) -> dict[s
 def cmd_check(args: argparse.Namespace) -> int:
     """모델 없이 촬영 폴더를 점검한다. 최종 평가용 폴더 동결(11/01) 때 인식 없이 확인하는 용도."""
     try:
-        rows = load_clips(Path(args.clips).resolve())
+        clips_dir = Path(args.clips).resolve()
+        rows = load_clips(clips_dir)
         report = folder_report(rows, json.loads(PROMPTS_PATH.read_text(encoding="utf-8")))
+        nested = sorted(d.name for d in clips_dir.iterdir()
+                        if d.is_dir() and any(f.suffix.lower() in VIDEO_SUFFIXES for f in d.iterdir()))
+        if nested:
+            report["warnings"].append(f"하위 폴더 안의 클립은 세지 않았습니다(압축을 풀 때 생긴 폴더?): {nested}. 안의 파일을 이 폴더로 옮기세요.")
     except (OSError, ValueError, KeyError) as exc:
         report = {"ok": False, "problems": [f"점검 실패: {exc}"]}
     print(json.dumps(report, ensure_ascii=False, indent=1))

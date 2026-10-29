@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
-  SESSIONS, buildPlan, clipBaseName, clipQualityWarnings, nextUnsaved, nonspeechItems, resumePoint, safeName, sessionFromMetas,
+  SESSIONS, buildPlan, clipBaseName, clipQualityWarnings, nextUnsaved, nonspeechItems, normalizeSpoken, resumePoint, safeName,
+  sessionFromMetas, spokenProblem,
 } from '../src/capture/plan.js';
 import { extensionFor, pickMimeType, publicTrackSettings, summarizeFrameLog } from '../src/hooks/useRecorder.js';
 
@@ -94,6 +95,7 @@ test('nextUnsaved: 다시 찍은 뒤에는 이미 저장된 다음 클립을 건
 test('clipQualityWarnings: 너무 짧은 녹화·낮은 실제 fps·긴 멈춤을 알린다', () => {
   assert.deepEqual(clipQualityWarnings(null), []);
   assert.deepEqual(clipQualityWarnings({ durationMs: 3200, estimatedFps: 29.8, maxGapMs: 45 }), []);
+  assert.deepEqual(clipQualityWarnings({ durationMs: 3000, estimatedFps: 22, maxGapMs: 120 }), [], '20fps 이상·300ms 이하는 경고 없음');
   const w = clipQualityWarnings({ durationMs: 400, estimatedFps: 14.9, maxGapMs: 350 });
   assert.equal(w.length, 3);
   assert.match(w[0], /1초보다 짧/);
@@ -101,10 +103,20 @@ test('clipQualityWarnings: 너무 짧은 녹화·낮은 실제 fps·긴 멈춤�
   assert.match(w[2], /350ms/);
 });
 
-test('publicTrackSettings: 카메라 기기 고유값은 저장하지 않는다', () => {
-  const out = publicTrackSettings({ width: 1280, height: 720, frameRate: 30, deviceId: 'abc', groupId: 'g1' }, 'HD Webcam');
-  assert.deepEqual(out, { width: 1280, height: 720, frameRate: 30, label: 'HD Webcam' });
-  assert.deepEqual(publicTrackSettings(undefined, undefined), { label: '' });
+test('spokenProblem/normalizeSpoken: 자유 문장 정답은 한글·띄어쓰기만, 공백은 정리해 저장한다', () => {
+  assert.equal(normalizeSpoken('  오늘은   집에 일찍 갈게 '), '오늘은 집에 일찍 갈게');
+  assert.equal(spokenProblem('오늘은 집에 일찍 갈게'), null);
+  assert.match(spokenProblem(''), /먼저 입력/);
+  assert.match(spokenProblem('3시에 만나자'), /숫자/);
+  assert.match(spokenProblem('카페 가서 coffee 마실래'), /영어/);
+  assert.match(spokenProblem('정말 좋아요!'), /한글과 띄어쓰기만/);
+  assert.match(spokenProblem('ㅋㅋ 재밌다'), /한글과 띄어쓰기만/);
+});
+
+test('publicTrackSettings: 카메라 기기 고유값과 이름은 저장하지 않는다', () => {
+  const out = publicTrackSettings({ width: 1280, height: 720, frameRate: 30, deviceId: 'abc', groupId: 'g1', label: '홍길동의 iPhone 카메라' });
+  assert.deepEqual(out, { width: 1280, height: 720, frameRate: 30 });
+  assert.deepEqual(publicTrackSettings(undefined), {});
 });
 
 test('safeName/clipBaseName: 파일명에 안전한 문자만 남긴다', () => {
