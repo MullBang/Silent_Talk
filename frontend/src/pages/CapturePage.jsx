@@ -1,7 +1,7 @@
 // CapturePage.jsx — 웹캠 촬영 화면 (모델 없이 동작). 3단계 파일럿·조정용과 8단계 최종 평가용을 같이 쓴다.
 // 문장 프롬프트를 띄우고 스페이스바/버튼으로 영상만 녹화해 저장소 밖 폴더에 저장한다.
 // 저장: Chrome/Edge는 File System Access API(폴더 선택). 쓸 수 없으면 클립을 화면에 모아 두었다가 zip 하나로 내려받는다.
-// 조원이 각자 PC에서 찍는 단독 실행판(capture.html → 웹캠촬영.html)도 이 화면을 그대로 쓴다(onBack 없음).
+// 조원이 각자 PC에서 찍는 단독 실행판(capture.html → 웹캠촬영.html)도 이 화면을 쓴다(onBack 없음: 뒤로 가기·다음 사람 버튼을 숨김).
 // 파일명: {가명ID}_{조건}_{문장ID}_{회차}.{webm|mp4} + 같은 이름의 .json(실제 해상도·fps·프레임 시각 로그).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -145,7 +145,7 @@ export default function CapturePage({ onBack }) {
       }
       if (found.session && found.session !== sessionRef.current.id) {
         const label = (id) => (SESSIONS.find((x) => x.id === id) || SESSIONS[0]).short;
-        setModal({ type: 'UPLOAD_ERROR', message: `이 폴더에는 '${label(found.session)}' 클립이 있는데 지금 고른 촬영 묶음은 '${label(sessionRef.current.id)}'입니다. 촬영 묶음과 폴더를 다시 확인하세요 (파일럿·조정용은 pilot 폴더, 최종 평가용은 eval 폴더).` });
+        setModal({ type: 'UPLOAD_ERROR', message: `이 폴더에는 '${label(found.session)}' 클립이 있는데 지금 고른 촬영 묶음은 '${label(sessionRef.current.id)}'입니다. 촬영 묶음과 폴더를 다시 확인하세요.` });
         return;
       }
       setDirHandle(handle);
@@ -369,10 +369,12 @@ export default function CapturePage({ onBack }) {
               className="rounded border border-green-300 bg-white px-3 py-1.5 text-sm text-green-800 hover:bg-green-100 disabled:opacity-40">
               마지막 클립 다시 찍기
             </button>
-            <button type="button" onClick={startNextPerson} disabled={!idle}
-              className="rounded border border-green-300 bg-white px-3 py-1.5 text-sm text-green-800 hover:bg-green-100 disabled:opacity-40">
-              다음 사람 촬영 (같은 폴더·촬영 묶음, 가명 ID 새로 입력)
-            </button>
+            {onBack && (
+              <button type="button" onClick={startNextPerson} disabled={!idle}
+                className="rounded border border-green-300 bg-white px-3 py-1.5 text-sm text-green-800 hover:bg-green-100 disabled:opacity-40">
+                다음 사람 촬영 (같은 폴더·촬영 묶음, 가명 ID 새로 입력)
+              </button>
+            )}
           </div>
         </div>
       )}

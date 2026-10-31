@@ -7,8 +7,7 @@
 //   웹캠촬영_패키지/먼저_읽어주세요.txt
 //   웹캠촬영_패키지_<날짜>.zip       위 폴더를 압축한 것
 //
-// 사용: cd frontend && npm.cmd run build:capture-package -- --contact "팀장 연락처"
-//   --contact 를 주면 동의서의 '문의·철회 연락처' 빈칸을 채운다. 주지 않으면 빈칸 그대로 두고 경고한다.
+// 사용: cd frontend && npm.cmd run build:capture-package
 
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -128,12 +127,6 @@ function section(path, name) {
   return text.slice(start, end).split('\n').slice(1).join('\n');
 }
 
-/** 동의서의 '문의·철회 연락처' 빈칸(밑줄)을 채운다. */
-export function fillContact(md, contact) {
-  if (!contact) return md;
-  return md.replace(/(\| 문의·철회 연락처 \| )_+( \|)/, (_, a, b) => `${a}${contact.replace(/\|/g, '/')}${b}`);
-}
-
 /** 읽기·인쇄용 HTML 문서 틀. */
 function page(title, bodyHtml) {
   return `<!doctype html>
@@ -209,15 +202,7 @@ export function makeZip(files) {
   return Buffer.concat([...locals, cd, end]);
 }
 
-/** 명령줄의 --contact 값 (없으면 null). */
-function contactArg() {
-  const i = process.argv.indexOf('--contact');
-  const value = i >= 0 ? (process.argv[i + 1] || '').trim() : '';
-  return value || null;
-}
-
 async function main() {
-  const contact = contactArg();
   rmSync(OUT, { recursive: true, force: true });
   await build({ configFile: join(FRONTEND, 'vite.capture.config.js'), root: FRONTEND, logLevel: 'warn' });
   const today = new Date().toISOString().slice(0, 10);
@@ -236,7 +221,7 @@ async function main() {
   const files = [
     { name: '웹캠촬영.html', data: Buffer.from(inlineBuild(), 'utf8') },
     { name: '촬영가이드.html', data: Buffer.from(page('웹캠 촬영 가이드', mdToHtml(section(GUIDE_DOC, '조원용'))), 'utf8') },
-    { name: '동의서.html', data: Buffer.from(page('웹캠 촬영 동의서', mdToHtml(fillContact(section(CONSENT_DOC, '동의서'), contact))), 'utf8') },
+    { name: '동의서.html', data: Buffer.from(page('웹캠 촬영 동의서', mdToHtml(section(CONSENT_DOC, '동의서'))), 'utf8') },
     { name: '먼저_읽어주세요.txt', data: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(readme, 'utf8')]) },
   ];
   const dir = join(OUT, PACKAGE_NAME);
@@ -246,7 +231,6 @@ async function main() {
   writeFileSync(zipPath, makeZip(files.map((f) => ({ name: `${PACKAGE_NAME}/${f.name}`, data: f.data }))));
   rmSync(BUILD_DIR, { recursive: true, force: true });
   console.log(`패키지: ${zipPath}`);
-  if (!contact) console.warn('경고: 동의서의 문의·철회 연락처가 비어 있습니다. --contact "연락처"를 주고 다시 만드세요.');
   for (const name of readdirSync(dir)) console.log(`  ${name}`);
 }
 

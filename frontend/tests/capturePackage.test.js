@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 
-import { fillContact, makeZip, mdToHtml } from '../scripts/build-capture-package.mjs';
+import { makeZip, mdToHtml } from '../scripts/build-capture-package.mjs';
 
 test('mdToHtml: 제목·중첩 목록·표·인용·코드·체크 상자를 바꾸고 문서 사이 링크는 글자만 남긴다', () => {
   const html = mdToHtml([
@@ -21,17 +21,14 @@ test('mdToHtml: 제목·중첩 목록·표·인용·코드·체크 상자를 바
   assert.equal((html.match(/<ol/g) || []).length, (html.match(/<\/ol>/g) || []).length);
 });
 
-test('fillContact: 동의서 연락처 빈칸만 채운다', () => {
-  const md = '| 보관 기한 | 지운다 |\n| 문의·철회 연락처 | ____________________ |\n';
-  assert.match(fillContact(md, '팀장 010-0000-0000'), /\| 문의·철회 연락처 \| 팀장 010-0000-0000 \|/);
-  assert.equal(fillContact(md, null), md);
-});
-
 test('조원용 가이드·동의서 표시가 문서에 있다', () => {
   const guide = readFileSync(new URL('../../docs/공식모델_전환_웹캠촬영_따라하기_2026-10-28.md', import.meta.url), 'utf8');
   const consent = readFileSync(new URL('../../docs/공식모델_전환_웹캠촬영_기록지_2026-10-27.md', import.meta.url), 'utf8');
   assert.ok(guide.indexOf('<!-- 조원용 시작 -->') < guide.indexOf('<!-- 조원용 끝 -->'));
   assert.ok(consent.indexOf('<!-- 동의서 시작 -->') < consent.indexOf('<!-- 동의서 끝 -->'));
+  const form = consent.slice(consent.indexOf('<!-- 동의서 시작 -->'), consent.indexOf('<!-- 동의서 끝 -->'));
+  assert.ok(!form.includes('____'), '조원에게 가는 동의서에 빈칸 연락처가 없다');
+  assert.ok(!form.includes('촬영 담당'), '혼자 찍으므로 촬영 담당 서명이 없다');
 });
 
 test('makeZip: 한글 이름에 UTF-8 표시를 켜고 내용이 그대로 풀린다', () => {
