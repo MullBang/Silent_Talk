@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 
-const ALLOWED_EXT = ['.mp4', '.avi', '.mov'];
+const ALLOWED_EXT = ['.mp4', '.avi', '.mov', '.webm'];
 
 /** 확장자 허용 여부. */
 function hasAllowedExt(name) {
@@ -65,7 +65,7 @@ export default function DropZone({ file, onFileSelect, disabled = false }) {
   const pick = (f) => {
     if (!f) return;
     if (!hasAllowedExt(f.name)) {
-      setLocalError('지원하지 않는 형식입니다. MP4 / AVI / MOV만 가능합니다.');
+      setLocalError('지원하지 않는 형식입니다. MP4 / AVI / MOV / WebM만 가능합니다.');
       return;
     }
     setLocalError('');
@@ -126,14 +126,14 @@ export default function DropZone({ file, onFileSelect, disabled = false }) {
         ) : (
           <div className="text-gray-500">
             <p className="mb-1 text-base">📁 파일을 드래그하거나 클릭하여 선택</p>
-            <p className="text-xs">MP4 / AVI / MOV · 최대 500MB · 최대 3분</p>
+            <p className="text-xs">MP4 / AVI / MOV · 최대 500MB · 최대 3분 (WebM은 100MB·30초 미만)</p>
           </div>
         )}
 
         <input
           ref={inputRef}
           type="file"
-          accept=".mp4,.avi,.mov,video/mp4,video/x-msvideo,video/quicktime"
+          accept=".mp4,.avi,.mov,.webm,video/mp4,video/x-msvideo,video/quicktime,video/webm"
           className="hidden"
           onChange={(e) => pick(e.target.files?.[0])}
           disabled={disabled}

@@ -74,6 +74,16 @@ export function baseMimeType(mime) {
 }
 
 /**
+ * WebM 파일인지 이름으로 판정한다. 촬영 화면·녹화 화면에서 저장한 WebM은 길이 정보가 없어 업로드 경로(/api/upload)가
+ * 아니라 서버가 프레임 시각으로 길이를 재는 녹화 경로(/api/record)로 보낸다.
+ * @param {string|null|undefined} name 파일 이름
+ * @returns {boolean}
+ */
+export function isWebmFileName(name) {
+  return String(name || '').toLowerCase().endsWith('.webm');
+}
+
+/**
  * 업로드 파일명 (서버 계약: recording.webm 또는 recording.mp4).
  * @param {string|null|undefined} mime
  * @returns {'recording.webm'|'recording.mp4'}

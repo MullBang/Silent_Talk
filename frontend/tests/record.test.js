@@ -8,6 +8,7 @@ import {
   RECORD_UNAVAILABLE_ERROR, RECORD_UPLOAD_ERROR, SERVER_MAX_SECONDS, baseMimeType, buildRecordPayload,
   clockLabel, formatElapsed, modeById, phaseLabel, recordUploadErrorMessage, recordingFileName,
   recordingProgress, recordingTitle, validateBlob, validateRecording,
+  isWebmFileName,
 } from '../src/record/recordFlow.js';
 import {
   NETWORK_ERROR, POLL_TIMEOUT_MS, REQUEST_TIMEOUT_ERROR, errorMessageFrom, interpretPoll, isTerminal,
@@ -204,4 +205,12 @@ test('라우팅 소스 계약: #record, 다시 녹화, 업로드 화면의 녹�
   assert.match(src('../src/pages/ResultPage.jsx'), /다시 녹화/);
   assert.match(src('../src/pages/UploadPage.jsx'), /녹화해서 분석 →/);
   assert.match(src('../src/api/client.js'), /'\/api\/record'/);
+});
+
+test('isWebmFileName: 대소문자와 상관없이 .webm만 녹화 경로로 보낸다', () => {
+  assert.equal(isWebmFileName('P01_voiced_A01_1.webm'), true);
+  assert.equal(isWebmFileName('CLIP.WEBM'), true);
+  assert.equal(isWebmFileName('clip.mp4'), false);
+  assert.equal(isWebmFileName('webm.mov'), false);
+  assert.equal(isWebmFileName(null), false);
 });

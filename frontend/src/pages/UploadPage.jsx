@@ -4,12 +4,13 @@
 
 import React, { useCallback, useState } from 'react';
 
-import { startInfer, uploadVideo } from '../api/client';
+import { startInfer, uploadRecording, uploadVideo } from '../api/client';
 import { START_ERROR, errorMessageFrom } from '../api/pollOutcome';
 import DropZone from '../components/DropZone';
 import ErrorModal from '../components/ErrorModal';
 import ProgressBar from '../components/ProgressBar';
 import ResultPoller from '../components/ResultPoller';
+import { isWebmFileName } from '../record/recordFlow';
 
 /**
  * 업로드 페이지 (SCR-01).
@@ -45,10 +46,12 @@ export default function UploadPage({ onComplete, onWebcam, onCapture, onRecord }
     setPhase('UPLOADING');
     setUploadPct(0);
     try {
-      const up = await uploadVideo(file, setUploadPct);
+      // WebM(촬영·녹화 화면에서 저장한 파일)은 녹화 경로로 보낸다. 이 경로는 업로드와 동시에 Job을 만든다.
+      const webm = isWebmFileName(file.name);
+      const up = webm ? await uploadRecording(file, 'video/webm', setUploadPct) : await uploadVideo(file, setUploadPct);
       if (!up?.session_id) throw new Error('missing session_id');
-      // Job은 POST /api/infer가 만든다. 응답을 받은 뒤에 폴러를 마운트해야 첫 폴링이 404가 되지 않는다.
-      await startInfer(up.session_id);
+      // 그 밖의 형식은 POST /api/infer가 Job을 만든다. 응답을 받은 뒤에 폴러를 마운트해야 첫 폴링이 404가 되지 않는다.
+      if (!webm) await startInfer(up.session_id);
       setSessionId(up.session_id);
       setInferPct(0);
       setPhase('INFERRING');
