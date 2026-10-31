@@ -272,7 +272,7 @@ def test_olkavs_backend_job_uses_service(tmp_upload_dir, tmp_path, monkeypatch) 
             return [{"start_ms": 0, "end_ms": 2000, "text": "안녕하세요", "confidence": 0.8, "raw_score": -3.5},
                     {"start_ms": 2000, "end_ms": 2600, "text": olkavs_service.FAIL_TEXT, "confidence": None, "raw_score": None},
                     {"start_ms": 2600, "end_ms": 3000, "text": olkavs_service.UNREC_TEXT, "confidence": 0.1,
-                     "raw_score": -40.0, "candidate": "낮은 확신 문장"}]
+                     "raw_score": -40.0, "candidate": "낮은 확신 문장", "phrase": None}]
 
         def model_info(self):
             return {"backend": "olkavs", "decoder": "hybrid", "checkpoint_sha256": "f41d7423",
@@ -285,10 +285,10 @@ def test_olkavs_backend_job_uses_service(tmp_upload_dir, tmp_path, monkeypatch) 
     body = client.get(f"/api/result/{session_id}").json()
     assert body["status"] == "done", body
     assert body["results"][0] == {"start_ms": 0, "end_ms": 2000, "text": "안녕하세요", "confidence": 0.8,
-                                  "raw_score": -3.5, "candidate": None}
+                                  "raw_score": -3.5, "candidate": None, "phrase": None}
     assert body["results"][1]["text"] == "[검출 실패 구간]"
     assert body["results"][2] == {"start_ms": 2600, "end_ms": 3000, "text": "[인식 불가]", "confidence": 0.1,
-                                  "raw_score": -40.0, "candidate": "낮은 확신 문장"}
+                                  "raw_score": -40.0, "candidate": "낮은 확신 문장", "phrase": None}
     assert body["warnings"] == ["낮은 프레임률 경고"]
     assert body["model"] == {"backend": "olkavs", "decoder": "hybrid", "checkpoint_sha256": "f41d7423",
                              "upstream_commit": "abc", "roi_profile": "p"}

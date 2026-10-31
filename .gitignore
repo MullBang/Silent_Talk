@@ -51,6 +51,8 @@ output/
 
 # 평가 산출물 (CSV/그래프는 디스크에만 보존, 저장소 제외)
 results/
+# 위 규칙의 예외: 화면 소스 폴더 이름이 같다
+!frontend/src/results/
 
 # 학습 데이터 캐시 (영상 파생 ROI/라벨 npz)
 data_cache/

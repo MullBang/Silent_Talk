@@ -10,6 +10,7 @@ import { errorMessageFrom } from '../api/pollOutcome';
 import ErrorModal from '../components/ErrorModal';
 import ProgressBar from '../components/ProgressBar';
 import ResultPoller from '../components/ResultPoller';
+import PROMPTS from '../capture/prompts.json';
 import useRecorder from '../hooks/useRecorder';
 import { blurAfterPointerClick } from '../record/pointerFocus';
 import {
@@ -401,6 +402,16 @@ export default function RecordPage({ onComplete, onBack }) {
           </button>
         </div>
       )}
+
+      <details className="mt-4 text-sm text-gray-600" onClick={blurAfterPointerClick}>
+        <summary className="cursor-pointer">지정 문장 목록 ({PROMPTS.fixed.length}개)</summary>
+        <p className="mt-2 text-xs text-gray-500">
+          이 중 한 문장을 말하면 결과에 어떤 문장인지 '지정 문장 모드'로 함께 표시합니다. 약 1.5초보다 짧은 녹화에는 표시하지 않습니다. 목록에 없는 말은 고르지 못하거나 다른 문장으로 잘못 고를 수 있습니다.
+        </p>
+        <ol className="mt-1 list-decimal pl-5">
+          {PROMPTS.fixed.map((p) => <li key={p.id}>{p.text}</li>)}
+        </ol>
+      </details>
 
       {settings && (
         <p className="mt-4 text-xs text-gray-400">

@@ -199,9 +199,9 @@ test('blurAfterPointerClick: 마우스 클릭 뒤 컨테이너 안 포커스만 
   assert.doesNotThrow(() => queue.shift()());
 });
 
-test('RecordPage 소스 계약: 녹화 길이 버튼·카운트다운 체크박스는 마우스 클릭 뒤 포커스 해제', () => {
+test('RecordPage 소스 계약: 녹화 길이 버튼·카운트다운 체크박스·지정 문장 목록은 마우스 클릭 뒤 포커스 해제', () => {
   const page = src('../src/pages/RecordPage.jsx');
-  assert.equal((page.match(/onClick=\{blurAfterPointerClick\}/g) || []).length, 2);
+  assert.equal((page.match(/onClick=\{blurAfterPointerClick\}/g) || []).length, 3);
   assert.match(page, /role="radiogroup"[\s\S]{0,80}onClick=\{blurAfterPointerClick\}/);
   assert.match(page, /<label[^>]*onClick=\{blurAfterPointerClick\}>\s*<input\s+type="checkbox"/);
   // 페이지 단축키는 포커스된 컨트롤의 Space를 가로채지 않는다 (키보드 접근성).

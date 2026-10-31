@@ -47,6 +47,17 @@ class RecordStartResponse(BaseModel):
     duration_sec: float
 
 
+class PhraseMatch(BaseModel):
+    """지정 문장 보조 모드 결과 (7단계). 녹화 한 건 전체가 창 하나이고 모든 후보를 정렬할 수 있을 때만 있다."""
+
+    id: str
+    text: str  # 후보 중 입 모양에 가장 가까운 문장
+    score: float  # 그 문장의 토큰당 CTC 강제 정렬 로그우도
+    margin: float  # 1등과 2등의 score 차이
+    runner_up_id: Optional[str] = None
+    accepted: bool  # margin과 score가 모두 기준 이상이면 True. False면 화면에 '고르지 못함'으로 표시한다.
+
+
 class ResultItem(BaseModel):
     """추론 결과 단일 세그먼트."""
 
@@ -57,6 +68,7 @@ class ResultItem(BaseModel):
     raw_score: Optional[float] = None  # 출력 문장의 CTC 로그우도 원본(olkavs) 또는 null
     # 확신이 낮아 text를 '[인식 불가]'로 바꾼 경우 모델이 낸 원래 문장. 그 밖에는 null.
     candidate: Optional[str] = None
+    phrase: Optional[PhraseMatch] = None  # 지정 문장 보조 모드 결과. 없으면 null.
 
 
 class ResultResponse(BaseModel):

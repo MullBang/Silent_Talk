@@ -4,7 +4,7 @@
 import React, { useMemo, useState } from 'react';
 
 import ResultList, { msToClock } from '../components/ResultList';
-import { UNSEEN_PERSON_NOTICE, isNonRecognition, modelInfoLine } from '../results/markers';
+import { UNSEEN_PERSON_NOTICE, isNonRecognition, modelInfoLine, phraseCopySuffix } from '../results/markers';
 
 /**
  * 결과 페이지 (SCR-02).
@@ -43,7 +43,7 @@ export default function ResultPage({ fileName, results, warnings, model, origin,
 
   const handleCopy = async () => {
     const text = items
-      .map((i) => `[${msToClock(i.start_ms)}~${msToClock(i.end_ms)}] ${i.text}`)
+      .map((i) => `[${msToClock(i.start_ms)}~${msToClock(i.end_ms)}] ${i.text}${phraseCopySuffix(i)}`)
       .join('\n');
     try {
       if (!navigator.clipboard?.writeText) throw new Error('clipboard unsupported');

@@ -16,6 +16,7 @@ import {
 import {
   NON_RECOGNITION_MARKERS, NO_SPEECH_TEXT, UNSEEN_PERSON_NOTICE, isNonRecognition, lowConfidenceCandidate,
   modelInfoLine,
+  phraseCopySuffix, phraseResult,
 } from '../src/results/markers.js';
 import { LOCAL_FACE_LANDMARKER_PATH, resolveFaceLandmarkerModel, withBase } from '../src/mediapipeAssets.js';
 
@@ -213,4 +214,23 @@ test('isWebmFileName: 대소문자와 상관없이 .webm만 녹화 경로로 보
   assert.equal(isWebmFileName('clip.mp4'), false);
   assert.equal(isWebmFileName('webm.mov'), false);
   assert.equal(isWebmFileName(null), false);
+});
+
+test('phraseResult: 지정 문장 결과가 있을 때만 값을 돌려준다', () => {
+  assert.deepEqual(phraseResult({ phrase: { text: ' 우리 이제 그만 집에 갈까 ', accepted: true } }), { accepted: true, text: '우리 이제 그만 집에 갈까' });
+  assert.deepEqual(phraseResult({ phrase: { text: '가', accepted: false } }), { accepted: false, text: '가' });
+  assert.equal(phraseResult({ phrase: null }), null);
+  assert.equal(phraseResult({ phrase: { text: '', accepted: true } }), null);
+  assert.equal(phraseResult(null), null);
+});
+
+test('phraseCopySuffix: 고른 문장만 복사하고 고르지 못한 후보는 복사하지 않는다', () => {
+  assert.equal(phraseCopySuffix({ phrase: { text: '가나', accepted: true } }), '\n  지정 문장 모드: 가나');
+  assert.equal(phraseCopySuffix({ phrase: { text: '가나', accepted: false } }), '');
+  assert.equal(phraseCopySuffix({}), '');
+});
+
+test('RecordPage: 지정 문장 목록을 마우스로 연 뒤에도 스페이스바가 녹화 단축키로 동작한다', () => {
+  const page = readFileSync(new URL('../src/pages/RecordPage.jsx', import.meta.url), 'utf8');
+  assert.match(page, /<details[^>]*onClick=\{blurAfterPointerClick\}/);
 });

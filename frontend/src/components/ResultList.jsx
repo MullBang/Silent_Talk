@@ -3,7 +3,7 @@
 
 import React from 'react';
 
-import { isNonRecognition, lowConfidenceCandidate } from '../results/markers';
+import { isNonRecognition, lowConfidenceCandidate, phraseResult } from '../results/markers';
 
 // 인식 불가/검출 실패/발화 없음 마커 (취소선 처리 대상). 정의는 순수 모듈 results/markers.js.
 export { NON_RECOGNITION_MARKERS, isNonRecognition } from '../results/markers';
@@ -23,7 +23,8 @@ export function msToClock(ms) {
  *
  * @param {object} props
  * @param {Array<{start_ms:number, end_ms:number, text:string, confidence:number|null,
- *   candidate?:string|null}>} props.results '[인식 불가]' 항목의 candidate는 낮은 신뢰도 추정으로 흐리게 표시한다.
+ *   candidate?:string|null, phrase?:object|null}>} props.results '[인식 불가]' 항목의 candidate는 낮은 신뢰도 추정으로
+ *   흐리게 표시한다. phrase가 있으면 자유 인식 아래에 '지정 문장 모드' 결과를 함께 표시한다.
  * @returns {JSX.Element}
  */
 export default function ResultList({ results }) {
@@ -40,6 +41,7 @@ export default function ResultList({ results }) {
       {items.map((item, idx) => {
         const marker = isNonRecognition(item.text);
         const candidate = lowConfidenceCandidate(item);
+        const phrase = phraseResult(item);
         // confidence < 0.5 → 회색 이탤릭 (초기 표시 기준; 검증 데이터로 CER/WER
         // 상관관계 확인 후 조정 가능)
         const lowConf =
@@ -64,6 +66,15 @@ export default function ResultList({ results }) {
                   {typeof item.confidence === 'number' && ` (${item.confidence.toFixed(2)})`}
                 </span>
               )}
+              {phrase && (phrase.accepted ? (
+                <span className="mt-1 block break-words rounded bg-blue-50 px-2 py-1 text-sm text-blue-900">
+                  지정 문장 모드: <strong>{phrase.text}</strong>
+                </span>
+              ) : (
+                <span className="mt-1 block break-words text-xs text-gray-400">
+                  지정 문장 모드: 목록에서 고르지 못했습니다 (가장 가까운 문장: {phrase.text})
+                </span>
+              ))}
             </span>
             {typeof item.confidence === 'number' && !marker && (
               <span className="shrink-0 text-xs text-gray-300">

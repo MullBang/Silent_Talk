@@ -185,10 +185,11 @@ def _cuda_poisoned(device: str) -> bool:
 
 
 def _handle_infer(core: Any, request: dict[str, Any], device: str, default_decoder: str) -> dict[str, Any]:
-    """NPZ 한 구간 → 텍스트·confidence·raw_score."""
+    """NPZ 한 구간 → 텍스트·confidence·raw_score (phrases를 주면 가장 가까운 지정 문장도)."""
     frames = core.read_frames(Path(str(request["npz"])))
     decoder = str(request.get("decoder") or default_decoder)
-    result = core.recognize(frames, device, decoder)
+    phrases = request.get("phrases")
+    result = core.recognize(frames, device, decoder, phrases) if phrases else core.recognize(frames, device, decoder)
     result.pop("token_ids", None)
     return result
 

@@ -10,6 +10,9 @@ services/olkavs_worker.py 를 두 가상환경에서 서브프로세스로 띄�
 - 요청마다 시간 상한을 둔다(넘으면 워커를 종료해 다음에 새로 띄움).
 - 영상 작업은 FIFO 순서로 하나씩 처리한다(단일 GPU·직렬 워커에서 먼저 온 작업이 먼저 끝나게).
 - 사용자에게 보내는 오류 문구는 고정 문구만 쓴다. 로그 꼬리·경로 같은 상세는 서버 로그에만 남긴다.
+- 지정 문장 보조 모드(7단계): 녹화 한 건 전체가 창 하나일 때만 후보 목록을 인식 워커에 함께 보내고, 결과에 phrase를 더한다.
+  1·2등 점수 차이가 config.OLKAVS_PHRASE_MIN_MARGIN 이상이고 1등 점수가 config.OLKAVS_PHRASE_MIN_SCORE 이상이면
+  accepted=True다. 자유 인식 결과는 바뀌지 않는다.
 - 결과 표시 규약(6단계): 입술 미검출 구간 FAIL_TEXT, 말하지 않은 구간 NO_SPEECH_TEXT(인식하지 않음),
   빈 출력 또는 confidence < config.OLKAVS_MIN_CONFIDENCE 이면 UNREC_TEXT(후자는 모델 문장을 candidate로 보존).
 """
@@ -549,6 +552,11 @@ class OlkavsService:
                             float(speech.get("active_seconds") or 0.0), speech.get("trimmed_head_ms"),
                             speech.get("trimmed_tail_ms"))
             min_confidence = float(config.OLKAVS_MIN_CONFIDENCE)
+            # 지정 문장은 온전히 관측된 한 발화용이다. 여러 창으로 나뉜 긴 녹화, 일부가 검출 실패인 녹화, 업로드에는 쓰지 않는다.
+            single = len(segments) == 1 and segments[0].get("status") == "ok" and bool(segments[0].get("npz"))
+            phrases = load_phrases(config.OLKAVS_PHRASE_FILE) if utterance and single else []
+            min_margin = float(config.OLKAVS_PHRASE_MIN_MARGIN)
+            min_score = float(config.OLKAVS_PHRASE_MIN_SCORE)
             report(_ROI_SHARE)
             results: list[dict[str, Any]] = []
             for i, seg in enumerate(segments):
@@ -558,8 +566,10 @@ class OlkavsService:
                 if seg.get("status") == "no_speech":
                     item["text"] = NO_SPEECH_TEXT  # 말하지 않은 구간은 인식하지 않는다
                 elif seg.get("status") == "ok" and seg.get("npz"):
-                    out = self.infer.request({"cmd": "infer", "npz": seg["npz"]},
-                                             timeout=config.OLKAVS_INFER_TIMEOUT_SEC)
+                    infer_request: dict[str, Any] = {"cmd": "infer", "npz": seg["npz"]}
+                    if phrases:
+                        infer_request["phrases"] = phrases
+                    out = self.infer.request(infer_request, timeout=config.OLKAVS_INFER_TIMEOUT_SEC)
                     if out.get("search_cap_reached"):
                         logger.warning("hybrid 탐색 상한 도달 — 창 끝부분이 잘렸을 수 있음 (%s~%sms)",
                                        item["start_ms"], item["end_ms"])
@@ -572,11 +582,32 @@ class OlkavsService:
                                     candidate=out["text"])
                     else:
                         item.update(text=out["text"], confidence=confidence, raw_score=out.get("raw_score"))
+                    phrase = out.get("phrase")
+                    if isinstance(phrase, dict):
+                        accepted = float(phrase["margin"]) >= min_margin and float(phrase["score"]) >= min_score
+                        item["phrase"] = {**phrase, "accepted": accepted}
                 results.append(item)
                 report(_ROI_SHARE + (100.0 - _ROI_SHARE) * (i + 1) / len(segments))
             return results
         finally:
             self.gate.release(ticket)
+
+
+def load_phrases(path: str | None) -> list[dict[str, str]]:
+    """지정 문장 목록(prompts.json의 fixed)을 [{id, text}]로 읽는다.
+
+    파일이 없거나 형식이 틀리면 빈 목록을 돌려준다. 보조 모드만 꺼지고 자유 인식은 그대로 진행한다.
+    """
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        phrases = [{"id": str(p["id"]), "text": str(p["text"])} for p in data["fixed"]]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        logger.warning("지정 문장 목록을 읽지 못해 보조 모드를 끕니다: %s: %s", type(exc).__name__, exc)
+        return []
+    return phrases if len(phrases) >= 2 else []
 
 
 _service: OlkavsService | None = None

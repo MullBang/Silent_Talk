@@ -1436,11 +1436,49 @@ def ctc_forced_score(log_probs: Any, tokens: list[int], blank: int = 3) -> dict[
         raise ValueError(f"CTC 점수 계산 실패: {exc}") from exc
 
 
-def recognize(frames: Any, device: str, decoder: str = "hybrid") -> dict[str, Any]:
+def phrase_tokens(text: str, bundle: dict[str, Any]) -> list[int]:
+    """문장 → OLKAVS 72토큰 ID (char2grp 자모 분해 + 사전). 사전에 없는 글자는 ValueError."""
+    import unicodedata
+    _ensure_path(UPSTREAM)
+    from avsr.utils.korean_funcs import char2grp
+    vocab = bundle["vocab"].vocab_dict
+    tokens = []
+    for grapheme in char2grp(" ".join(unicodedata.normalize("NFC", text).split())):
+        if grapheme not in vocab:
+            raise ValueError(f"사전에 없는 토큰: {grapheme!r}")
+        tokens.append(int(vocab[grapheme]))
+    return tokens
+
+
+def rank_phrases(phrases: list[dict[str, Any]], scores: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """후보별 CTC 강제 정렬 점수(토큰당 평균)로 1등과 1·2등 차이를 구한다.
+
+    phrases와 scores는 같은 순서다. 프레임이 모자라 정렬할 수 없는 후보가 하나라도 있으면 None을 돌려준다.
+    후보가 줄면 짧은 문장끼리만 겨루어 차이가 부풀고, 기준값(후보 전체로 정함)을 그대로 쓸 수 없기 때문이다.
+    """
+    usable = [(score["per_token"], phrase) for phrase, score in zip(phrases, scores) if score.get("status") == "ok"]
+    if len(usable) < 2 or len(usable) < len(phrases):
+        return None
+    usable.sort(key=lambda pair: pair[0], reverse=True)
+    (best_score, best), (second_score, second) = usable[0], usable[1]
+    return {"id": str(best["id"]), "text": str(best["text"]), "score": float(best_score),
+            "margin": float(best_score - second_score), "runner_up_id": str(second["id"])}
+
+
+def score_phrases(log_probs: Any, phrases: list[dict[str, Any]], bundle: dict[str, Any]) -> dict[str, Any] | None:
+    """지정 문장 후보마다 프레임별 로그확률에 강제 정렬해 가장 가까운 문장을 고른다 (7단계 보조 모드)."""
+    scores = [ctc_forced_score(log_probs, phrase_tokens(str(p["text"]), bundle), blank=3) for p in phrases]
+    return rank_phrases(phrases, scores)
+
+
+def recognize(frames: Any, device: str, decoder: str = "hybrid",
+              phrases: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """서비스용 단일 구간 인식: 텍스트 + confidence(0~1) + raw_score(CTC 로그우도).
 
     confidence = exp(프레임별 최대 CTC 로그확률의 평균) — compact 서비스와 같은 정의.
     raw_score  = 출력 토큰열의 CTC 강제 정렬 로그우도(원본 log-prob 합). 정렬 불가면 None.
+    phrases    = 지정 문장 후보 [{id, text}]. 주면 결과에 phrase(가장 가까운 문장·점수·1·2등 차이)를 더한다.
+                 후보 계산이 실패해도 자유 인식 결과는 그대로 돌려준다(phrase=None).
     """
     import torch
     _ensure_path(OLKAVS)
@@ -1491,9 +1529,18 @@ def recognize(frames: Any, device: str, decoder: str = "hybrid") -> dict[str, An
     text = grp2char(graphemes).strip() if graphemes else ""
     confidence = float(torch.exp(log_probs.max(dim=-1).values.mean()))
     score = ctc_forced_score(log_probs, content, blank=3) if content else {"status": "empty", "total": None}
-    return {"text": text, "confidence": min(1.0, max(0.0, confidence)), "raw_score": score["total"],
-            "raw_score_status": score["status"], "decoder": decoder, "frames": int(frames.shape[0]),
-            "search_cap_reached": search_cap_reached, "token_ids": content, "timing_seconds": timing}
+    result = {"text": text, "confidence": min(1.0, max(0.0, confidence)), "raw_score": score["total"],
+              "raw_score_status": score["status"], "decoder": decoder, "frames": int(frames.shape[0]),
+              "search_cap_reached": search_cap_reached, "token_ids": content, "timing_seconds": timing}
+    if phrases:
+        t0 = time.perf_counter()
+        try:
+            result["phrase"] = score_phrases(log_probs, phrases, bundle)
+        except (KeyError, TypeError, ValueError) as exc:
+            print(f"[recognize] 지정 문장 점수 실패: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+            result["phrase"] = None
+        timing["phrase"] = time.perf_counter() - t0
+    return result
 
 
 def read_frames(path: Path) -> Any:

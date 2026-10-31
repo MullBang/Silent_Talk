@@ -158,17 +158,8 @@ def cmd_roi_all(args: argparse.Namespace) -> int:
 
 
 def text_to_olkavs_tokens(text: str, bundle: dict[str, Any]) -> list[int]:
-    """문장 → OLKAVS 72토큰 ID (char2grp 자모 분해 + 사전). 사전에 없는 글자는 ValueError."""
-    sys.path.insert(0, str(ot.UPSTREAM))
-    from avsr.utils.korean_funcs import char2grp
-    import unicodedata
-    vocab = bundle["vocab"].vocab_dict
-    tokens = []
-    for g in char2grp(" ".join(unicodedata.normalize("NFC", text).split())):
-        if g not in vocab:
-            raise ValueError(f"사전에 없는 토큰: {g!r}")
-        tokens.append(int(vocab[g]))
-    return tokens
+    """문장 → OLKAVS 72토큰 ID. 서비스 지정 문장 모드와 같은 변환을 쓴다."""
+    return ot.phrase_tokens(text, bundle)
 
 
 ctc_forced_score = ot.ctc_forced_score  # 후보 문장 CTC 강제 정렬 점수 (olkavs_transcribe 공용 구현)

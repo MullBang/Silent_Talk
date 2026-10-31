@@ -177,7 +177,7 @@ def test_record_webm_starts_record_mode_job_and_cleans_up(env) -> None:
     try:
         assert result["status"] == "done", result
         assert result["results"] == [{"start_ms": 300, "end_ms": 1700, "text": "안녕하세요", "confidence": 0.8,
-                                      "raw_score": -2.5, "candidate": None}]
+                                      "raw_score": -2.5, "candidate": None, "phrase": None}]
         assert result["model"] == env["service"].model_info()
         assert session_id not in infer_module._running_sessions
     finally:
