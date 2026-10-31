@@ -193,6 +193,9 @@ pip install -r requirements.txt
 cd frontend && npm install
 ```
 
+### 한 번에 실행 (Windows)
+프로젝트 폴더의 `Silent_Talk_실행.bat`을 더블클릭하면 서버(모델)와 화면을 각각 새 창으로 켜고, 준비되면 Chrome(없으면 Edge)으로 녹화 화면을 엽니다. 끌 때는 "Silent Talk 서버"와 "Silent Talk 화면" 창을 닫습니다.
+
 ### 백엔드 실행
 ```bash
 cd backend
