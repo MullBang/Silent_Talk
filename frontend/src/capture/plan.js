@@ -1,9 +1,21 @@
-// plan.js — 파일럿 촬영 순서와 파일명 규칙 (순수 함수, node 테스트 가능).
+// plan.js — 파일럿·병실 명령 촬영 순서와 파일명 규칙 (순수 함수, node 테스트 가능).
 
 export const CONDITIONS = [
   { id: 'voiced', label: '소리 내어 말하기', hint: '평소처럼 소리 내어 읽습니다 (영상만 저장됩니다).' },
   { id: 'silent', label: '소리 없이 입만 움직이기', hint: '목소리를 내지 않고 입 모양만 또렷하게 움직입니다.' },
 ];
+
+/** 병실 명령 조정용의 기댄 자세 조건(소리 없이). 촬영 순서를 도는 CONDITIONS에는 넣지 않는다. */
+export const RECLINED_CONDITION = {
+  id: 'reclined',
+  label: '등받이에 기대어 소리 없이',
+  hint: '등받이에 기대어 앉고 노트북은 침상 테이블(낮은 받침) 위에 둔 채, 목소리 없이 입 모양만 움직입니다.',
+};
+
+/** 조건 ID의 표시 정보. 무발화(none)처럼 목록에 없으면 null. */
+export function conditionInfo(id) {
+  return CONDITIONS.find((c) => c.id === id) || (id === RECLINED_CONDITION.id ? RECLINED_CONDITION : null);
+}
 
 /** 파일명에 쓸 수 없는 문자를 제거한다. */
 export function safeName(value) {
@@ -18,6 +30,70 @@ export const SESSIONS = [
   { id: 'pilot', label: '파일럿·조정용 (지정 문장 2회, 100클립)', short: '파일럿·조정용', repeats: 2 },
   { id: 'eval', label: '최종 평가용 (지정 문장 3회, 140클립)', short: '최종 평가용', repeats: 3 },
 ];
+
+/**
+ * 병실 명령 묶음에서 클립을 저장한 뒤 녹화 시작을 막는 시간(ms). 문장 촬영처럼 끝에 스페이스바를 습관대로 누르면
+ * 5초 자동 정지 직후 다음 클립이 준비 없이 시작되고, 그 클립은 멈출 수도 없으므로 잠깐 시작을 받지 않는다.
+ */
+export const WARD_START_COOLDOWN_MS = 1000;
+
+/**
+ * 병실 명령 촬영 묶음 (목록 ward_prompts.json + 명령 commands.json). 실제 사용과 같이 5초에 저절로 멈추고 중간에 멈출 수 없다.
+ * repeats는 조건별 명령 반복 횟수(소리 내어 1회는 등록용), decoys는 ward_prompts.decoys의 어느 목록을 찍을지,
+ * reclined는 기댄 자세 무음 클립을 찍을지다. 구성·클립 수는 ward_prompts.json의 sessions와 테스트로 맞춘다.
+ */
+export const WARD_SESSIONS = [
+  { id: 'ward_tune', label: '병실 명령 조정용 (5초 자동 정지, 93클립)', short: '병실 명령 조정용', promptSet: 'ward',
+    repeats: { voiced: 1, silent: 2 }, decoys: 'tune', reclined: true, maxSeconds: 5, manualStop: false,
+    startCooldownMs: WARD_START_COOLDOWN_MS },
+  { id: 'ward_eval', label: '병실 명령 평가용 (5초 자동 정지, 103클립)', short: '병실 명령 평가용', promptSet: 'ward',
+    repeats: { voiced: 1, silent: 3 }, decoys: 'eval', reclined: false, maxSeconds: 5, manualStop: false,
+    startCooldownMs: WARD_START_COOLDOWN_MS },
+];
+
+/** 촬영 화면에서 고를 수 있는 모든 묶음 (문장 촬영 + 병실 명령 촬영). */
+export const ALL_SESSIONS = [...SESSIONS, ...WARD_SESSIONS];
+
+/** 묶음 ID로 묶음을 찾는다. 모르는 ID면 파일럿·조정용. */
+export function findSession(id) {
+  return ALL_SESSIONS.find((x) => x.id === id) || SESSIONS[0];
+}
+
+/** 병실 명령 묶음인지 (클립 .json의 session이 ward_로 시작). */
+export function isWardSession(session) {
+  const id = typeof session === 'string' ? session : session?.id;
+  return typeof id === 'string' && id.startsWith('ward_');
+}
+
+/** 문장 촬영의 한 클립 최대 길이(초). 스페이스바로 멈추고, 이 시간이 지나면 저절로 멈춘다. */
+export const SENTENCE_MAX_SECONDS = 8;
+
+/**
+ * 묶음의 녹화 규칙: 최대 길이(초), 손으로 멈출 수 있는지, 저장 뒤 시작을 막는 시간(ms).
+ * 문장 촬영은 8초까지 스페이스바로 멈추고(시작 막음 없음), 병실 명령 촬영은 실제 사용처럼 5초에 저절로만 멈춘다.
+ * @param {object} session SESSIONS 또는 WARD_SESSIONS의 항목
+ * @returns {{maxSeconds:number, manualStop:boolean, startCooldownMs:number}}
+ */
+export function recordingRule(session) {
+  return {
+    maxSeconds: Number.isFinite(session?.maxSeconds) ? session.maxSeconds : SENTENCE_MAX_SECONDS,
+    manualStop: session?.manualStop !== false,
+    startCooldownMs: Number.isFinite(session?.startCooldownMs) ? session.startCooldownMs : 0,
+  };
+}
+
+/**
+ * 스페이스바·녹화 버튼을 눌렀을 때 할 일.
+ * @param {{status:string, done:boolean, saving:boolean, blocked:boolean, manualStop:boolean, cooldown?:boolean}} state
+ *   cooldown: 병실 명령 묶음에서 방금 클립을 저장해 아직 시작을 받지 않는 동안
+ * @returns {('start'|'stop'|null)} 시작·정지 또는 아무것도 하지 않음(녹화 중 손으로 멈출 수 없는 묶음 포함)
+ */
+export function recordToggleAction({ status, done, saving, blocked, manualStop, cooldown = false }) {
+  if (done || saving) return null;
+  if (status === 'recording') return manualStop ? 'stop' : null;
+  if (status === 'ready' && !blocked && !cooldown) return 'start';
+  return null;
+}
 
 /**
  * 저장 폴더에 이미 있는 클립 기록(.json)으로 그 폴더의 촬영 묶음을 정한다.
@@ -41,28 +117,126 @@ export function nonspeechItems(nonspeech) {
 }
 
 /**
+ * 조건별 반복 횟수. 숫자 하나면 모든 조건에 같은 횟수(파일럿·평가용), 객체면 조건 ID별 횟수(없는 조건은 0회).
+ * @param {number|Object<string,number>} repeats
+ * @param {string} condId
+ * @returns {number}
+ */
+export function repeatsFor(repeats, condId) {
+  const n = typeof repeats === 'number' ? repeats : (repeats || {})[condId];
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+/**
  * 촬영 순서: 조건별로 지정 문장 전체를 반복 횟수만큼 돈 뒤 자유 문장(유성)·무발화를 붙인다.
- * @param {{fixed:Array, free:Array, nonspeech:(number|Array<{id:string,text:string}>)}} prompts
- * @param {number} [repeats=2]
+ * @param {{fixed:Array, free?:Array, nonspeech?:(number|Array<{id:string,text:string}>)}} prompts
+ * @param {number|Object<string,number>} [repeats=2] 모든 조건의 반복 횟수, 또는 {voiced, silent} 조건별 횟수
  * @returns {Array<{cond:string, sentenceId:string, text:string, rep:number, kind:string}>}
  */
 export function buildPlan(prompts, repeats = 2) {
   const plan = [];
   for (const cond of CONDITIONS) {
-    for (let rep = 1; rep <= repeats; rep += 1) {
+    for (let rep = 1; rep <= repeatsFor(repeats, cond.id); rep += 1) {
       for (const p of prompts.fixed) plan.push({ cond: cond.id, sentenceId: p.id, text: p.text, rep, kind: 'fixed' });
     }
   }
-  for (const p of prompts.free) plan.push({ cond: 'voiced', sentenceId: p.id, text: p.text, rep: 1, kind: 'free' });
+  for (const p of prompts.free || []) plan.push({ cond: 'voiced', sentenceId: p.id, text: p.text, rep: 1, kind: 'free' });
   for (const p of nonspeechItems(prompts.nonspeech)) {
     plan.push({ cond: 'none', sentenceId: p.id, text: p.text, rep: 1, kind: 'nonspeech' });
   }
   return plan;
 }
 
+/**
+ * 병실 명령 촬영 순서: 명령(소리 내어 등록 1회 → 소리 없이 n회) → 목록 밖 문장(소리 없이) → 짧은 긴급 표현(소리 없이)
+ * → 말하지 않는 동작 → (조정용만) 등받이에 기댄 자세로 명령 일부(소리 없이). 자세를 바꾸는 클립은 맨 끝에 모았다.
+ * 모든 항목에 posture('upright'|'reclined')를 붙인다. 파일명 규칙은 파일럿과 같다(기댄 자세는 조건 reclined).
+ * @param {{fixed:Array<{id:string,text:string}>, decoys:Object<string,Array>, short:Array, nonspeech:Array, reclined:string[]}} ward
+ *   ward_prompts.json (fixed는 commands.json에서 가져온 명령)
+ * @param {object} session WARD_SESSIONS의 항목
+ * @returns {Array<{cond:string, sentenceId:string, text:string, rep:number, kind:string, posture:string}>}
+ */
+export function buildWardPlan(ward, session) {
+  const upright = (item) => ({ ...item, posture: 'upright' });
+  const plan = buildPlan({ fixed: ward.fixed }, session.repeats).map(upright);
+  const decoys = (ward.decoys || {})[session.decoys];
+  if (session.decoys && !Array.isArray(decoys)) throw new Error(`ward_prompts.json에 함정 문장 목록 '${session.decoys}'가 없습니다`);
+  for (const p of decoys || []) plan.push(upright({ cond: 'silent', sentenceId: p.id, text: p.text, rep: 1, kind: 'decoy' }));
+  for (const p of ward.short || []) plan.push(upright({ cond: 'silent', sentenceId: p.id, text: p.text, rep: 1, kind: 'short' }));
+  for (const p of nonspeechItems(ward.nonspeech)) {
+    plan.push(upright({ cond: 'none', sentenceId: p.id, text: p.text, rep: 1, kind: 'nonspeech' }));
+  }
+  if (session.reclined) {
+    for (const id of ward.reclined || []) {
+      const cmd = ward.fixed.find((p) => p.id === id);
+      if (!cmd) throw new Error(`기댄 자세 명령 ${id}가 명령 목록에 없습니다`);
+      plan.push({ cond: RECLINED_CONDITION.id, sentenceId: cmd.id, text: cmd.text, rep: 1, kind: 'fixed', posture: 'reclined' });
+    }
+  }
+  return plan;
+}
+
+/**
+ * 묶음에 맞는 촬영 순서. 병실 명령 묶음은 buildWardPlan, 그 밖은 기존 buildPlan(prompts, repeats)과 같다.
+ * @param {object} session ALL_SESSIONS의 항목
+ * @param {object} prompts prompts.json
+ * @param {object} ward ward_prompts.json (fixed는 commands.json의 명령)
+ */
+export function buildSessionPlan(session, prompts, ward) {
+  return isWardSession(session) ? buildWardPlan(ward, session) : buildPlan(prompts, session.repeats);
+}
+
+/**
+ * 병실 촬영 목록: ward_prompts.json에 commands.json의 명령(id·text)을 fixed로 넣는다 (명령 문장은 commands.json 하나만 기준).
+ * @param {object} wardPrompts ward_prompts.json
+ * @param {{version:string, fixed:Array<{id:string,text:string}>}} commands commands.json
+ */
+export function wardPromptSet(wardPrompts, commands) {
+  return { ...wardPrompts, commandsVersion: commands.version, fixed: commands.fixed.map(({ id, text }) => ({ id, text })) };
+}
+
+/** 촬영 화면 오른쪽 위에 보여 줄 클립 종류 이름. */
+export function kindLabel(kind, ward = false) {
+  if (kind === 'fixed') return ward ? '병실 명령' : '지정 문장';
+  return { free: '자유 문장', decoy: '목록 밖 문장', short: '짧은 말', nonspeech: '무발화' }[kind] || kind;
+}
+
 /** 클립 파일 기본 이름: {가명ID}_{조건}_{문장ID}_{회차}. */
 export function clipBaseName(participant, item) {
   return `${safeName(participant)}_${item.cond}_${item.sentenceId}_${item.rep}`;
+}
+
+/**
+ * 클립 영상 옆에 저장할 .json 기록.
+ * 문장 촬영(파일럿·평가용)은 예전과 같은 필드·순서·값이다(maxSeconds 8, prompts.json 버전, 자세·명령 버전 없음).
+ * 병실 명령 묶음만 promptsVersion을 ward_prompts.json 버전으로 쓰고 commandsVersion·posture를 더한다.
+ * @param {{session:object, item:object, participant:string, resultMeta:object, spoken?:string,
+ *   prompts:{version:string}, ward:{version:string, commandsVersion:string}}} args
+ *   resultMeta는 useRecorder가 준 녹화 통계(extension 포함), spoken은 자유 문장에 적은 정답 문장
+ * @returns {object}
+ */
+export function clipMeta({ session, item, participant, resultMeta, spoken, prompts, ward }) {
+  const isWard = isWardSession(session);
+  return {
+    ...resultMeta, participant: safeName(participant), condition: item.cond, sentenceId: item.sentenceId, text: item.text,
+    kind: item.kind, rep: item.rep, maxSeconds: recordingRule(session).maxSeconds,
+    file: `${clipBaseName(participant, item)}.${resultMeta.extension}`,
+    session: session.id, repeats: session.repeats, promptsVersion: isWard ? ward.version : prompts.version,
+    ...(isWard ? { commandsVersion: ward.commandsVersion, posture: item.posture } : {}),
+    ...(item.kind === 'free' ? { spoken: normalizeSpoken(spoken) } : {}),
+  };
+}
+
+/**
+ * 폴더에 저장할 수 없을 때 내려받는 zip과 그 안 폴더의 이름.
+ * 문장 촬영은 예전 이름({가명ID}_웹캠촬영) 그대로, 병실 명령 묶음은 묶음 ID를 넣어 문장 촬영 zip과 같은 폴더로 풀리지 않게 한다.
+ * @param {string} participant 가명 ID
+ * @param {object} session ALL_SESSIONS의 항목
+ * @returns {string}
+ */
+export function zipFolderName(participant, session) {
+  const pid = safeName(participant || 'clips');
+  return isWardSession(session) ? `${pid}_${session.id}_웹캠촬영` : `${pid}_웹캠촬영`;
 }
 
 /**

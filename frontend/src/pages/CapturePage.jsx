@@ -1,5 +1,6 @@
-// CapturePage.jsx — 웹캠 촬영 화면 (모델 없이 동작). 3단계 파일럿·조정용과 8단계 최종 평가용을 같이 쓴다.
+// CapturePage.jsx — 웹캠 촬영 화면 (모델 없이 동작). 3단계 파일럿·조정용과 8단계 최종 평가용, 병실 명령 조정용·평가용을 같이 쓴다.
 // 문장 프롬프트를 띄우고 스페이스바/버튼으로 영상만 녹화해 저장소 밖 폴더에 저장한다.
+// 병실 명령 묶음은 실제 사용과 같이 5초에 저절로 멈추고 중간에 멈출 수 없다(남은 초를 크게 보여 준다).
 // 저장: Chrome/Edge는 File System Access API(폴더 선택). 쓸 수 없으면 클립을 화면에 모아 두었다가 zip 하나로 내려받는다.
 // 조원이 각자 PC에서 찍는 단독 실행판(capture.html → 웹캠촬영.html)도 이 화면을 쓴다(onBack 없음: 뒤로 가기·다음 사람 버튼을 숨김).
 // 파일명: {가명ID}_{조건}_{문장ID}_{회차}.{webm|mp4} + 같은 이름의 .json(실제 해상도·fps·프레임 시각 로그).
@@ -8,18 +9,36 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorModal from '../components/ErrorModal';
 import useRecorder from '../hooks/useRecorder';
 import PROMPTS from '../capture/prompts.json';
+import WARD_PROMPTS from '../capture/ward_prompts.json';
+import WARD_COMMANDS from '../ward/commands.json';
 import {
-  CONDITIONS, SESSIONS, buildPlan, clipBaseName, clipQualityWarnings, nextUnsaved, normalizeSpoken, resumePoint, safeName,
-  sessionFromMetas, spokenProblem,
+  ALL_SESSIONS, SESSIONS, buildSessionPlan, clipBaseName, clipMeta, clipQualityWarnings, conditionInfo, findSession,
+  isWardSession, kindLabel, nextUnsaved, recordToggleAction, recordingRule, resumePoint, safeName, sessionFromMetas,
+  spokenProblem, wardPromptSet, zipFolderName,
 } from '../capture/plan';
 import { zipStore } from '../capture/zipStore';
 
-const MAX_SECONDS = 8;
+// 병실 촬영 목록: 명령 문장은 commands.json 하나만 기준으로 쓴다.
+const WARD = wardPromptSet(WARD_PROMPTS, WARD_COMMANDS);
 const KIND_HINT = {
   free: '영어·숫자·사람 이름·사는 곳 없이 3초 안쪽의 한 문장으로 소리 내어 말합니다. 말할 문장을 아래 칸에 먼저 적고 Enter를 누른 뒤, 적은 그대로 말하며 녹화합니다.',
   nonspeech: '정지할 때까지 말은 하지 않고 위 지시대로만 합니다.',
 };
+const WARD_KIND_HINT = {
+  voiced: '등록용 영상입니다. 프로그램이 내 입 모양을 익히는 데 씁니다.',
+  decoy: '명령 목록에 없는 말입니다. 화면 문장 그대로 소리 없이 입 모양만 움직입니다.',
+  short: '짧은 말입니다. 화면 그대로 소리 없이 입 모양만 움직입니다.',
+  nonspeech: '5초 동안 말은 하지 않고 위 지시대로만 합니다. 손으로 입을 가리지 않습니다.',
+};
 const HAS_FOLDER_API = typeof window !== 'undefined' && Boolean(window.showDirectoryPicker);
+
+/** 지금 클립에 붙일 안내 문구 (병실 명령 묶음은 등록용·목록 밖 문장 등 종류별 안내). */
+function itemHint(item, ward) {
+  if (!item) return null;
+  if (!ward) return KIND_HINT[item.kind] || null;
+  if (item.kind === 'fixed' && item.cond === 'voiced') return WARD_KIND_HINT.voiced;
+  return WARD_KIND_HINT[item.kind] || null;
+}
 
 export default function CapturePage({ onBack }) {
   const [participant, setParticipant] = useState('');
@@ -44,8 +63,13 @@ export default function CapturePage({ onBack }) {
   const [memVersion, setMemVersion] = useState(0);
   const [downloadedVersion, setDownloadedVersion] = useState(0);
   const [jumpText, setJumpText] = useState('');
-  const session = SESSIONS.find((x) => x.id === sessionId) || SESSIONS[0];
-  const plan = useMemo(() => buildPlan(PROMPTS, session.repeats), [session.repeats]);
+  // 병실 명령 묶음: 클립을 저장한 직후 잠깐(startCooldownMs) 녹화 시작을 받지 않는다(5초 자동 정지 직후 누른 스페이스바 대비).
+  const [coolingDown, setCoolingDown] = useState(false);
+  const cooldownTimerRef = useRef(null);
+  const session = findSession(sessionId);
+  const ward = isWardSession(session);
+  const rule = recordingRule(session);
+  const plan = useMemo(() => buildSessionPlan(session, PROMPTS, WARD), [session]);
   const item = plan[Math.min(index, plan.length - 1)];
   const done = index >= plan.length;
   const participantRef = useRef(participant);
@@ -69,6 +93,7 @@ export default function CapturePage({ onBack }) {
   const memRef = useRef(new Map()); // 기본 이름 → [[파일 이름, Blob], ...] (다시 찍으면 바뀐다)
 
   useEffect(() => { setSpokenText(''); }, [index]);
+  useEffect(() => () => clearTimeout(cooldownTimerRef.current), []);
 
   const unsavedMemory = memoryMode && memVersion > downloadedVersion;
   useEffect(() => {
@@ -83,11 +108,9 @@ export default function CapturePage({ onBack }) {
     setSaving(true);
     const cur = itemRef.current;
     const base = clipBaseName(participantRef.current, cur);
-    const videoName = `${base}.${result.meta.extension}`;
-    const meta = { ...result.meta, participant: safeName(participantRef.current), condition: cur.cond,
-      sentenceId: cur.sentenceId, text: cur.text, kind: cur.kind, rep: cur.rep, maxSeconds: MAX_SECONDS, file: videoName,
-      session: sessionRef.current.id, repeats: sessionRef.current.repeats, promptsVersion: PROMPTS.version,
-      ...(cur.kind === 'free' ? { spoken: normalizeSpoken(spokenRef.current) } : {}) };
+    const meta = clipMeta({ session: sessionRef.current, item: cur, participant: participantRef.current,
+      resultMeta: result.meta, spoken: spokenRef.current, prompts: PROMPTS, ward: WARD });
+    const videoName = meta.file;
     const metaBlob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
     try {
       if (dirRef.current) {
@@ -114,11 +137,18 @@ export default function CapturePage({ onBack }) {
     } catch (e) {
       setModal({ type: 'UPLOAD_ERROR', message: `저장 실패: ${e.message}` });
     } finally {
+      const { startCooldownMs } = recordingRule(sessionRef.current);
+      if (startCooldownMs > 0) {
+        // setSaving(false)와 같은 렌더에 반영되므로 저장이 끝난 순간에도 시작이 열리는 틈이 없다.
+        setCoolingDown(true);
+        clearTimeout(cooldownTimerRef.current);
+        cooldownTimerRef.current = setTimeout(() => setCoolingDown(false), startCooldownMs);
+      }
       setSaving(false);
     }
   }, []);
 
-  const rec = useRecorder({ maxSeconds: MAX_SECONDS, onResult: persist });
+  const rec = useRecorder({ maxSeconds: rule.maxSeconds, onResult: persist });
   const { status, error, errorType, errorSeq, videoRef, settings, open, close, start, stop, elapsedMs } = rec;
 
   // 카메라 오류마다(errorSeq 증가) 모달. error가 null이면 모달의 기본 한국어 문구를 쓴다.
@@ -140,11 +170,11 @@ export default function CapturePage({ onBack }) {
       }
       const found = sessionFromMetas(metas);
       if (found.mixed) {
-        setModal({ type: 'UPLOAD_ERROR', message: '이 폴더에는 파일럿·조정용과 최종 평가용 클립이 섞여 있습니다. 묶음마다 다른 폴더를 고르세요.' });
+        setModal({ type: 'UPLOAD_ERROR', message: '이 폴더에는 촬영 묶음이 서로 다른 클립(예: 파일럿·조정용과 최종 평가용, 문장 촬영과 병실 명령 촬영)이 섞여 있습니다. 묶음마다 다른 폴더를 고르세요.' });
         return;
       }
       if (found.session && found.session !== sessionRef.current.id) {
-        const label = (id) => (SESSIONS.find((x) => x.id === id) || SESSIONS[0]).short;
+        const label = (id) => findSession(id).short;
         setModal({ type: 'UPLOAD_ERROR', message: `이 폴더에는 '${label(found.session)}' 클립이 있는데 지금 고른 촬영 묶음은 '${label(sessionRef.current.id)}'입니다. 촬영 묶음과 폴더를 다시 확인하세요.` });
         return;
       }
@@ -163,7 +193,7 @@ export default function CapturePage({ onBack }) {
 
   const downloadZip = async () => {
     try {
-      const folder = `${safeName(participant || 'clips')}_웹캠촬영`;
+      const folder = zipFolderName(participant, session);
       const version = memVersion;
       const entries = [];
       for (const files of memRef.current.values()) {
@@ -189,13 +219,14 @@ export default function CapturePage({ onBack }) {
   const blocked = needFolder || needId || needSpoken;
 
   const toggle = useCallback(() => {
-    if (done || saving) return;
-    if (status === 'recording') stop();
-    else if (status === 'ready' && !blocked) start();
-  }, [done, saving, status, start, stop, blocked]);
+    // 병실 명령 묶음은 녹화 중 스페이스바·버튼으로 멈추지 않고(5초에 저절로 멈춤), 저장 직후 잠깐은 시작도 받지 않는다.
+    const action = recordToggleAction({ status, done, saving, blocked, manualStop: rule.manualStop, cooldown: coolingDown });
+    if (action === 'stop') stop();
+    else if (action === 'start') start();
+  }, [done, saving, status, start, stop, blocked, rule.manualStop, coolingDown]);
 
   useEffect(() => {
-    // 스페이스바는 언제나 녹화 시작·정지다. 마우스로 누른 버튼(이전·카메라 열기 등)에 포커스가 남아도 그 버튼을
+    // 스페이스바는 언제나 녹화 시작·정지다(병실 명령 묶음은 시작만). 마우스로 누른 버튼(이전·카메라 열기 등)에 포커스가 남아도 그 버튼을
     // 다시 누르지 않도록 keydown·keyup 기본 동작을 막는다. 글자 입력칸·선택 상자·오류 창에서는 원래 동작을 둔다.
     const typing = (t) => Boolean(t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)));
     const onKeyDown = (e) => {
@@ -233,10 +264,12 @@ export default function CapturePage({ onBack }) {
     if (Number.isFinite(n) && n >= 1 && n <= plan.length) { setIndex(n - 1); setJumpText(''); }
   };
 
-  const remaining = Math.max(0, MAX_SECONDS - elapsedMs / 1000);
+  const remaining = Math.max(0, rule.maxSeconds - elapsedMs / 1000);
   // 첫 클립을 저장하기 시작한 뒤, 또는 폴더·화면에 이미 클립이 있으면 촬영 묶음을 바꿀 수 없다 ('이전'으로 처음에 돌아가도 유지).
   const sessionLocked = index > 0 || saved.length > 0 || saving || folderSession !== null || memCount > 0 || status === 'recording';
-  const cond = CONDITIONS.find((c) => c.id === item?.cond);
+  const cond = conditionInfo(item?.cond);
+  const recording = status === 'recording';
+  const hint = done ? null : itemHint(item, ward);
   const preexisting = useMemo(() => resumePoint(plan, participant, preexistingNames), [plan, participant, preexistingNames]);
   const resume = useMemo(() => resumePoint(plan, participant, existingNames), [plan, participant, existingNames]);
   // 이어 찍기 버튼은 폴더를 고를 때 이 가명 ID의 클립이 이미 있었을 때만(창을 닫았다 다시 연 경우) 띄운다.
@@ -256,7 +289,9 @@ export default function CapturePage({ onBack }) {
         )}
       </header>
       <p className="mb-3 text-xs text-amber-600">
-        영상만 녹화합니다(음성 트랙 없음). 정면, 50~70cm, 고정 조명. 한 클립은 최대 {MAX_SECONDS}초이며 스페이스바로 시작·정지합니다.
+        {rule.manualStop
+          ? `영상만 녹화합니다(음성 트랙 없음). 정면, 50~70cm, 고정 조명. 한 클립은 최대 ${rule.maxSeconds}초이며 스페이스바로 시작·정지합니다.`
+          : `영상만 녹화합니다(음성 트랙 없음). 정면, 50~70cm, 고정 조명. 스페이스바로 시작하면 ${rule.maxSeconds}초 뒤 저절로 멈춥니다(중간에 멈출 수 없음). 녹화가 시작되면 바로 말합니다.`}
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
@@ -269,7 +304,7 @@ export default function CapturePage({ onBack }) {
           촬영 묶음
           <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} disabled={sessionLocked}
             className="rounded border border-gray-300 px-2 py-1" title="첫 클립을 찍은 뒤에는 바꿀 수 없습니다">
-            {SESSIONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            {ALL_SESSIONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
         </label>
         {HAS_FOLDER_API && (
@@ -287,7 +322,7 @@ export default function CapturePage({ onBack }) {
       </div>
       {folderSession && (
         <p className="mb-3 text-xs text-gray-600">
-          이 폴더에 '{(SESSIONS.find((x) => x.id === folderSession.session) || SESSIONS[0]).label}' 클립 기록 {folderSession.clips}개가 있어 촬영 묶음을 고정했습니다. 같은 가명 ID로 이어 찍으면 같은 이름의 클립은 덮어씁니다.
+          이 폴더에 '{findSession(folderSession.session).label}' 클립 기록 {folderSession.clips}개가 있어 촬영 묶음을 고정했습니다. 같은 가명 ID로 이어 찍으면 같은 이름의 클립은 덮어씁니다.
         </p>
       )}
       {preexisting.saved > 0 && (
@@ -325,8 +360,15 @@ export default function CapturePage({ onBack }) {
 
       <div className="relative mb-3 overflow-hidden rounded-lg bg-black">
         <video ref={videoRef} className="w-full" style={{ transform: 'scaleX(-1)' }} playsInline muted />
-        {status === 'recording' && (
+        {recording && rule.manualStop && (
           <div className="absolute left-3 top-3 rounded bg-red-600 px-2 py-0.5 text-sm text-white">● REC {remaining.toFixed(1)}s</div>
+        )}
+        {recording && !rule.manualStop && (
+          <div className="absolute left-3 top-3 rounded bg-red-600 px-3 py-1 text-white" aria-live="polite">
+            <span className="text-lg font-bold">● REC</span>{' '}
+            <span className="text-2xl font-bold tabular-nums">{Math.ceil(remaining)}초</span>{' '}
+            <span className="text-sm">남음 · 저절로 멈춥니다</span>
+          </div>
         )}
       </div>
 
@@ -334,11 +376,16 @@ export default function CapturePage({ onBack }) {
         <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
           <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
             <span>{session.short} · {index + 1} / {plan.length} · {cond ? cond.label : '무발화'} · {item.sentenceId} · {item.rep}회차{currentSaved ? ' · 이미 저장됨(녹화하면 덮어씀)' : ''}</span>
-            <span>{item.kind === 'fixed' ? '지정 문장' : item.kind === 'free' ? '자유 문장' : '무발화'}</span>
+            <span>{kindLabel(item.kind, ward)}</span>
           </div>
+          {item.posture === 'reclined' && (
+            <p className="mb-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-900">
+              기댄 자세 클립입니다. 등받이에 기대어 앉고 노트북을 침상 테이블(낮은 받침) 위에 둔 채 찍습니다. 얼굴 전체와 입이 화면 안에 보이는지 먼저 확인하세요.
+            </p>
+          )}
           <p className="text-2xl font-semibold leading-relaxed text-gray-900">{item.text}</p>
           {cond && <p className="mt-1 text-sm text-gray-600">{cond.hint}</p>}
-          {KIND_HINT[item.kind] && <p className="mt-1 text-sm text-gray-600">{KIND_HINT[item.kind]}</p>}
+          {hint && <p className="mt-1 text-sm text-gray-600">{hint}</p>}
           {item.kind === 'free' && (
             <div className="mt-2">
               <input value={spokenText} onChange={(e) => setSpokenText(e.target.value)}
@@ -351,9 +398,12 @@ export default function CapturePage({ onBack }) {
             </div>
           )}
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={toggle} disabled={saving || (status === 'ready' && blocked) || (status !== 'ready' && status !== 'recording')}
-              className={`rounded px-4 py-2 text-white disabled:opacity-40 ${status === 'recording' ? 'bg-red-600' : 'bg-green-600'}`}>
-              {status === 'recording' ? '정지 (Space)' : '녹화 시작 (Space)'}
+            <button type="button" onClick={toggle}
+              disabled={saving || (status === 'ready' && (blocked || coolingDown)) || (status !== 'ready' && status !== 'recording') || (recording && !rule.manualStop)}
+              className={`rounded px-4 py-2 text-white disabled:opacity-40 ${recording ? 'bg-red-600' : 'bg-green-600'}`}>
+              {recording
+                ? (rule.manualStop ? '정지 (Space)' : `녹화 중 · ${Math.ceil(remaining)}초 뒤 저절로 멈춤`)
+                : (rule.manualStop ? '녹화 시작 (Space)' : `녹화 시작 (Space, ${rule.maxSeconds}초)`)}
             </button>
             <button type="button" onClick={() => setIndex((i) => i + 1)} disabled={status === 'recording'}
               className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-40">건너뛰기</button>

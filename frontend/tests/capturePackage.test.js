@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 
-import { makeZip, mdToHtml } from '../scripts/build-capture-package.mjs';
+import { leakedWardTexts, makeZip, mdToHtml } from '../scripts/build-capture-package.mjs';
 
 test('mdToHtml: 제목·중첩 목록·표·인용·코드·체크 상자를 바꾸고 문서 사이 링크는 글자만 남긴다', () => {
   const html = mdToHtml([
@@ -29,6 +29,39 @@ test('조원용 가이드·동의서 표시가 문서에 있다', () => {
   const form = consent.slice(consent.indexOf('<!-- 동의서 시작 -->'), consent.indexOf('<!-- 동의서 끝 -->'));
   assert.ok(!form.includes('____'), '조원에게 가는 동의서에 빈칸 연락처가 없다');
   assert.ok(!form.includes('촬영 담당'), '혼자 찍으므로 촬영 담당 서명이 없다');
+});
+
+test('병실 명령 촬영 안내: 조원용 표시가 있고, 함정·짧은 말 문장은 없고, 명령 20개와 클립 수가 목록과 같다', () => {
+  const doc = readFileSync(new URL('../../docs/병실명령_촬영안내_2026-11-09.md', import.meta.url), 'utf8');
+  const ward = JSON.parse(readFileSync(new URL('../src/capture/ward_prompts.json', import.meta.url), 'utf8'));
+  const commands = JSON.parse(readFileSync(new URL('../src/ward/commands.json', import.meta.url), 'utf8'));
+  const start = doc.indexOf('<!-- 조원용 시작 -->');
+  const end = doc.indexOf('<!-- 조원용 끝 -->');
+  assert.ok(start >= 0 && start < end);
+  const guide = doc.slice(start, end);
+  const commandTexts = commands.fixed.map((p) => p.text);
+  assert.deepEqual(leakedWardTexts(doc, ward, commandTexts), [], '평가 참가자가 읽는 문서에 함정·짧은 말 문장이 없다');
+  for (const p of commands.fixed) assert.ok(guide.includes(`| ${p.id} | ${p.text} |`), `대사표에 ${p.id}`);
+  assert.match(guide, /93클립/);
+  assert.match(guide, /103클립/);
+  assert.match(guide, /186개/);
+  assert.match(guide, /206개/);
+  assert.match(guide, /5초/);
+  const html = mdToHtml(guide.split('\n').slice(1).join('\n'));
+  assert.equal((html.match(/<table>/g) || []).length, (html.match(/<\/table>/g) || []).length);
+  assert.match(html, /<h1>병실 명령 촬영 안내/);
+});
+
+test('leakedWardTexts: 띄어쓰기가 달라도 함정·짧은 말 문장을 찾는다', () => {
+  const ward = { decoys: { tune: [{ id: 'D01', text: '물은 이제 괜찮아요' }], eval: [] }, short: [{ id: 'E02', text: '아파요' }] };
+  assert.deepEqual(leakedWardTexts('안내: 물은이제 괜찮아요', ward), ['D01']);
+  assert.deepEqual(leakedWardTexts('너무 아파요', ward), ['E02']);
+  assert.deepEqual(leakedWardTexts('명령만 있는 안내', ward), []);
+  // 짧은 말이 명령 문장의 일부일 때 명령(대사표)만으로는 걸리지 않고, 따로 적히면 걸린다.
+  const withShort = { decoys: { tune: [], eval: [] }, short: [{ id: 'E03', text: '토할 것 같아' }] };
+  const w10 = '구역질이 나서 토할 것 같아요';
+  assert.deepEqual(leakedWardTexts(`| W10 | ${w10} |`, withShort, [w10]), []);
+  assert.deepEqual(leakedWardTexts(`| W10 | ${w10} | 짧은 말: 토할 것 같아`, withShort, [w10]), ['E03']);
 });
 
 test('makeZip: 한글 이름에 UTF-8 표시를 켜고 내용이 그대로 풀린다', () => {

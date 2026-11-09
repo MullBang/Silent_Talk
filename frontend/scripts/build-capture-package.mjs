@@ -1,11 +1,13 @@
 // build-capture-package.mjs — 조원에게 보낼 웹캠 촬영 패키지(압축 파일)를 만든다.
 //
 // 만드는 것 (frontend/dist-capture/):
-//   웹캠촬영_패키지/웹캠촬영.html      촬영 화면을 HTML 파일 하나로 묶은 것 (서버·인터넷 없이 Chrome/Edge로 연다)
-//   웹캠촬영_패키지/촬영가이드.html    docs 따라하기 가이드의 조원용 부분
-//   웹캠촬영_패키지/동의서.html        docs 동의서·기록지 문서의 동의서 부분 (인쇄용)
+//   웹캠촬영_패키지/웹캠촬영.html          촬영 화면을 HTML 파일 하나로 묶은 것 (서버·인터넷 없이 Chrome/Edge로 연다)
+//                                          문장 촬영(파일럿·평가용)과 병실 명령 촬영(조정용·평가용) 묶음을 모두 고를 수 있다.
+//   웹캠촬영_패키지/병실명령_촬영안내.html  docs 병실 명령 촬영 안내의 조원용 부분 (5초 자동 정지 촬영)
+//   웹캠촬영_패키지/촬영가이드.html        docs 따라하기 가이드의 조원용 부분 (문장 촬영)
+//   웹캠촬영_패키지/동의서.html            docs 동의서·기록지 문서의 동의서 부분 (인쇄용)
 //   웹캠촬영_패키지/먼저_읽어주세요.txt
-//   웹캠촬영_패키지_<날짜>.zip       위 폴더를 압축한 것
+//   웹캠촬영_패키지_<날짜>.zip           위 폴더를 압축한 것
 //
 // 사용: cd frontend && npm.cmd run build:capture-package
 
@@ -23,7 +25,26 @@ const BUILD_DIR = join(OUT, 'build');
 const PACKAGE_NAME = '웹캠촬영_패키지';
 const GUIDE_DOC = join(REPO, 'docs', '공식모델_전환_웹캠촬영_따라하기_2026-10-28.md');
 const CONSENT_DOC = join(REPO, 'docs', '공식모델_전환_웹캠촬영_기록지_2026-10-27.md');
+export const WARD_GUIDE_DOC = join(REPO, 'docs', '병실명령_촬영안내_2026-11-09.md');
 const PROMPTS = JSON.parse(readFileSync(join(FRONTEND, 'src', 'capture', 'prompts.json'), 'utf8'));
+const WARD_PROMPTS = JSON.parse(readFileSync(join(FRONTEND, 'src', 'capture', 'ward_prompts.json'), 'utf8'));
+const WARD_COMMANDS = JSON.parse(readFileSync(join(FRONTEND, 'src', 'ward', 'commands.json'), 'utf8'));
+
+/**
+ * 조원에게 가는 문서에 함정·짧은 말 문장이 들어가지 않았는지 확인한다(평가 참가자가 안내를 미리 읽기 때문).
+ * 명령 문장(대사표)은 문서에 있어야 하므로 먼저 지운 뒤 찾는다(짧은 말이 명령의 일부인 경우, 예: '토할 것 같아').
+ * @param {string} text 패키지에 넣을 문서 내용
+ * @param {object} ward ward_prompts.json
+ * @param {string[]} [allowed=[]] 문서에 있어도 되는 문장(명령)
+ * @returns {string[]} 문서에 들어 있는 문장 ID (없으면 빈 배열)
+ */
+export function leakedWardTexts(text, ward, allowed = []) {
+  const squash = (s) => String(s).replace(/\s+/g, '');
+  let body = squash(text);
+  for (const a of allowed) body = body.split(squash(a)).join('\n');
+  const hidden = [...(ward.decoys?.tune || []), ...(ward.decoys?.eval || []), ...(ward.short || [])];
+  return hidden.filter((p) => body.includes(squash(p.text))).map((p) => p.id);
+}
 
 /** HTML 특수문자를 이스케이프한다. */
 function esc(text) {
@@ -206,20 +227,25 @@ async function main() {
   rmSync(OUT, { recursive: true, force: true });
   await build({ configFile: join(FRONTEND, 'vite.capture.config.js'), root: FRONTEND, logLevel: 'warn' });
   const today = new Date().toISOString().slice(0, 10);
+  const wardGuide = section(WARD_GUIDE_DOC, '조원용');
+  const leaked = leakedWardTexts(wardGuide, WARD_PROMPTS, WARD_COMMANDS.fixed.map((p) => p.text));
+  if (leaked.length) throw new Error(`병실 명령 촬영 안내에 촬영 화면에만 둘 문장이 들어 있습니다: ${leaked.join(', ')}`);
   const readme = [
     'Silent Talk 웹캠 촬영 패키지',
-    `만든 날: ${today} · 촬영 문장 ${PROMPTS.version}`,
+    `만든 날: ${today} · 촬영 문장 ${PROMPTS.version} · 병실 명령 ${WARD_PROMPTS.version} (명령 ${WARD_COMMANDS.version})`,
     '',
     '1. 이 압축 파일을 "압축 풀기"로 풀어 주세요 (압축 파일 안에서 바로 열지 마세요).',
-    '2. 촬영가이드.html 을 열어 처음부터 순서대로 따라 하세요.',
+    '2. 병실 명령 촬영(5초 자동 정지)이면 병실명령_촬영안내.html 을, 문장 촬영이면 촬영가이드.html 을 열어 처음부터 순서대로 따라 하세요.',
+    '   어느 촬영인지는 팀장이 알려 준 촬영 묶음으로 정합니다.',
     '3. 촬영은 웹캠촬영.html 을 Chrome 또는 Edge로 열어서 합니다. 인터넷·설치가 필요 없습니다.',
-    '4. 동의서.html 은 인쇄하거나 화면으로 읽고 서명합니다.',
+    '4. 동의서.html 은 문장 촬영 때 쓰던 인쇄용 문서입니다. 팀장이 요청할 때만 씁니다.',
     '',
     '찍은 영상은 팀장이 정한 방법으로만 보내고, 단톡방·공개 링크에는 올리지 마세요.',
     '',
   ].join('\r\n');
   const files = [
     { name: '웹캠촬영.html', data: Buffer.from(inlineBuild(), 'utf8') },
+    { name: '병실명령_촬영안내.html', data: Buffer.from(page('병실 명령 촬영 안내', mdToHtml(wardGuide)), 'utf8') },
     { name: '촬영가이드.html', data: Buffer.from(page('웹캠 촬영 가이드', mdToHtml(section(GUIDE_DOC, '조원용'))), 'utf8') },
     { name: '동의서.html', data: Buffer.from(page('웹캠 촬영 동의서', mdToHtml(section(CONSENT_DOC, '동의서'))), 'utf8') },
     { name: '먼저_읽어주세요.txt', data: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(readme, 'utf8')]) },
