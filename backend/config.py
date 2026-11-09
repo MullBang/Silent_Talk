@@ -8,6 +8,7 @@ CLAUDE.md '절대 변경 금지 기준값'을 단일 진실 공급원(Single Sou
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # 절대 변경 금지 기준값 (CLAUDE.md §절대 변경 금지 기준값)
@@ -274,6 +275,78 @@ OLKAVS_PHRASE_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_
 (docs/공식모델_전환_08_설정고정_2026-11-09.md)."""
 if not (OLKAVS_PHRASE_MIN_SCORE <= 0.0 and OLKAVS_PHRASE_MIN_SCORE > float("-inf")):
     raise ValueError(f"LIPNET_OLKAVS_PHRASE_MIN_SCORE는 0 이하의 유한한 값이어야 합니다: {OLKAVS_PHRASE_MIN_SCORE!r}")
+
+# ---------------------------------------------------------------------------
+# 지정 문장 묶음 (병실 무음 도우미, 2026-11-09)
+# ---------------------------------------------------------------------------
+# 녹화 접수(POST /api/record)의 phrase_set 필드로 후보 목록과 판정 기준을 고른다. 클라이언트는 아래 ID만 보낼 수 있고
+# 파일 경로는 받지 않는다(test_set_id 규칙과 같다). 기본 'sentences'는 위 2026-11-09 고정 설정 그대로다.
+
+OLKAVS_WARD_PHRASE_FILE: str = os.environ.get(
+    "LIPNET_OLKAVS_WARD_PHRASE_FILE", os.path.join(PROJECT_ROOT, "frontend", "src", "ward", "commands.json"))
+"""병실 명령 20개 목록 파일(JSON의 fixed 배열, 서버는 id·text만 읽는다). 빈 문자열이면 ward 묶음의 지정 문장 결과를 끈다."""
+
+OLKAVS_WARD_MIN_MARGIN: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_MARGIN", "0.5"))
+"""ward 묶음 1·2등의 토큰당 CTC 점수 차이 하한. 아래 점수 하한과 함께 넘어야 명령을 고른 것으로 표시한다.
+
+임시값 0.5: 문장 묶음의 고정값을 그대로 가져왔을 뿐 병실 명령으로 잰 근거가 아직 없다. P01·P03 병실 조정 영상(ward_tune)으로
+다시 정한다. P02 평가 영상(ward_eval)은 동결 파일을 만들기 전에는 쓰지 않는다(docs/병실무음도우미_기획_및_개발계획_2026-11-09.md 9.3절)."""
+if not (OLKAVS_WARD_MIN_MARGIN >= 0.0 and OLKAVS_WARD_MIN_MARGIN < float("inf")):
+    raise ValueError(f"LIPNET_OLKAVS_WARD_MIN_MARGIN은 0 이상의 유한한 값이어야 합니다: {OLKAVS_WARD_MIN_MARGIN!r}")
+
+OLKAVS_WARD_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_SCORE", "-3.40"))
+"""ward 묶음 1등의 토큰당 CTC 점수 하한. 낮으면 어느 명령과도 맞지 않는 말로 보고 고르지 않는다.
+
+임시값 -3.40: 문장 묶음의 고정값을 그대로 가져왔다. 위 차이 하한과 같이 P01·P03 병실 조정 영상으로 다시 정한다."""
+if not (OLKAVS_WARD_MIN_SCORE <= 0.0 and OLKAVS_WARD_MIN_SCORE > float("-inf")):
+    raise ValueError(f"LIPNET_OLKAVS_WARD_MIN_SCORE는 0 이하의 유한한 값이어야 합니다: {OLKAVS_WARD_MIN_SCORE!r}")
+
+PHRASE_SET_SENTENCES: str = "sentences"
+PHRASE_SET_WARD: str = "ward"
+PHRASE_SET_DEFAULT: str = PHRASE_SET_SENTENCES
+PHRASE_SET_IDS: tuple[str, ...] = (PHRASE_SET_SENTENCES, PHRASE_SET_WARD)
+"""phrase_set 화이트리스트. 이 밖의 값은 400으로 거부한다."""
+
+
+@dataclass(frozen=True)
+class PhraseSetConfig:
+    """지정 문장 묶음 하나의 설정.
+
+    file: 후보 목록 파일(JSON의 fixed 배열). min_margin/min_score: 고른 것으로 표시할 기준.
+    decoder: 인식 요청에 넣을 디코더. None이면 요청에 넣지 않고 워커 기본값(OLKAVS_DECODER)을 쓴다.
+    """
+
+    file: str
+    min_margin: float
+    min_score: float
+    decoder: str | None
+
+
+def phrase_set_config(phrase_set: str) -> PhraseSetConfig:
+    """묶음 ID → (목록 파일, 차이 하한, 점수 하한, 디코더) 화이트리스트 대응.
+
+    부를 때마다 현재 모듈 값을 읽는다(환경변수·테스트에서 바꾼 기준값이 그대로 반영된다).
+    ward는 받아쓰기 글자를 화면에 쓰지 않으므로 hybrid 탐색을 생략하고 ctc로 인식한다.
+
+    Args:
+        phrase_set: PHRASE_SET_IDS 중 하나.
+
+    Returns:
+        해당 묶음의 PhraseSetConfig.
+
+    Raises:
+        ValueError: 화이트리스트에 없는 묶음.
+    """
+    table = {
+        PHRASE_SET_SENTENCES: PhraseSetConfig(OLKAVS_PHRASE_FILE, OLKAVS_PHRASE_MIN_MARGIN,
+                                              OLKAVS_PHRASE_MIN_SCORE, None),
+        PHRASE_SET_WARD: PhraseSetConfig(OLKAVS_WARD_PHRASE_FILE, OLKAVS_WARD_MIN_MARGIN,
+                                         OLKAVS_WARD_MIN_SCORE, "ctc"),
+    }
+    try:
+        return table[phrase_set]
+    except (KeyError, TypeError) as exc:  # TypeError: 해시할 수 없는 값
+        raise ValueError(f"알 수 없는 지정 문장 묶음: {phrase_set!r}") from exc
 
 # ---------------------------------------------------------------------------
 # 웹캠 녹화 접수 (POST /api/record, 6단계)

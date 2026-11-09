@@ -13,6 +13,9 @@ services/olkavs_worker.py 를 두 가상환경에서 서브프로세스로 띄�
 - 지정 문장 보조 모드(7단계): 녹화 한 건 전체가 창 하나일 때만 후보 목록을 인식 워커에 함께 보내고, 결과에 phrase를 더한다.
   1·2등 점수 차이가 config.OLKAVS_PHRASE_MIN_MARGIN 이상이고 1등 점수가 config.OLKAVS_PHRASE_MIN_SCORE 이상이면
   accepted=True다. 자유 인식 결과는 바뀌지 않는다.
+- 지정 문장 묶음(병실 무음 도우미): phrase_set='ward'면 병실 명령 목록·OLKAVS_WARD_* 기준을 쓰고 인식 요청에 decoder='ctc'를
+  넣는다. 기본 'sentences'는 위 규약 그대로다. 묶음 대응은 config.phrase_set_config가 정한다. 병실 목록을 읽을 수 있는지는
+  /health의 ward_phrases(status())로 알리고, 서비스를 처음 만들 때 읽지 못하면 ERROR 로그를 남긴다.
 - 결과 표시 규약(6단계): 입술 미검출 구간 FAIL_TEXT, 말하지 않은 구간 NO_SPEECH_TEXT(인식하지 않음),
   빈 출력 또는 confidence < config.OLKAVS_MIN_CONFIDENCE 이면 UNREC_TEXT(후자는 모델 문장을 candidate로 보존).
 """
@@ -446,6 +449,7 @@ class OlkavsService:
             "roi_profile": (self.roi.info or {}).get("detector_profile"),
             "jobs_in_queue": self.gate.waiting(),
             "last_error": {"roi": self.roi.last_error, "infer": self.infer.last_error},
+            "ward_phrases": ward_phrase_status(),
         }
 
     def model_info(self) -> dict[str, Any]:
@@ -478,8 +482,9 @@ class OlkavsService:
                          remaining_seconds: Callable[[], float | None] | None = None,
                          video_seconds: float | None = None,
                          warnings: list[str] | None = None,
-                         utterance: bool = False) -> list[dict[str, Any]]:
-        """영상 → [{start_ms, end_ms, text, confidence, raw_score[, candidate]}] (시간 순서).
+                         utterance: bool = False,
+                         phrase_set: str = config.PHRASE_SET_DEFAULT) -> list[dict[str, Any]]:
+        """영상 → [{start_ms, end_ms, text, confidence, raw_score[, candidate][, phrase]}] (시간 순서).
 
         - 얼굴(입술) 미검출 구간은 FAIL_TEXT, 빈 인식 결과는 UNREC_TEXT(점수 없음)로 표시한다.
         - 입 움직임으로 판정한 무발화 창(status 'no_speech')은 인식하지 않고 NO_SPEECH_TEXT로 표시한다.
@@ -492,7 +497,13 @@ class OlkavsService:
         - warnings에는 사용자에게 보여 줄 품질 경고(낮은 프레임률 등)를 덧붙인다.
         - video_seconds가 유한한 양수면 ROI 요청에 'duration_seconds'로 보내 메타데이터 없는 영상의 진행률 분모로 쓴다.
         - FIFO 차례가 오면 바로 진행률 0을 알려 Job을 'processing'으로 옮긴다(진행률은 단조 증가).
+        - phrase_set(config.PHRASE_SET_IDS)이 지정 문장 후보 목록·판정 기준·디코더를 고른다. 기본 'sentences'의 인식 요청은
+          묶음 기능 이전과 같다(디코더 키 없음). 'ward'는 모든 인식 요청에 decoder='ctc'를 넣는다. phrase에는 묶음 ID(set)를 더한다.
+
+        Raises:
+            ValueError: 화이트리스트에 없는 phrase_set (워커를 쓰기 전에 거부한다).
         """
+        set_config = config.phrase_set_config(phrase_set)
         last = {"progress": 0.0}
 
         def check_abort() -> None:
@@ -554,9 +565,9 @@ class OlkavsService:
             min_confidence = float(config.OLKAVS_MIN_CONFIDENCE)
             # 지정 문장은 온전히 관측된 한 발화용이다. 여러 창으로 나뉜 긴 녹화, 일부가 검출 실패인 녹화, 업로드에는 쓰지 않는다.
             single = len(segments) == 1 and segments[0].get("status") == "ok" and bool(segments[0].get("npz"))
-            phrases = load_phrases(config.OLKAVS_PHRASE_FILE) if utterance and single else []
-            min_margin = float(config.OLKAVS_PHRASE_MIN_MARGIN)
-            min_score = float(config.OLKAVS_PHRASE_MIN_SCORE)
+            phrases = load_phrases(set_config.file) if utterance and single else []
+            min_margin = float(set_config.min_margin)
+            min_score = float(set_config.min_score)
             report(_ROI_SHARE)
             results: list[dict[str, Any]] = []
             for i, seg in enumerate(segments):
@@ -569,7 +580,12 @@ class OlkavsService:
                     infer_request: dict[str, Any] = {"cmd": "infer", "npz": seg["npz"]}
                     if phrases:
                         infer_request["phrases"] = phrases
+                    if set_config.decoder:
+                        infer_request["decoder"] = set_config.decoder  # 기본 묶음은 넣지 않는다(워커 기본값)
                     out = self.infer.request(infer_request, timeout=config.OLKAVS_INFER_TIMEOUT_SEC)
+                    timing = out.get("timing_seconds") if isinstance(out.get("timing_seconds"), dict) else {}
+                    logger.info("인식 창 %s~%sms: 묶음=%s 디코더=%s 디코딩=%s초 워커=%s초", item["start_ms"], item["end_ms"],
+                                phrase_set, out.get("decoder"), timing.get("decode"), out.get("elapsed_seconds"))
                     if out.get("search_cap_reached"):
                         logger.warning("hybrid 탐색 상한 도달 — 창 끝부분이 잘렸을 수 있음 (%s~%sms)",
                                        item["start_ms"], item["end_ms"])
@@ -585,7 +601,7 @@ class OlkavsService:
                     phrase = out.get("phrase")
                     if isinstance(phrase, dict):
                         accepted = float(phrase["margin"]) >= min_margin and float(phrase["score"]) >= min_score
-                        item["phrase"] = {**phrase, "accepted": accepted}
+                        item["phrase"] = {**phrase, "accepted": accepted, "set": phrase_set}
                 results.append(item)
                 report(_ROI_SHARE + (100.0 - _ROI_SHARE) * (i + 1) / len(segments))
             return results
@@ -594,7 +610,7 @@ class OlkavsService:
 
 
 def load_phrases(path: str | None) -> list[dict[str, str]]:
-    """지정 문장 목록(prompts.json의 fixed)을 [{id, text}]로 읽는다.
+    """지정 문장 목록(prompts.json 또는 ward/commands.json의 fixed)을 [{id, text}]로 읽는다.
 
     파일이 없거나 형식이 틀리면 빈 목록을 돌려준다. 보조 모드만 꺼지고 자유 인식은 그대로 진행한다.
     """
@@ -610,16 +626,55 @@ def load_phrases(path: str | None) -> list[dict[str, str]]:
     return phrases if len(phrases) >= 2 else []
 
 
+def ward_phrase_status() -> dict[str, Any]:
+    """/health 용 병실 명령 목록 상태 {enabled, count, version}. 경로·예외 원문은 넣지 않는다.
+
+    count는 ward 녹화에 실제로 쓰일 후보 수다(load_phrases와 같은 규칙: 읽지 못했거나 2개 미만이면 0).
+    enabled=True인데 count=0이면 ward 녹화에 지정 문장 결과가 붙지 않는다(시연 PC 점검에서 잡는다).
+    문장 묶음(prompts.json)의 읽기 경로는 건드리지 않는다.
+    """
+    path = config.OLKAVS_WARD_PHRASE_FILE
+    if not path:
+        return {"enabled": False, "count": 0, "version": None}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        phrases = [{"id": str(p["id"]), "text": str(p["text"])} for p in data["fixed"]]
+        version = data.get("version")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {"enabled": True, "count": 0, "version": None}
+    return {"enabled": True, "count": len(phrases) if len(phrases) >= 2 else 0,
+            "version": version if isinstance(version, str) else None}
+
+
+def check_ward_phrases() -> dict[str, Any]:
+    """병실 명령 목록을 확인하고, 설정돼 있는데 읽지 못하면 ERROR 로그를 남긴다 (서비스 생성 시 1회).
+
+    Returns:
+        ward_phrase_status() 결과.
+    """
+    try:
+        status = ward_phrase_status()
+    except Exception:  # noqa: BLE001 - 점검 실패가 서버 기동을 막지 않는다
+        logger.exception("병실 명령 목록 점검 중 오류")
+        return {"enabled": True, "count": 0, "version": None}
+    if status["enabled"] and status["count"] < 2:
+        logger.error("병실 명령 목록(LIPNET_OLKAVS_WARD_PHRASE_FILE=%s)을 읽지 못했습니다. "
+                     "ward 녹화에는 지정 문장 결과가 붙지 않습니다.", config.OLKAVS_WARD_PHRASE_FILE)
+    return status
+
+
 _service: OlkavsService | None = None
 _service_lock = threading.Lock()
 
 
 def get_service() -> OlkavsService:
-    """프로세스 전역 서비스 인스턴스 (지연 생성)."""
+    """프로세스 전역 서비스 인스턴스 (지연 생성). 처음 만들 때 병실 명령 목록을 한 번 점검한다."""
     global _service
     with _service_lock:
         if _service is None:
             _service = OlkavsService()
+            check_ward_phrases()
         return _service
 
 

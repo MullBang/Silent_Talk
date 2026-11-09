@@ -95,8 +95,8 @@ def test_phrase_is_sent_and_accepted_for_single_window_recording(tmp_path, monke
     service, infer = _service(monkeypatch, _one_window(), {"text": "모델 문장", "confidence": 0.9, "raw_score": -3.0, "phrase": best})
     item = service.transcribe_video("v.webm", str(tmp_path), utterance=True)[0]
     assert infer.calls[0]["phrases"] == _PHRASES
-    assert item["text"] == "모델 문장" and item["phrase"] == {**best, "accepted": True}
-    assert ResultItem(**item).phrase.accepted is True
+    assert item["text"] == "모델 문장" and item["phrase"] == {**best, "accepted": True, "set": "sentences"}
+    assert ResultItem(**item).phrase.accepted is True and ResultItem(**item).phrase.set == "sentences"
 
 
 def test_phrase_below_margin_is_kept_but_not_accepted(tmp_path, monkeypatch) -> None:

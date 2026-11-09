@@ -48,7 +48,10 @@ class RecordStartResponse(BaseModel):
 
 
 class PhraseMatch(BaseModel):
-    """지정 문장 보조 모드 결과 (7단계). 녹화 한 건 전체가 창 하나이고 모든 후보를 정렬할 수 있을 때만 있다."""
+    """지정 문장 보조 모드 결과 (7단계). 녹화 한 건 전체가 창 하나이고 모든 후보를 정렬할 수 있을 때만 있다.
+
+    클라이언트는 accepted만 보고 표시 여부를 정한다. 서버는 명령의 긴급 여부를 해석하지 않는다.
+    """
 
     id: str
     text: str  # 후보 중 입 모양에 가장 가까운 문장
@@ -56,6 +59,8 @@ class PhraseMatch(BaseModel):
     margin: float  # 1등과 2등의 score 차이
     runner_up_id: Optional[str] = None
     accepted: bool  # margin과 score가 모두 기준 이상이면 True. False면 화면에 '고르지 못함'으로 표시한다.
+    # 후보 목록 묶음(config.PHRASE_SET_IDS): 'sentences'(기본 20문장) 또는 'ward'(병실 명령 20개).
+    set: Optional[Literal["sentences", "ward"]] = None
 
 
 class ResultItem(BaseModel):

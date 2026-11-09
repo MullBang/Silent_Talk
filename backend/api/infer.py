@@ -11,6 +11,7 @@ GET  /api/result/{session_id} — 결과 폴링 전용 엔드포인트.
 Job 모드
   upload : POST /api/infer (업로드 영상). 창 분할 인식, 앞뒤 무발화 구간을 잘라 내지 않는다.
   record : POST /api/record (웹캠 녹화, api/record.py). 앞뒤 무발화를 잘라 내고 12초 이하 녹화는 창 하나로 인식한다.
+           phrase_set(기본 'sentences', 병실 'ward')이 지정 문장 후보 목록·기준·디코더를 고른다(config.phrase_set_config).
 """
 
 from __future__ import annotations
@@ -35,8 +36,11 @@ from config import (  # noqa: E402
     JOB_TIMEOUT_SEC,
     MODEL_BACKEND,
     MODEL_WEIGHTS_PATH,
+    PHRASE_SET_DEFAULT,
+    PHRASE_SET_IDS,
     TMP_ROI_DIR,
     TMP_UPLOAD_DIR,
+    phrase_set_config,
 )
 from models.baseline import ModelCompatibilityError  # noqa: E402
 from models.tokenizer import TokenizerMismatchError  # noqa: E402
@@ -175,7 +179,8 @@ async def start_inference(
 
 
 def start_background_job(session_id: str, file_path: str, background_tasks: BackgroundTasks,
-                         mode: str = MODE_UPLOAD, video_seconds: float | None = None) -> InferStartResponse:
+                         mode: str = MODE_UPLOAD, video_seconds: float | None = None,
+                         phrase_set: str = PHRASE_SET_DEFAULT) -> InferStartResponse:
     """같은 세션 중복 실행을 막고 Job을 만든 뒤 백그라운드 인식을 예약한다 (upload·record 공용).
 
     Args:
@@ -184,16 +189,19 @@ def start_background_job(session_id: str, file_path: str, background_tasks: Back
         background_tasks: FastAPI 백그라운드 태스크 큐.
         mode: 'upload'(창 분할) 또는 'record'(발화 전체·앞뒤 무발화 제거).
         video_seconds: 서버가 잰 영상 길이(초). 없으면 upload 모드에서 메타데이터로 어림한다.
+        phrase_set: 지정 문장 묶음 ID(config.PHRASE_SET_IDS). 지정 문장은 record 모드에서만 쓰인다.
 
     Returns:
         {job_id, session_id, status:'processing'}.
 
     Raises:
         HTTPException: 이미 처리 중인 세션(409).
-        ValueError: 알 수 없는 mode.
+        ValueError: 알 수 없는 mode 또는 phrase_set.
     """
     if mode not in _MODES:
         raise ValueError(f"알 수 없는 Job 모드: {mode!r}")
+    if phrase_set not in PHRASE_SET_IDS:
+        raise ValueError(f"알 수 없는 지정 문장 묶음: {phrase_set!r}")
     with _running_lock:
         existing = jm.get_job(session_id)
         # 타임아웃으로 응답한 Job이라도 이전 작업 스레드가 아직 돌면 같은 세션을 다시 받지 않는다
@@ -205,7 +213,7 @@ def start_background_job(session_id: str, file_path: str, background_tasks: Back
         _running_sessions.add(session_id)
     try:
         job_id = jm.create_job(session_id)
-        background_tasks.add_task(_run_infer_job, session_id, file_path, mode, video_seconds)
+        background_tasks.add_task(_run_infer_job, session_id, file_path, mode, video_seconds, phrase_set)
     except Exception:
         with _running_lock:
             _running_sessions.discard(session_id)
@@ -266,12 +274,15 @@ def _service_model_info(service: Any) -> dict | None:
 
 
 def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: str = MODE_UPLOAD,
-                    video_seconds: float | None = None) -> tuple[list[dict], dict | None]:
+                    video_seconds: float | None = None,
+                    phrase_set: str = PHRASE_SET_DEFAULT) -> tuple[list[dict], dict | None]:
     """olkavs 경로: 상주 워커로 입술 추출(구간별 NPZ) → 구간별 인식. NPZ 폴더는 바로 지운다.
 
     record 모드(utterance=True)는 녹화 전체를 한 발화로 보고 앞뒤 무발화 구간을 잘라 낸다.
     12초 모델 창은 그대로라 12초를 넘는 녹화(30초 실험 모드)는 여러 창으로 나뉠 수 있다.
     warnings에는 결과와 함께 보여 줄 품질 경고(낮은 프레임률 등)를 덧붙인다.
+    phrase_set이 디코더를 정하는 묶음(ward → ctc)이면 모델 정보의 decoder를 이 Job이 인식 요청에 쓰는 디코더로 바꾼다.
+    모든 구간이 무발화·검출 실패라 인식 요청이 한 번도 없던 Job도 같다(기본 묶음이 워커 기본값을 알리는 것과 같은 뜻).
 
     Returns:
         (결과 목록, 완료 시점의 모델 정보 또는 None).
@@ -305,8 +316,13 @@ def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: 
             video_seconds=video_seconds,
             warnings=warnings,
             utterance=(mode == MODE_RECORD),
+            phrase_set=phrase_set,
         )
-        return results, _service_model_info(service)
+        model_info = _service_model_info(service)
+        decoder = phrase_set_config(phrase_set).decoder
+        if model_info is not None and decoder:
+            model_info["decoder"] = decoder  # 워커 기본값(hybrid)이 아니라 이 Job이 요청하는 디코더(인식 요청이 없어도 같다)
+        return results, model_info
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
         if os.path.exists(work_dir):
@@ -314,7 +330,7 @@ def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: 
 
 
 def _run_infer_job(session_id: str, file_path: str, mode: str = MODE_UPLOAD,
-                   video_seconds: float | None = None) -> None:
+                   video_seconds: float | None = None, phrase_set: str = PHRASE_SET_DEFAULT) -> None:
     """백그라운드 추론 작업.
 
     선택된 모델 경로로 인식 → 진행률 갱신 → 완료 처리 → 임시 파일 즉시 삭제. 예외 시 fail_job.
@@ -325,13 +341,14 @@ def _run_infer_job(session_id: str, file_path: str, mode: str = MODE_UPLOAD,
         file_path: 임시 업로드(또는 녹화) 파일 경로.
         mode: 'upload' 또는 'record'.
         video_seconds: 서버가 잰 영상 길이(초, record 모드). 없으면 메타데이터로 어림한다.
+        phrase_set: 지정 문장 묶음 ID (record 모드, 기본 'sentences').
     """
     try:
         warnings: list[str] = []
         model_info: dict | None = None
         if MODEL_BACKEND == "olkavs":
             results, model_info = _run_olkavs_job(session_id, file_path, warnings, mode=mode,
-                                                  video_seconds=video_seconds)
+                                                  video_seconds=video_seconds, phrase_set=phrase_set)
         elif mode == MODE_RECORD:
             raise _UserFacingError(MSG_RECORD_BACKEND)
         else:

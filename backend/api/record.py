@@ -12,6 +12,9 @@ POST /api/record — 브라우저 MediaRecorder 녹화(WebM, Safari는 MP4)를 �
   미만만 접수한다. 측정은 asyncio.to_thread로 돌려 이벤트 루프를 막지 않는다.
 - 거부 사유는 고정 한국어 문구로만 알린다(서버 경로·예외 원문 금지). 거부하면 저장한 파일을 바로 지운다.
 - 공식 모델(olkavs) 백엔드에서만 지원한다. compact면 503.
+- 선택 필드 phrase_set: 지정 문장 묶음 ID('sentences' 기본, 'ward' 병실 명령). 필드를 보내지 않을 때만 기본값을 쓰고,
+  화이트리스트(config.PHRASE_SET_IDS) 밖의 값·빈 값·같은 필드 여러 개는 400이다. FastAPI는 빈 폼 값을 '보내지 않음'으로
+  바꾸므로 원래 폼(request.form(), 이미 읽은 것을 다시 씀)에서 직접 확인한다. 목록 파일 경로는 클라이언트에게서 받지 않는다.
 """
 
 from __future__ import annotations
@@ -24,8 +27,9 @@ import statistics
 import sys
 import time
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
 
 _BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BACKEND_ROOT not in sys.path:
@@ -48,6 +52,7 @@ MSG_UNREADABLE = "녹화 영상을 읽을 수 없습니다. 다시 녹화해 주
 MSG_TOO_SHORT = "녹화가 너무 짧습니다 ({sec:g}초 이상 녹화해 주세요)."
 MSG_TOO_LONG = "녹화 길이는 {sec:g}초 미만이어야 합니다."
 MSG_SAVE_FAILED = "녹화 파일을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."
+MSG_BAD_PHRASE_SET = "알 수 없는 문장 묶음입니다 (sentences 또는 ward만 사용할 수 있습니다)."
 
 _MIN_FILE_BYTES = 32
 _EBML_MAGIC = b"\x1a\x45\xdf\xa3"
@@ -237,6 +242,35 @@ _REJECT_MESSAGES = {
 }
 
 
+def resolve_phrase_set(values: list[Any] | None) -> str:
+    """phrase_set 폼 필드 값 전체를 화이트리스트로 확인한다. 필드가 아예 없을 때만 기본 묶음('sentences').
+
+    대소문자·공백을 고쳐 주지 않는다(정확히 일치하는 ID만 받는다). 경로나 파일 이름은 받지 않는다.
+    빈 문자열, 같은 필드를 여러 번 보낸 요청, 문자열이 아닌 파트(파일)는 기본값으로 바꾸지 않고 거부한다.
+
+    Args:
+        values: 원래 폼의 'phrase_set' 값 목록(form.getlist). 없거나 비었으면 필드를 보내지 않은 것이다.
+
+    Returns:
+        config.PHRASE_SET_IDS 중 하나.
+
+    Raises:
+        RecordingRejected: 화이트리스트 밖의 값 (고정 문구, 보낸 값을 되돌려 보여 주지 않는다).
+    """
+    if not values:
+        return config.PHRASE_SET_DEFAULT
+    if len(values) == 1 and isinstance(values[0], str) and values[0] in config.PHRASE_SET_IDS:
+        return values[0]
+    shown = [str(v)[:40] if isinstance(v, str) else type(v).__name__ for v in values[:3]]
+    raise RecordingRejected(MSG_BAD_PHRASE_SET, f"phrase_set={shown!r} ({len(values)}개)")
+
+
+async def _form_phrase_set_values(request: Request) -> list[Any]:
+    """원래 멀티파트 폼의 phrase_set 값 목록. FastAPI가 이미 읽어 둔 폼을 다시 쓴다(본문을 다시 읽지 않는다)."""
+    form = await request.form()
+    return list(form.getlist("phrase_set"))
+
+
 def record_body_limit() -> tuple[float, str]:
     """요청 본문 크기 제한 미들웨어 규칙: (RECORD_MAX_SIZE_MB, 413 고정 문구). 요청마다 설정을 다시 읽는다."""
     return float(config.RECORD_MAX_SIZE_MB), MSG_TOO_LARGE.format(mb=config.RECORD_MAX_SIZE_MB)
@@ -268,25 +302,33 @@ async def _save_capped(file: UploadFile, session_id: str) -> tuple[str, int]:
 
 
 @router.post("/record", response_model=RecordStartResponse)
-async def start_record(background_tasks: BackgroundTasks,
-                       file: UploadFile = File(...)) -> RecordStartResponse:
+async def start_record(request: Request,
+                       background_tasks: BackgroundTasks,
+                       file: UploadFile = File(...),
+                       phrase_set: str | None = Form(None)) -> RecordStartResponse:
     """웹캠 녹화를 받아 발화 전체 인식 Job을 등록한다 (결과 즉시 반환 금지).
 
     Args:
+        request: 원래 폼에서 phrase_set을 확인하는 데 쓴다(빈 값·중복 필드 구분).
         background_tasks: FastAPI 백그라운드 태스크 큐.
         file: 멀티파트 'file' 필드의 녹화 파일.
+        phrase_set: 멀티파트 'phrase_set' 필드(선택). 'sentences'(기본) 또는 'ward'. API 문서용이며,
+            FastAPI가 빈 값을 None으로 바꾸므로 판정은 원래 폼 값(resolve_phrase_set)으로 한다.
 
     Returns:
         {job_id, session_id, status:'processing', duration_sec}.
 
     Raises:
-        HTTPException: 접수 거부 400(고정 문구), compact 백엔드 503, 같은 세션 처리 중 409.
+        HTTPException: 접수 거부 400(고정 문구, 알 수 없는·빈·중복 phrase_set 포함), compact 백엔드 503,
+            같은 세션 처리 중 409.
     """
     if infer_api.MODEL_BACKEND != "olkavs":
         raise HTTPException(status_code=503, detail=MSG_BACKEND_UNSUPPORTED)
     session_id = str(uuid.uuid4())
     path: str | None = None
     try:
+        # 파일을 저장하기 전에 거른다. phrase_set 인자 대신 원래 폼 값으로 판정한다(빈 값이 기본값으로 바뀌지 않게).
+        phrase_set = resolve_phrase_set(await _form_phrase_set_values(request))
         path, size = await _save_capped(file, session_id)
         duration = await asyncio.to_thread(measure_recording_seconds, path, config.RECORD_MAX_SECONDS,
                                            config.RECORD_MAX_FRAMES, config.RECORD_PROBE_TIMEOUT_SEC)
@@ -307,10 +349,10 @@ async def start_record(background_tasks: BackgroundTasks,
             await file.close()
         except Exception:  # noqa: BLE001 - 업로드 임시 파일 정리 실패는 무시
             pass
-    logger.info("녹화 접수: %s %d바이트 %.3f초", os.path.basename(path), size, duration)
+    logger.info("녹화 접수: %s %d바이트 %.3f초 묶음=%s", os.path.basename(path), size, duration, phrase_set)
     try:
         start = infer_api.start_background_job(session_id, path, background_tasks,
-                                               mode="record", video_seconds=duration)
+                                               mode="record", video_seconds=duration, phrase_set=phrase_set)
     except Exception:
         _safe_remove(path)
         raise
