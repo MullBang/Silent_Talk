@@ -198,3 +198,8 @@ docs/이매지니어_2026-2학기/02_작성근거와_확인사항.docx
 # 공식 모델 워커 가상환경의 패키지 고정 목록은 재현에 필요하다 (데이터 없음)
 !experiments/olkavs_official/requirements-lock.txt
 !experiments/olkavs_official/requirements-lock-roi.txt
+
+# 시연 노트북 묶음: 노트북에서 생기는 설치 기록·로그, 점검용 예시 영상(개인 영상), 묶음 기록 (deploy/)
+deploy/runtime/
+deploy/samples/
+deploy/bundle_manifest.json

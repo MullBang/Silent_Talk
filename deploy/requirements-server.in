@@ -1,0 +1,17 @@
+# 시연 노트북 서버(.venv-server, Python 3.11) 직접 의존성.
+# 실제 설치는 이 파일이 아니라 requirements-server-lock.txt(새 가상환경에서 pip freeze로 만든 전체 고정 목록)를 쓴다.
+#
+# 버전은 개발 PC 서버(py -3.11)에서 쓰는 값에 맞췄다. 루트 requirements.txt 중 서버가 실제로 import 하지 않는 것
+# (mediapipe·matplotlib·torchvision·pytest·httpx)은 뺐다.
+#  - mediapipe: 서버 쪽 import는 선택(try/except)이고, 입술 추출은 .venv-olkavs-roi 워커가 한다.
+#  - python-magic: 녹화 접수(/api/record)는 내용 시그니처로만 판정한다. 업로드 경로는 magic이 없으면 시그니처로 대신 검사한다.
+# torch는 서버가 시작할 때 compact 모델 모듈을 import 하느라 필요하다. 병실·녹화 인식은 워커가 하므로
+# 서버에는 항상 CPU판(작은 파일)을 설치한다. 줄은 아래처럼 두되 install.py가 PyTorch CPU 저장소에서 따로 받는다.
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
+pydantic==2.13.4
+numpy==2.2.4
+opencv-python-headless==4.13.0.92
+APScheduler==3.11.2
+torch==2.10.0+cpu
