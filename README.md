@@ -240,7 +240,7 @@ py -3.11 -m uvicorn main:app --host 127.0.0.1 --port 8000
 - 입이 움직이지 않으면 `[발화 없음]`, 얼굴을 못 찾은 구간은 `[검출 실패 구간]`, 신뢰도가 낮으면 `[인식 불가]`로 표시한다.
 - 녹화 흐름은 외부 주소를 쓰지 않는다. MediaPipe wasm은 `node_modules`에서 `/mediapipe/wasm`으로 제공한다. 실시간 웹캠 화면(WebcamPage)을 오프라인에서 쓰려면 `face_landmarker.task`를 `frontend/public/mediapipe/`에 직접 넣어야 한다.
 - 기준값 근거와 다시 맞추는 방법은 [보정 기록](experiments/stage6_vad_calibration_20261020/README.md)에 있다.
-- 지정 문장 모드(7단계): 녹화 한 건 전체가 모델 창 하나이고 약 1.5초 이상이면 촬영 문장 20개 중 입 모양에 가장 가까운 문장을 고른다. 1·2등 점수 차이와 1등 점수가 기준(`OLKAVS_PHRASE_MIN_MARGIN` 0.5, `OLKAVS_PHRASE_MIN_SCORE` -3.45, 임시값) 이상일 때만 결과로 표시하고, 자유 인식 결과는 그대로 함께 보여 준다. 결과: [7단계 결과](docs/공식모델_전환_07_지정문장_결과_2026-10-31.md).
+- 지정 문장 모드(7단계): 녹화 한 건 전체가 모델 창 하나이고 약 1.5초 이상이면 촬영 문장 20개 중 입 모양에 가장 가까운 문장을 고른다. 1·2등 점수 차이와 1등 점수가 기준(`OLKAVS_PHRASE_MIN_MARGIN` 0.5, `OLKAVS_PHRASE_MIN_SCORE` -3.40, 2026-11-09 고정 — [설정 고정](docs/공식모델_전환_08_설정고정_2026-11-09.md)) 이상일 때만 결과로 표시하고, 자유 인식 결과는 그대로 함께 보여 준다. 결과: [7단계 결과](docs/공식모델_전환_07_지정문장_결과_2026-10-31.md).
 
 #### 데이터와 라이선스
 - 학습·평가 자료는 AI Hub 「립리딩(입모양) 음성인식 데이터」(한국지능정보사회진흥원)를 쓴다. 자료 이용은 [AI Hub 이용 정책](https://aihub.or.kr/intrcn/guid/usagepolicy.do)을 따른다.

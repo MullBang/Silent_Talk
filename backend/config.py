@@ -260,15 +260,18 @@ OLKAVS_PHRASE_FILE: str = os.environ.get(
 OLKAVS_PHRASE_MIN_MARGIN: float = float(os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_MARGIN", "0.5"))
 """지정 문장 1·2등의 토큰당 CTC 점수 차이 하한. 아래 점수 하한과 함께 넘어야 문장을 결과로 보여 준다.
 
-임시값 0.5: 파일럿 P01 100클립의 서비스 경로로 정했다. 다른 참가자 영상으로 다시 정한다
-(docs/공식모델_전환_07_지정문장_결과_2026-10-31.md)."""
+고정값 0.5 (2026-11-09 고정): P01로 정한 뒤 조정 참가자 P01·P03 200클립으로 다시 확인했다. P01의 오답 1등(차이 0.21·0.23)과
+모델까지 간 무발화(최대 0.29)를 막는 값이고, P03의 정답 차이는 0.69 이상이라 손해가 없다
+(docs/공식모델_전환_08_설정고정_2026-11-09.md)."""
 if not (OLKAVS_PHRASE_MIN_MARGIN >= 0.0 and OLKAVS_PHRASE_MIN_MARGIN < float("inf")):
     raise ValueError(f"LIPNET_OLKAVS_PHRASE_MIN_MARGIN은 0 이상의 유한한 값이어야 합니다: {OLKAVS_PHRASE_MIN_MARGIN!r}")
 
-OLKAVS_PHRASE_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_SCORE", "-3.45"))
+OLKAVS_PHRASE_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_SCORE", "-3.40"))
 """지정 문장 1등의 토큰당 CTC 점수 하한. 낮으면 어느 후보와도 맞지 않는 말로 보고 고르지 않는다.
 
-임시값 -3.45: 같은 자료에서 목록 문장 80개의 최저 -3.40과 목록 밖 자유 문장 10개의 최고 -3.50 사이다."""
+고정값 -3.40 (2026-11-09 고정, 이전 임시값 -3.45): P01·P03 200클립에서 표시 결과는 -3.45와 같고(147/160, 오답 0,
+목록 밖·무발화 표시 0), 가장 가까운 목록 밖 문장(P03 F07, -3.558)과의 여유가 0.108에서 0.158로 넓어진다
+(docs/공식모델_전환_08_설정고정_2026-11-09.md)."""
 if not (OLKAVS_PHRASE_MIN_SCORE <= 0.0 and OLKAVS_PHRASE_MIN_SCORE > float("-inf")):
     raise ValueError(f"LIPNET_OLKAVS_PHRASE_MIN_SCORE는 0 이하의 유한한 값이어야 합니다: {OLKAVS_PHRASE_MIN_SCORE!r}")
 

@@ -5,6 +5,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 import torch
 
 _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +65,14 @@ def test_recognize_keeps_text_when_phrase_scoring_fails(monkeypatch) -> None:
     monkeypatch.setattr(ot, "phrase_tokens", boom)
     out = ot.recognize(frames, "cpu", "ctc", [{"id": "X", "text": "가"}, {"id": "Y", "text": "나"}])
     assert out["phrase"] is None and out["token_ids"] == [5, 6]
+
+
+def test_frozen_phrase_thresholds_are_defaults() -> None:
+    """2026-11-09 고정값(차이 0.5, 점수 -3.40)이 환경 변수 없이 쓰는 기본값이다. 최종 평가 뒤 바꾸지 않는다."""
+    if os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_MARGIN") or os.environ.get("LIPNET_OLKAVS_PHRASE_MIN_SCORE"):
+        pytest.skip("환경 변수로 기준값을 덮어쓴 실행")
+    assert svc.config.OLKAVS_PHRASE_MIN_MARGIN == 0.5
+    assert svc.config.OLKAVS_PHRASE_MIN_SCORE == -3.40
 
 
 def _one_window(status: str = "ok") -> list[dict]:
