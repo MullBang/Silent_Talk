@@ -3,11 +3,13 @@
 
 import axios from 'axios';
 
-import { baseMimeType, recordingFileName, validateBlob } from '../record/recordFlow';
+import { baseMimeType, recordingFileName, validateBlob } from '../record/recordFlow.js';
 
 /** 서비스 제한값 (설계문서 F-MVP-01). 클라이언트 1차 검증용. */
 export const MAX_UPLOAD_SIZE_MB = 500;
 export const MAX_DURATION_SEC = 180; // 3분
+/** POST /api/record의 phrase_set으로 보낼 수 있는 지정 문장 묶음. 서버 기본은 'sentences'. */
+export const PHRASE_SETS = Object.freeze(['sentences', 'ward']);
 
 /** 공용 axios 인스턴스. */
 export const apiClient = axios.create({
@@ -93,16 +95,25 @@ export async function uploadVideo(file, onProgress) {
  * 서버가 실제 길이를 재서 30초 미만만 접수하고 즉시 결과 대신 {job_id, session_id, status:'processing',
  * duration_sec}를 돌려준다. 결과는 getResult(session_id) 폴링으로 받는다.
  * 파일 파트의 MIME은 코덱 매개변수를 뗀 기본형(video/webm|video/mp4), 파일명은 recording.webm|.mp4다.
+ * options.phraseSet을 주면 phrase_set 필드로 지정 문장 묶음을 고른다(병실 화면은 'ward').
+ * 주지 않으면 필드를 보내지 않아 서버 기본(sentences) 요청과 똑같다.
  * @param {Blob} blob 녹화 Blob.
  * @param {string} mime MediaRecorder MIME (예: 'video/webm;codecs=vp9').
  * @param {(percent: number) => void} [onProgress] 업로드 진행률(0~100) 콜백.
+ * @param {{phraseSet?: 'sentences'|'ward'}} [options]
  * @returns {Promise<{ job_id: string, session_id: string, status: string, duration_sec: number }>}
- * @throws {Error} 빈 Blob(isClientCheck=true) 또는 axios 오류(서버 400/503 detail 포함).
+ * @throws {Error} 빈 Blob·모르는 묶음(isClientCheck=true) 또는 axios 오류(서버 400/503 detail 포함).
  */
-export async function uploadRecording(blob, mime, onProgress) {
+export async function uploadRecording(blob, mime, onProgress, options = {}) {
   const check = validateBlob(blob);
   if (!check.ok) {
     const err = new Error(check.message);
+    err.isClientCheck = true;
+    throw err;
+  }
+  const phraseSet = options?.phraseSet;
+  if (phraseSet !== undefined && phraseSet !== null && !PHRASE_SETS.includes(phraseSet)) {
+    const err = new Error('지원하지 않는 문장 묶음입니다.');
     err.isClientCheck = true;
     throw err;
   }
@@ -110,6 +121,7 @@ export async function uploadRecording(blob, mime, onProgress) {
   const part = blob.type === type ? blob : new Blob([blob], { type });
   const form = new FormData();
   form.append('file', part, recordingFileName(type));
+  if (phraseSet !== undefined && phraseSet !== null) form.append('phrase_set', phraseSet);
   const { data } = await apiClient.post('/api/record', form, {
     timeout: 120000,
     onUploadProgress: (e) => {

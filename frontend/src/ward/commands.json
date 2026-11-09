@@ -1,0 +1,33 @@
+{
+  "version": "ward-commands-v1",
+  "note": "병실 무음 도우미 명령 20개 (2026-11-09 동결). text는 입 모양으로 말하는 인식용 문장, display는 화면·간호사 카드에 보여 주는 존댓말 문장이다. 입 모양 최소 거리 0.500(엄격 0.467), 끝말 공유 최대 4, OLKAVS 토큰 23~34. 서버는 fixed의 id·text만 읽는다.",
+  "categories": [
+    { "id": "emergency", "label": "긴급" },
+    { "id": "call", "label": "호출·소통" },
+    { "id": "care", "label": "몸 돌봄" },
+    { "id": "room", "label": "병실" },
+    { "id": "answer", "label": "대답" }
+  ],
+  "fixed": [
+    { "id": "W01", "text": "간호사 선생님 좀 불러 주세요", "display": "간호사를 불러 주세요", "category": "call", "emergency": false, "action": "call_nurse" },
+    { "id": "W02", "text": "숨쉬기가 갑자기 답답해요", "display": "숨쉬기가 답답해요", "category": "emergency", "emergency": true, "action": "alert_breathing" },
+    { "id": "W03", "text": "몸이 너무 아파서 못 참겠어요", "display": "많이 아파요", "category": "emergency", "emergency": true, "action": "alert_pain" },
+    { "id": "W04", "text": "가래가 차서 숨이 막혀요", "display": "가래 때문에 숨이 막혀요", "category": "emergency", "emergency": true, "action": "alert_sputum" },
+    { "id": "W05", "text": "목이 말라 물 한 모금만", "display": "물을 마시고 싶어요", "category": "care", "emergency": false, "action": "request_water" },
+    { "id": "W06", "text": "화장실에 가고 싶어요", "display": "배변·배뇨 도움이 필요해요", "category": "care", "emergency": false, "action": "request_toilet" },
+    { "id": "W07", "text": "누워 있기 불편해서 자세 바꿔 줘", "display": "자세를 바꿔 주세요", "category": "care", "emergency": false, "action": "request_reposition" },
+    { "id": "W08", "text": "너무 추워서 이불 덮어 줄래", "display": "추워요, 이불을 덮어 주세요", "category": "care", "emergency": false, "action": "request_blanket" },
+    { "id": "W09", "text": "땀이 나고 몸이 더워요", "display": "더워요, 땀이 나요", "category": "care", "emergency": false, "action": "report_hot" },
+    { "id": "W10", "text": "구역질이 나서 토할 것 같아요", "display": "토할 것 같아요", "category": "emergency", "emergency": true, "action": "alert_nausea" },
+    { "id": "W11", "text": "방이 어두우니까 불 좀 켜 줘", "display": "불을 켜 주세요", "category": "room", "emergency": false, "action": "light_on" },
+    { "id": "W12", "text": "이제 잠을 자려고 해요", "display": "이제 잘게요", "category": "room", "emergency": false, "action": "sleep_mode" },
+    { "id": "W13", "text": "커튼 좀 닫아 주면 좋겠어", "display": "커튼을 닫아 주세요", "category": "room", "emergency": false, "action": "curtain_close" },
+    { "id": "W14", "text": "등받이를 조금만 올려 줘요", "display": "등받이를 올려 주세요", "category": "room", "emergency": false, "action": "request_backrest" },
+    { "id": "W15", "text": "텔레비전 좀 틀어 볼까", "display": "텔레비전을 켜 주세요", "category": "room", "emergency": false, "action": "tv_on" },
+    { "id": "W16", "text": "조금만 이따가 다시 와 줘요", "display": "조금 뒤에 다시 와 주세요", "category": "call", "emergency": false, "action": "come_back_later" },
+    { "id": "W17", "text": "네 좋아요 그렇게 하세요", "display": "네", "category": "answer", "emergency": false, "action": "answer_yes" },
+    { "id": "W18", "text": "아니요 그건 원하지 않아요", "display": "아니요", "category": "answer", "emergency": false, "action": "answer_no" },
+    { "id": "W19", "text": "우리 가족에게 전화해 볼래요", "display": "가족에게 연락해 주세요", "category": "call", "emergency": false, "action": "contact_family" },
+    { "id": "W20", "text": "방금 말한 건 취소할게요", "display": "방금 요청은 취소할게요", "category": "call", "emergency": false, "action": "cancel_last" }
+  ]
+}
