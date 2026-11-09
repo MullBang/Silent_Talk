@@ -1,5 +1,17 @@
 # 립리딩 프로젝트 — 개발 규칙 (설계문서 완성본 기준)
 
+> **2026-11-10 병실 명령 채점 도구와 시연 노트북 스크립트 추가.**
+> - **채점 도구:** `scripts/ward_service_batch.py`(서버로 클립 일괄 전송), `scripts/ward_eval_tools.py`(calibrate·report·validate·fingerprint), `scripts/ward_enroll.py`(등록 거리), 판정표는 `scripts/ward_tools/metrics.py`이다. 사용법은 `docs/병실명령_채점도구_사용법_2026-11-10.md`에 있다.
+> - **봉인:** P02·ward_eval 자료는 `--allow-sealed`와 커밋된 동결 파일(`--freeze`)이 모두 있어야 읽는다.
+> - **긴급 가능성 점수 하한:** 기본으로 쓰지 않아 화면 규칙과 같다. 쓰려면 화면(wardMachine.js)에도 같은 규칙을 넣어야 한다.
+> - **목록 밖 말 재채점:** P01·P03 문장 200클립을 병실 묶음으로 다시 채점했다. 임시 기준 0.5/−3.40에서 명령으로 표시된 것은 2/200(P01 A09 → W10 빨간 카드, P01 A06 → W18)이다. 긴급 가능성은 124/200(대부분 W10·W03)으로, 명령 촬영 뒤 기준과 함께 다시 정한다.
+> - **시연 노트북:** `deploy/`에 묶음 만들기(`build_bundle.py`), 설치.bat·시연_실행.bat·시연_점검.bat·시연_중지.bat가 있고, 안내는 `docs/시연노트북_설치안내_2026-11-10.md`이다.
+>   - Python 3.11 하나만 있으면 되고 Node·Git은 필요 없다. Visual C++ 런타임은 필요하다.
+>   - GPU(cu128)·CPU 중 하나를 자동으로 고른다.
+>   - 설치는 약 12분(6MB/s 기준)이고, 크기는 GPU 6.6GB·CPU 2.8GB, 디스크 여유는 GPU 16GB가 필요하다.
+>   - 이 PC에서 병실 요청 처리 시간 중앙값은 GPU 1.3초, CPU 1.6초다.
+>   - 묶음은 HEAD 코드를 쓰므로 기준 동결 커밋 뒤에 다시 만든다. 실제 노트북에서는 아직 시험하지 않았다.
+
 > **2026-11-10 병실 무음 도우미 1단계 구현 (기준값 미조정, 문장 모드 불변).**
 > - **명령 목록:** `frontend/src/ward/commands.json`의 20개(동결). `text`는 인식용 입 모양 문장, `display`는 화면용 존댓말이다. 긴급은 W02·W03·W04·W10이다.
 > - **서버:** `POST /api/record`에 `phrase_set`(sentences 기본 / ward, 화이트리스트 ID) 추가. ward는 ctc 디코딩이고, 기준 `OLKAVS_WARD_MIN_MARGIN`/`OLKAVS_WARD_MIN_SCORE`는 임시값 0.5/−3.40이다. P01·P03 명령 영상으로 다시 정한다. 결과 `phrase`에 `set`을 더했다. 기본 묶음은 P01·P03 200클립 회귀 최대 차이 0이다.
