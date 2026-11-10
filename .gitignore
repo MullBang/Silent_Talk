@@ -203,3 +203,7 @@ docs/이매지니어_2026-2학기/02_작성근거와_확인사항.docx
 deploy/runtime/
 deploy/samples/
 deploy/bundle_manifest.json
+deploy/ward_thresholds.json
+
+# 병실 "내 입 모양 등록" 템플릿 (사람별 입 모양 특징 = 개인 자료, 서버 기본 저장 폴더)
+backend/data/ward_profiles/

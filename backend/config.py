@@ -7,8 +7,10 @@ CLAUDE.md '절대 변경 금지 기준값'을 단일 진실 공급원(Single Sou
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
+from typing import Callable
 
 # ---------------------------------------------------------------------------
 # 절대 변경 금지 기준값 (CLAUDE.md §절대 변경 금지 기준값)
@@ -301,6 +303,53 @@ OLKAVS_WARD_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_SCOR
 if not (OLKAVS_WARD_MIN_SCORE <= 0.0 and OLKAVS_WARD_MIN_SCORE > float("-inf")):
     raise ValueError(f"LIPNET_OLKAVS_WARD_MIN_SCORE는 0 이하의 유한한 값이어야 합니다: {OLKAVS_WARD_MIN_SCORE!r}")
 
+def _env_optional_threshold(name: str, default: str | None, valid: Callable[[float], bool], rule: str) -> float | None:
+    """선택 기준값 환경변수를 읽는다. 빈 문자열·'none'(대소문자 무관)은 None(기준을 쓰지 않음)이다.
+
+    Args:
+        name: 환경변수 이름.
+        default: 환경변수가 없을 때 쓸 문자열(None이면 기준을 쓰지 않음).
+        valid: 숫자 값의 허용 범위 검사.
+        rule: 오류 문구에 넣을 허용 범위 설명.
+
+    Returns:
+        실수 기준값 또는 None.
+
+    Raises:
+        ValueError: 숫자가 아니거나(NaN 포함) 허용 범위를 벗어난 경우. 서버 기동(config import)을 막는다.
+    """
+    raw = os.environ.get(name, default)
+    try:
+        if raw is None or raw.strip() == "" or raw.strip().lower() == "none":
+            return None
+        value = float(raw)
+    except (AttributeError, ValueError) as exc:
+        raise ValueError(f"{name}는 {rule}이거나 비워 두어야 합니다: {raw!r}") from exc
+    if not (math.isfinite(value) and valid(value)):
+        raise ValueError(f"{name}는 {rule}이거나 비워 두어야 합니다: {raw!r}")
+    return value
+
+
+OLKAVS_WARD_ENROLL_MAX_DISTANCE: float | None = _env_optional_threshold(
+    "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE", "0.27", lambda v: v > 0.0, "0보다 큰 유한한 값")
+"""ward 묶음 '내 입 모양 등록' 거리 기준 D. 등록 1등 거리가 이 값 이하일 때만 등록으로 고르거나 긴급 가능성을 올린다.
+
+임시값 0.27: P02 등록 오프라인 분석의 미리 정한 규칙('자기 등록 거리 ≤ 0.27')을 가져왔다. P01·P03 명령 영상으로 다시 정한다.
+빈 값·'none'이면 거리는 계산해 결과에 남기지만 등록으로 고르거나 알리지 않는다(within·accepted가 항상 false).
+판정표는 scripts/ward_tools/metrics.py decide()와 같다(화면 wardResult.js가 적용한다)."""
+
+OLKAVS_WARD_POSSIBLE_MIN_SCORE: float | None = _env_optional_threshold(
+    "LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE", None, lambda v: v <= 0.0, "0 이하의 유한한 값")
+"""ward 묶음 '긴급 가능성' 점수 하한. 기본 None(꺼짐 = 이전 화면 규칙: 고르지 못했을 때 글자 1·2등에 긴급이 있으면 알린다).
+
+값을 주면 metrics.possible_score()와 같은 뜻이다: 1등 점수 = phrase.score, 2등 점수 = phrase.score − phrase.margin이고,
+그 점수가 이 값 이상인 긴급 후보만 긴급 가능성으로 올린다. 서버는 값을 결과 phrase.rule로 알리기만 하고 화면이 적용한다."""
+
+WARD_PROFILE_DIR: str = os.environ.get("LIPNET_WARD_PROFILE_DIR") or os.path.join(BACKEND_ROOT, "data", "ward_profiles")
+"""'내 입 모양 등록' 저장 폴더. 사람별 하위 폴더에 profile.json과 명령별 특징 <명령ID>.npz를 둔다.
+
+등록 특징은 개인 자료다. 저장소에 넣지 않는다(.gitignore의 backend/data/ward_profiles/). 시연 뒤 지운다."""
+
 PHRASE_SET_SENTENCES: str = "sentences"
 PHRASE_SET_WARD: str = "ward"
 PHRASE_SET_DEFAULT: str = PHRASE_SET_SENTENCES
@@ -347,6 +396,23 @@ def phrase_set_config(phrase_set: str) -> PhraseSetConfig:
         return table[phrase_set]
     except (KeyError, TypeError) as exc:  # TypeError: 해시할 수 없는 값
         raise ValueError(f"알 수 없는 지정 문장 묶음: {phrase_set!r}") from exc
+
+
+def ward_rule() -> dict[str, float | None]:
+    """ward 묶음의 현재 판정 기준값 (결과 phrase.rule·/health ward_phrases.thresholds). 부를 때마다 현재 모듈 값을 읽는다.
+
+    Returns:
+        {min_margin, min_score, possible_min_score, enroll_max_distance}. 뒤의 둘은 쓰지 않으면 None.
+    """
+    try:
+        ward = phrase_set_config(PHRASE_SET_WARD)
+        return {"min_margin": float(ward.min_margin), "min_score": float(ward.min_score),
+                "possible_min_score": (None if OLKAVS_WARD_POSSIBLE_MIN_SCORE is None
+                                       else float(OLKAVS_WARD_POSSIBLE_MIN_SCORE)),
+                "enroll_max_distance": (None if OLKAVS_WARD_ENROLL_MAX_DISTANCE is None
+                                        else float(OLKAVS_WARD_ENROLL_MAX_DISTANCE))}
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"ward 기준값을 읽지 못했습니다: {exc}") from exc
 
 # ---------------------------------------------------------------------------
 # 웹캠 녹화 접수 (POST /api/record, 6단계)

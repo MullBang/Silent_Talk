@@ -16,6 +16,9 @@ services/olkavs_worker.py 를 두 가상환경에서 서브프로세스로 띄�
 - 지정 문장 묶음(병실 무음 도우미): phrase_set='ward'면 병실 명령 목록·OLKAVS_WARD_* 기준을 쓰고 인식 요청에 decoder='ctc'를
   넣는다. 기본 'sentences'는 위 규약 그대로다. 묶음 대응은 config.phrase_set_config가 정한다. 병실 목록을 읽을 수 있는지는
   /health의 ward_phrases(status())로 알리고, 서비스를 처음 만들 때 읽지 못하면 ERROR 로그를 남긴다.
+  ward phrase에는 판정 기준값 rule을 더하고, /health ward_phrases에는 thresholds·enroll을 더한다(문장 묶음 결과는 그대로).
+- 내 입 모양 등록(병실): ward 녹화에 enroll_profile이 있으면 같은 순전파의 은닉 특징을 받아 등록 템플릿으로 저장하거나
+  등록 템플릿과 거리로 비교해 results[0].enroll을 더한다(services/ward_profiles.py, ward_templates.py).
 - 결과 표시 규약(6단계): 입술 미검출 구간 FAIL_TEXT, 말하지 않은 구간 NO_SPEECH_TEXT(인식하지 않음),
   빈 출력 또는 confidence < config.OLKAVS_MIN_CONFIDENCE 이면 UNREC_TEXT(후자는 모델 문장을 candidate로 보존).
 """
@@ -399,6 +402,100 @@ def _duration_hint(video_seconds: float | None) -> float | None:
         return None
 
 
+def _check_enroll_args(phrase_set: str, enroll_profile: str | None, enroll_command: str | None) -> bool:
+    """등록 인자 확인. 등록을 쓰면 True, 둘 다 없으면 False.
+
+    Raises:
+        ValueError: ward가 아닌 묶음의 등록 인자, 등록 이름 없는 enroll_command, 규칙에 맞지 않는 등록 이름·명령 ID 형식.
+    """
+    if enroll_profile is None and enroll_command is None:
+        return False
+    if phrase_set != config.PHRASE_SET_WARD:
+        raise ValueError("내 입 모양 등록은 ward 묶음에서만 쓸 수 있습니다")
+    if enroll_profile is None:
+        raise ValueError("enroll_command에는 enroll_profile이 필요합니다")
+    from services import ward_profiles
+
+    try:
+        ward_profiles.validate_profile_id(enroll_profile)
+    except ward_profiles.InvalidProfileId as exc:
+        raise ValueError(exc.user_message) from exc
+    if enroll_command is not None and not isinstance(enroll_command, str):
+        raise ValueError("enroll_command는 문자열이어야 합니다")
+    return True
+
+
+def _remove_quietly(path: str) -> None:
+    """임시 파일을 지운다 (없으면 무시, 실패는 서버 로그)."""
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError as exc:
+        logger.error("등록 특징 임시 파일 삭제 실패: %s (%s)", os.path.basename(path), exc)
+
+
+def _take_hidden(path: str, out: dict[str, Any]) -> Any:
+    """인식 워커가 저장한 은닉 특징(hidden_saved=True)을 메모리로 읽는다. 없거나 틀리면 None (파일 삭제는 호출한 쪽).
+
+    인식 반복 안에서 부르므로 어떤 오류도 밖으로 내지 않는다: 특징을 못 읽으면 등록 결과만 no_features가 되고 녹화 결과는 그대로다.
+    """
+    try:
+        from services import ward_profiles
+
+        if out.get("hidden_saved") is not True or not os.path.isfile(path):
+            logger.warning("인식 워커가 은닉 특징을 저장하지 않았습니다 (hidden_saved=%r)", out.get("hidden_saved"))
+            return None
+        return ward_profiles.load_hidden_npz(path)
+    except Exception as exc:  # noqa: BLE001 - 등록 특징 실패가 녹화 결과를 막지 않는다
+        logger.error("은닉 특징을 읽지 못했습니다: %s: %s", type(exc).__name__, exc)
+        return None
+
+
+def _enroll_result(profile: str, command: str | None, segments: list[dict[str, Any]], first: dict[str, Any],
+                   hidden: Any, checkpoint: str | None, ward_rule: dict[str, Any] | None) -> dict[str, Any]:
+    """results[0].enroll: enroll_command가 있으면 저장 모드, 없으면 판정 모드 (services/ward_profiles.py).
+
+    예상 밖 오류도 녹화 결과를 막지 않도록 reason/status 'error'로 바꾼다.
+    """
+    from services import ward_profiles as wp
+
+    phrase = first.get("phrase") if isinstance(first.get("phrase"), dict) else None
+    reason = wp.segments_reason(segments)
+    max_distance = (ward_rule or {}).get("enroll_max_distance")
+    try:
+        store = wp.get_store()
+        if command is not None:
+            meta = {"start_ms": first.get("start_ms"), "end_ms": first.get("end_ms")}
+            return wp.store_result(store, profile, command, reason, phrase, hidden, meta, checkpoint)
+        return wp.match_result(store, profile, reason, phrase, hidden, checkpoint, max_distance)
+    except Exception as exc:  # noqa: BLE001 - 등록 처리 실패가 녹화 결과를 막지 않는다
+        logger.exception("등록 처리 중 예기치 않은 오류: %s", type(exc).__name__)
+        if command is not None:
+            top = phrase.get("id") if phrase else None
+            return {"mode": "store", "profile": profile, "command": command, "stored": False, "reason": wp.REASON_ERROR,
+                    "text_top": top, "text_top_matches": top == command, "count": 0, "complete": False}
+        return {"mode": "match", "profile": profile, "status": wp.STATUS_ERROR, "count": 0, "top_id": None,
+                "distance": None, "runner_up_id": None, "runner_up_distance": None, "distances": None,
+                "max_distance": max_distance, "within": False, "agree": False, "accepted": False}
+
+
+def ward_status() -> dict[str, Any]:
+    """/health ward_phrases: 목록 상태 + 판정 기준값(thresholds) + 등록(enroll {enabled, profile_dir_writable}).
+
+    ward_phrase_status()의 키는 그대로 두고 더하기만 한다. 경로는 넣지 않는다.
+    """
+    from services import ward_profiles
+
+    status: dict[str, Any] = dict(ward_phrase_status())
+    try:
+        status["thresholds"] = config.ward_rule()
+    except ValueError:
+        logger.exception("ward 기준값 조회 실패")
+        status["thresholds"] = None
+    status["enroll"] = {"enabled": True, "profile_dir_writable": ward_profiles.profile_dir_writable()}
+    return status
+
+
 def expected_processing_seconds(video_seconds: float) -> float:
     """영상 길이로 예상 처리 시간을 어림한다 (입장 제어용, 실측: 180초 영상 약 215초)."""
     return (config.OLKAVS_EXPECTED_OVERHEAD_SEC
@@ -449,7 +546,7 @@ class OlkavsService:
             "roi_profile": (self.roi.info or {}).get("detector_profile"),
             "jobs_in_queue": self.gate.waiting(),
             "last_error": {"roi": self.roi.last_error, "infer": self.infer.last_error},
-            "ward_phrases": ward_phrase_status(),
+            "ward_phrases": ward_status(),
         }
 
     def model_info(self) -> dict[str, Any]:
@@ -483,7 +580,9 @@ class OlkavsService:
                          video_seconds: float | None = None,
                          warnings: list[str] | None = None,
                          utterance: bool = False,
-                         phrase_set: str = config.PHRASE_SET_DEFAULT) -> list[dict[str, Any]]:
+                         phrase_set: str = config.PHRASE_SET_DEFAULT,
+                         enroll_profile: str | None = None,
+                         enroll_command: str | None = None) -> list[dict[str, Any]]:
         """영상 → [{start_ms, end_ms, text, confidence, raw_score[, candidate][, phrase]}] (시간 순서).
 
         - 얼굴(입술) 미검출 구간은 FAIL_TEXT, 빈 인식 결과는 UNREC_TEXT(점수 없음)로 표시한다.
@@ -499,11 +598,24 @@ class OlkavsService:
         - FIFO 차례가 오면 바로 진행률 0을 알려 Job을 'processing'으로 옮긴다(진행률은 단조 증가).
         - phrase_set(config.PHRASE_SET_IDS)이 지정 문장 후보 목록·판정 기준·디코더를 고른다. 기본 'sentences'의 인식 요청은
           묶음 기능 이전과 같다(디코더 키 없음). 'ward'는 모든 인식 요청에 decoder='ctc'를 넣는다. phrase에는 묶음 ID(set)를 더한다.
+        - ward phrase에는 이번 판정에 쓴 기준값 rule {min_margin, min_score, possible_min_score, enroll_max_distance}을 더한다.
+          문장 묶음 phrase에는 rule이 없다.
+        - enroll_profile(ward 전용, '내 입 모양 등록'): 창 하나·지정 문장 결과가 있는 녹화면 인식 요청에 hidden_out을 넣어 같은
+          순전파의 은닉 특징을 받고, 읽은 즉시 임시 파일을 지운다. results[0]에 enroll을 더한다. enroll_command가 있으면 그 명령의
+          템플릿으로 저장(store), 없으면 등록 템플릿과 거리 판정(match). 등록 처리는 대기열 차례를 넘긴 뒤 하며, 실패해도
+          녹화 인식 결과는 그대로 돌려준다(services/ward_profiles.py).
 
         Raises:
-            ValueError: 화이트리스트에 없는 phrase_set (워커를 쓰기 전에 거부한다).
+            ValueError: 화이트리스트에 없는 phrase_set, ward가 아닌 묶음의 등록 인자, 규칙에 맞지 않는 등록 이름,
+                등록 이름 없는 enroll_command (워커를 쓰기 전에 거부한다).
         """
         set_config = config.phrase_set_config(phrase_set)
+        enrolling = _check_enroll_args(phrase_set, enroll_profile, enroll_command)
+        ward_rule = config.ward_rule() if phrase_set == config.PHRASE_SET_WARD else None
+        hidden: Any = None  # 등록용 은닉 특징 (T, 256): 창 하나·후보가 있는 ward 등록 녹화에서만 받는다
+        segments: list[dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
+        checkpoint: str | None = None
         last = {"progress": 0.0}
 
         def check_abort() -> None:
@@ -569,7 +681,6 @@ class OlkavsService:
             min_margin = float(set_config.min_margin)
             min_score = float(set_config.min_score)
             report(_ROI_SHARE)
-            results: list[dict[str, Any]] = []
             for i, seg in enumerate(segments):
                 check_abort()
                 item: dict[str, Any] = {"start_ms": int(seg["start_ms"]), "end_ms": int(seg["end_ms"]),
@@ -582,7 +693,18 @@ class OlkavsService:
                         infer_request["phrases"] = phrases
                     if set_config.decoder:
                         infer_request["decoder"] = set_config.decoder  # 기본 묶음은 넣지 않는다(워커 기본값)
-                    out = self.infer.request(infer_request, timeout=config.OLKAVS_INFER_TIMEOUT_SEC)
+                    hidden_path: str | None = None
+                    if enrolling and phrases:  # 창 하나·후보가 있을 때만 (등록 저장·판정에 쓸 수 있는 녹화)
+                        os.makedirs(work_dir, exist_ok=True)
+                        hidden_path = os.path.abspath(os.path.join(work_dir, f"enroll_hidden_{i:03d}.npz"))
+                        infer_request["hidden_out"] = hidden_path
+                    try:
+                        out = self.infer.request(infer_request, timeout=config.OLKAVS_INFER_TIMEOUT_SEC)
+                        if hidden_path is not None:
+                            hidden = _take_hidden(hidden_path, out)
+                    finally:
+                        if hidden_path is not None:
+                            _remove_quietly(hidden_path)  # 은닉 특징 임시 파일은 읽은 즉시 지운다
                     timing = out.get("timing_seconds") if isinstance(out.get("timing_seconds"), dict) else {}
                     logger.info("인식 창 %s~%sms: 묶음=%s 디코더=%s 디코딩=%s초 워커=%s초", item["start_ms"], item["end_ms"],
                                 phrase_set, out.get("decoder"), timing.get("decode"), out.get("elapsed_seconds"))
@@ -602,11 +724,18 @@ class OlkavsService:
                     if isinstance(phrase, dict):
                         accepted = float(phrase["margin"]) >= min_margin and float(phrase["score"]) >= min_score
                         item["phrase"] = {**phrase, "accepted": accepted, "set": phrase_set}
+                        if ward_rule is not None:
+                            item["phrase"]["rule"] = dict(ward_rule)  # 화면이 같은 기준으로 판정표를 적용한다
                 results.append(item)
                 report(_ROI_SHARE + (100.0 - _ROI_SHARE) * (i + 1) / len(segments))
-            return results
+            checkpoint = (self.infer.info or {}).get("checkpoint_sha256")
         finally:
             self.gate.release(ticket)
+        if enrolling and results:
+            check_abort()  # 시간 초과로 끝난 Job은 등록을 저장하지 않는다
+            results[0]["enroll"] = _enroll_result(enroll_profile, enroll_command, segments, results[0], hidden,
+                                                  checkpoint, ward_rule)
+        return results
 
 
 def load_phrases(path: str | None) -> list[dict[str, str]]:

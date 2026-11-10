@@ -15,6 +15,9 @@ POST /api/record — 브라우저 MediaRecorder 녹화(WebM, Safari는 MP4)를 �
 - 선택 필드 phrase_set: 지정 문장 묶음 ID('sentences' 기본, 'ward' 병실 명령). 필드를 보내지 않을 때만 기본값을 쓰고,
   화이트리스트(config.PHRASE_SET_IDS) 밖의 값·빈 값·같은 필드 여러 개는 400이다. FastAPI는 빈 폼 값을 '보내지 않음'으로
   바꾸므로 원래 폼(request.form(), 이미 읽은 것을 다시 씀)에서 직접 확인한다. 목록 파일 경로는 클라이언트에게서 받지 않는다.
+- 선택 필드 enroll_profile·enroll_command(내 입 모양 등록): phrase_set=ward에서만 받는다. enroll_command는 enroll_profile과
+  함께, 병실 명령 목록의 ID만 받는다. 규칙 위반·빈 값·중복 필드는 파일을 저장하기 전에 400(고정 문구)이다.
+  응답 형식은 그대로이고, 등록 결과는 폴링 결과 results[0].enroll로 준다(services/ward_profiles.py).
 """
 
 from __future__ import annotations
@@ -53,6 +56,11 @@ MSG_TOO_SHORT = "녹화가 너무 짧습니다 ({sec:g}초 이상 녹화해 주�
 MSG_TOO_LONG = "녹화 길이는 {sec:g}초 미만이어야 합니다."
 MSG_SAVE_FAILED = "녹화 파일을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."
 MSG_BAD_PHRASE_SET = "알 수 없는 문장 묶음입니다 (sentences 또는 ward만 사용할 수 있습니다)."
+MSG_ENROLL_WARD_ONLY = "내 입 모양 등록은 병실 명령 묶음(phrase_set=ward)에서만 쓸 수 있습니다."
+MSG_ENROLL_NEEDS_PROFILE = "등록할 명령(enroll_command)을 보낼 때는 등록 이름(enroll_profile)도 함께 보내야 합니다."
+MSG_BAD_ENROLL_PROFILE = "등록 이름은 영문·숫자·밑줄(_)·하이픈(-)으로 1~32자만 쓸 수 있습니다."
+MSG_BAD_ENROLL_COMMAND = "알 수 없는 병실 명령입니다 (병실 명령 목록의 ID만 쓸 수 있습니다)."
+MSG_ENROLL_ORIGIN = "허용하지 않은 화면 주소에서 보낸 등록 요청입니다. 이 프로그램의 화면에서 다시 해 주세요."
 
 _MIN_FILE_BYTES = 32
 _EBML_MAGIC = b"\x1a\x45\xdf\xa3"
@@ -267,8 +275,63 @@ def resolve_phrase_set(values: list[Any] | None) -> str:
 
 async def _form_phrase_set_values(request: Request) -> list[Any]:
     """원래 멀티파트 폼의 phrase_set 값 목록. FastAPI가 이미 읽어 둔 폼을 다시 쓴다(본문을 다시 읽지 않는다)."""
+    return await _form_values(request, "phrase_set")
+
+
+async def _form_values(request: Request, name: str) -> list[Any]:
+    """원래 멀티파트 폼의 name 필드 값 목록 (FastAPI가 이미 읽어 둔 폼을 다시 쓴다)."""
     form = await request.form()
-    return list(form.getlist("phrase_set"))
+    return list(form.getlist(name))
+
+
+def _single_text(values: list[Any], message: str, name: str) -> str | None:
+    """선택 폼 필드 값: 보내지 않았으면 None, 문자열 하나면 그 값. 빈 값·여러 개·파일 파트는 거부한다.
+
+    Raises:
+        RecordingRejected: 빈 값·중복·문자열이 아닌 파트 (고정 문구, 보낸 값을 되돌려 보여 주지 않는다).
+    """
+    if not values:
+        return None
+    if len(values) == 1 and isinstance(values[0], str) and values[0] != "":
+        return values[0]
+    shown = [str(v)[:40] if isinstance(v, str) else type(v).__name__ for v in values[:3]]
+    raise RecordingRejected(message, f"{name}={shown!r} ({len(values)}개)")
+
+
+def resolve_enroll(profile_values: list[Any] | None, command_values: list[Any] | None,
+                   phrase_set: str) -> tuple[str | None, str | None]:
+    """enroll_profile·enroll_command 폼 필드를 확인한다 (둘 다 선택, ward 묶음 전용).
+
+    - 둘 중 하나라도 보냈는데 phrase_set이 ward가 아니면 거부한다.
+    - enroll_command는 enroll_profile과 함께만, 현재 병실 명령 목록의 ID만 받는다.
+    - 등록 이름은 ^[A-Za-z0-9_-]{1,32}$ (Windows 장치 이름 제외). 경로 문자는 받지 않는다.
+    - 빈 값·같은 필드 여러 번·파일 파트는 '보내지 않음'으로 바꾸지 않고 거부한다.
+
+    Returns:
+        (enroll_profile 또는 None, enroll_command 또는 None).
+
+    Raises:
+        RecordingRejected: 위 규칙 위반 (고정 한국어 문구).
+    """
+    from services import ward_profiles
+
+    profile_values = list(profile_values or [])
+    command_values = list(command_values or [])
+    if not profile_values and not command_values:
+        return None, None
+    if phrase_set != config.PHRASE_SET_WARD:
+        raise RecordingRejected(MSG_ENROLL_WARD_ONLY, f"phrase_set={phrase_set!r}")
+    if not profile_values:
+        raise RecordingRejected(MSG_ENROLL_NEEDS_PROFILE, "enroll_profile 없음")
+    profile = _single_text(profile_values, MSG_BAD_ENROLL_PROFILE, "enroll_profile")
+    if not ward_profiles.is_valid_profile_id(profile):
+        raise RecordingRejected(MSG_BAD_ENROLL_PROFILE, f"enroll_profile={str(profile)[:40]!r}")
+    command = _single_text(command_values, MSG_BAD_ENROLL_COMMAND, "enroll_command")
+    if command is not None:
+        commands = ward_profiles.current_commands()
+        if commands is None or command not in commands["ids"]:
+            raise RecordingRejected(MSG_BAD_ENROLL_COMMAND, f"enroll_command={command[:40]!r}")
+    return profile, command
 
 
 def record_body_limit() -> tuple[float, str]:
@@ -301,26 +364,50 @@ async def _save_capped(file: UploadFile, session_id: str) -> tuple[str, int]:
     return saved.path, saved.size
 
 
+class EnrollOriginRejected(Exception):
+    """등록 필드가 있는 요청이 화이트리스트 밖 Origin에서 왔다 (403)."""
+
+
+def origin_allowed(origin: str | None) -> bool:
+    """Origin 헤더가 없거나(같은 출처의 일부 요청·채점 도구·점검 스크립트) config.CORS_ORIGINS 안이면 참.
+
+    여러 부분 폼 POST는 CORS 사전 요청 없이 오고, CORS 미들웨어는 허용하지 않은 출처의 요청도 앱까지 보낸다(응답 헤더만 뺀다).
+    등록은 서버에 템플릿을 남기므로 같은 브라우저에 열린 다른 사이트가 등록을 만들거나 덮어쓰지 못하게 여기서 막는다.
+    """
+    try:
+        if origin is None:
+            return True
+        return origin in config.CORS_ORIGINS
+    except (AttributeError, TypeError):
+        return False
+
+
 @router.post("/record", response_model=RecordStartResponse)
 async def start_record(request: Request,
                        background_tasks: BackgroundTasks,
                        file: UploadFile = File(...),
-                       phrase_set: str | None = Form(None)) -> RecordStartResponse:
+                       phrase_set: str | None = Form(None),
+                       enroll_profile: str | None = Form(None),
+                       enroll_command: str | None = Form(None)) -> RecordStartResponse:
     """웹캠 녹화를 받아 발화 전체 인식 Job을 등록한다 (결과 즉시 반환 금지).
 
     Args:
-        request: 원래 폼에서 phrase_set을 확인하는 데 쓴다(빈 값·중복 필드 구분).
+        request: 원래 폼에서 phrase_set·등록 필드를 확인하는 데 쓴다(빈 값·중복 필드 구분).
         background_tasks: FastAPI 백그라운드 태스크 큐.
         file: 멀티파트 'file' 필드의 녹화 파일.
         phrase_set: 멀티파트 'phrase_set' 필드(선택). 'sentences'(기본) 또는 'ward'. API 문서용이며,
             FastAPI가 빈 값을 None으로 바꾸므로 판정은 원래 폼 값(resolve_phrase_set)으로 한다.
+        enroll_profile: (선택, ward 전용) 내 입 모양 등록 이름. 보내면 결과 results[0]에 enroll이 붙는다.
+        enroll_command: (선택, ward 전용, enroll_profile 필요) 이 녹화를 그 명령의 등록 템플릿으로 저장한다.
+            없으면 등록 템플릿과 거리 판정만 한다. 두 필드도 원래 폼 값(resolve_enroll)으로 판정한다.
 
     Returns:
         {job_id, session_id, status:'processing', duration_sec}.
 
     Raises:
-        HTTPException: 접수 거부 400(고정 문구, 알 수 없는·빈·중복 phrase_set 포함), compact 백엔드 503,
-            같은 세션 처리 중 409.
+        HTTPException: 접수 거부 400(고정 문구, 알 수 없는·빈·중복 phrase_set, ward가 아닌 묶음의 등록 필드, 이름 없는
+            등록 명령, 규칙에 맞지 않는 등록 이름·명령 포함), 허용하지 않은 Origin의 등록 요청 403,
+            compact 백엔드 503, 같은 세션 처리 중 409.
     """
     if infer_api.MODEL_BACKEND != "olkavs":
         raise HTTPException(status_code=503, detail=MSG_BACKEND_UNSUPPORTED)
@@ -329,6 +416,10 @@ async def start_record(request: Request,
     try:
         # 파일을 저장하기 전에 거른다. phrase_set 인자 대신 원래 폼 값으로 판정한다(빈 값이 기본값으로 바뀌지 않게).
         phrase_set = resolve_phrase_set(await _form_phrase_set_values(request))
+        enroll_profile, enroll_command = resolve_enroll(await _form_values(request, "enroll_profile"),
+                                                        await _form_values(request, "enroll_command"), phrase_set)
+        if enroll_profile is not None and not origin_allowed(request.headers.get("origin")):
+            raise EnrollOriginRejected()
         path, size = await _save_capped(file, session_id)
         duration = await asyncio.to_thread(measure_recording_seconds, path, config.RECORD_MAX_SECONDS,
                                            config.RECORD_MAX_FRAMES, config.RECORD_PROBE_TIMEOUT_SEC)
@@ -336,6 +427,10 @@ async def start_record(request: Request,
             raise RecordingRejected(MSG_TOO_SHORT.format(sec=config.RECORD_MIN_SECONDS), f"{duration:.3f}초")
         if not (duration < config.RECORD_MAX_SECONDS):
             raise RecordingRejected(MSG_TOO_LONG.format(sec=config.RECORD_MAX_SECONDS), f"{duration:.3f}초")
+    except EnrollOriginRejected:
+        _safe_remove(path)
+        logger.warning("등록 요청 거부: 허용하지 않은 Origin %r", request.headers.get("origin"))
+        raise HTTPException(status_code=403, detail=MSG_ENROLL_ORIGIN) from None
     except RecordingRejected as exc:
         _safe_remove(path)
         logger.info("녹화 접수 거부: %s (%s)", exc.user_message, exc.detail)
@@ -349,10 +444,14 @@ async def start_record(request: Request,
             await file.close()
         except Exception:  # noqa: BLE001 - 업로드 임시 파일 정리 실패는 무시
             pass
-    logger.info("녹화 접수: %s %d바이트 %.3f초 묶음=%s", os.path.basename(path), size, duration, phrase_set)
+    logger.info("녹화 접수: %s %d바이트 %.3f초 묶음=%s%s", os.path.basename(path), size, duration, phrase_set,
+                f" 등록={enroll_profile}/{enroll_command or 'match'}" if enroll_profile else "")
+    enroll_kwargs = ({"enroll_profile": enroll_profile, "enroll_command": enroll_command}
+                     if enroll_profile is not None else {})
     try:
         start = infer_api.start_background_job(session_id, path, background_tasks,
-                                               mode="record", video_seconds=duration, phrase_set=phrase_set)
+                                               mode="record", video_seconds=duration, phrase_set=phrase_set,
+                                               **enroll_kwargs)
     except Exception:
         _safe_remove(path)
         raise

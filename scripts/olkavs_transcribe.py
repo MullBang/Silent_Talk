@@ -1471,14 +1471,31 @@ def score_phrases(log_probs: Any, phrases: list[dict[str, Any]], bundle: dict[st
     return rank_phrases(phrases, scores)
 
 
+def save_hidden(path: str, features: Any) -> bool:
+    """CTC 직전 은닉 특징(model.medium 출력)을 np.savez(path, hidden=(T, 256) float32)로 저장한다.
+
+    scripts/ward_enroll.py features 단계와 같은 변환(features[0].float().cpu().numpy())이라 값이 비트 단위로 같다.
+    저장 실패는 인식을 막지 않는다(False, 표준오류에 사유).
+    """
+    try:
+        import numpy as np
+        np.savez(path, hidden=features[0].float().cpu().numpy())
+        return True
+    except (OSError, ValueError, RuntimeError, TypeError) as exc:
+        print(f"[recognize] 은닉 특징 저장 실패: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return False
+
+
 def recognize(frames: Any, device: str, decoder: str = "hybrid",
-              phrases: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+              phrases: list[dict[str, Any]] | None = None, hidden_out: str | None = None) -> dict[str, Any]:
     """서비스용 단일 구간 인식: 텍스트 + confidence(0~1) + raw_score(CTC 로그우도).
 
     confidence = exp(프레임별 최대 CTC 로그확률의 평균) — compact 서비스와 같은 정의.
     raw_score  = 출력 토큰열의 CTC 강제 정렬 로그우도(원본 log-prob 합). 정렬 불가면 None.
     phrases    = 지정 문장 후보 [{id, text}]. 주면 결과에 phrase(가장 가까운 문장·점수·1·2등 차이)를 더한다.
                  후보 계산이 실패해도 자유 인식 결과는 그대로 돌려준다(phrase=None).
+    hidden_out = (선택, 병실 '내 입 모양 등록') 같은 순전파의 은닉 특징을 저장할 .npz 경로. 주면 결과에 hidden_saved(저장
+                 성공 여부)를 더한다. 주지 않으면 동작·결과 키가 이 기능 이전과 같다.
     """
     import torch
     _ensure_path(OLKAVS)
@@ -1532,6 +1549,8 @@ def recognize(frames: Any, device: str, decoder: str = "hybrid",
     result = {"text": text, "confidence": min(1.0, max(0.0, confidence)), "raw_score": score["total"],
               "raw_score_status": score["status"], "decoder": decoder, "frames": int(frames.shape[0]),
               "search_cap_reached": search_cap_reached, "token_ids": content, "timing_seconds": timing}
+    if hidden_out is not None:
+        result["hidden_saved"] = save_hidden(hidden_out, features)
     if phrases:
         t0 = time.perf_counter()
         try:

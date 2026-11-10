@@ -16,6 +16,8 @@ torch와 mediapipe를 한 프로세스에 함께 올리면 segfault가 날 수 �
                {"type": "progress", "id": n, ...}                    (진행 상황, 0회 이상)
                {"type": "result", "id": n, "ok": true|false, ...}    (요청당 정확히 1회)
 표준출력은 규약 전용이다. 라이브러리가 찍는 출력은 모두 표준오류(서버가 로그 파일로 보냄)로 돌린다.
+infer 요청의 선택 항목 "hidden_out"(.npz 절대 경로, 병실 '내 입 모양 등록')을 주면 같은 순전파의 은닉 특징을 그 경로에
+저장하고 결과에 "hidden_saved"를 더한다. 주지 않으면 요청·결과가 이 기능 이전과 같다.
 """
 from __future__ import annotations
 
@@ -184,12 +186,35 @@ def _cuda_poisoned(device: str) -> bool:
         return True
 
 
+def _hidden_out(request: dict[str, Any]) -> str | None:
+    """요청의 선택 항목 "hidden_out"(은닉 특징을 저장할 .npz 절대 경로). 없거나 null이면 None.
+
+    .npz로 끝나는 절대 경로 문자열이 아니면 ValueError로 요청을 거부한다(ok:false).
+    """
+    value = request.get("hidden_out")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.lower().endswith(".npz") or not os.path.isabs(value):
+        raise ValueError("hidden_out은 .npz로 끝나는 절대 경로여야 합니다")
+    return value
+
+
 def _handle_infer(core: Any, request: dict[str, Any], device: str, default_decoder: str) -> dict[str, Any]:
-    """NPZ 한 구간 → 텍스트·confidence·raw_score (phrases를 주면 가장 가까운 지정 문장도)."""
+    """NPZ 한 구간 → 텍스트·confidence·raw_score (phrases를 주면 가장 가까운 지정 문장도).
+
+    "hidden_out"(선택, 병실 등록): 같은 순전파의 은닉 특징을 그 경로에 저장하고 결과에 hidden_saved를 더한다.
+    주지 않으면 공용 코어 호출과 결과가 이 기능 이전과 같다.
+    """
     frames = core.read_frames(Path(str(request["npz"])))
     decoder = str(request.get("decoder") or default_decoder)
     phrases = request.get("phrases")
-    result = core.recognize(frames, device, decoder, phrases) if phrases else core.recognize(frames, device, decoder)
+    hidden_out = _hidden_out(request)
+    if hidden_out is not None:
+        result = core.recognize(frames, device, decoder, phrases or None, hidden_out=hidden_out)
+    elif phrases:
+        result = core.recognize(frames, device, decoder, phrases)
+    else:
+        result = core.recognize(frames, device, decoder)
     result.pop("token_ids", None)
     return result
 

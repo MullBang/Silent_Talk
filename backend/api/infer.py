@@ -38,6 +38,7 @@ from config import (  # noqa: E402
     MODEL_WEIGHTS_PATH,
     PHRASE_SET_DEFAULT,
     PHRASE_SET_IDS,
+    PHRASE_SET_WARD,
     TMP_ROI_DIR,
     TMP_UPLOAD_DIR,
     phrase_set_config,
@@ -180,7 +181,8 @@ async def start_inference(
 
 def start_background_job(session_id: str, file_path: str, background_tasks: BackgroundTasks,
                          mode: str = MODE_UPLOAD, video_seconds: float | None = None,
-                         phrase_set: str = PHRASE_SET_DEFAULT) -> InferStartResponse:
+                         phrase_set: str = PHRASE_SET_DEFAULT, enroll_profile: str | None = None,
+                         enroll_command: str | None = None) -> InferStartResponse:
     """같은 세션 중복 실행을 막고 Job을 만든 뒤 백그라운드 인식을 예약한다 (upload·record 공용).
 
     Args:
@@ -190,18 +192,25 @@ def start_background_job(session_id: str, file_path: str, background_tasks: Back
         mode: 'upload'(창 분할) 또는 'record'(발화 전체·앞뒤 무발화 제거).
         video_seconds: 서버가 잰 영상 길이(초). 없으면 upload 모드에서 메타데이터로 어림한다.
         phrase_set: 지정 문장 묶음 ID(config.PHRASE_SET_IDS). 지정 문장은 record 모드에서만 쓰인다.
+        enroll_profile: (record·ward 전용) 내 입 모양 등록 이름. 없으면 등록 기능 이전과 같은 Job이다.
+        enroll_command: (enroll_profile 필요) 저장할 명령 ID. 없으면 판정 모드.
 
     Returns:
         {job_id, session_id, status:'processing'}.
 
     Raises:
         HTTPException: 이미 처리 중인 세션(409).
-        ValueError: 알 수 없는 mode 또는 phrase_set.
+        ValueError: 알 수 없는 mode 또는 phrase_set, record·ward가 아닌 Job의 등록 인자, 이름 없는 등록 명령.
     """
     if mode not in _MODES:
         raise ValueError(f"알 수 없는 Job 모드: {mode!r}")
     if phrase_set not in PHRASE_SET_IDS:
         raise ValueError(f"알 수 없는 지정 문장 묶음: {phrase_set!r}")
+    enroll_kwargs: dict[str, str | None] = {}
+    if enroll_profile is not None or enroll_command is not None:
+        if mode != MODE_RECORD or phrase_set != PHRASE_SET_WARD or enroll_profile is None:
+            raise ValueError("내 입 모양 등록은 ward 녹화(record) Job에서 등록 이름과 함께만 쓸 수 있습니다")
+        enroll_kwargs = {"enroll_profile": enroll_profile, "enroll_command": enroll_command}
     with _running_lock:
         existing = jm.get_job(session_id)
         # 타임아웃으로 응답한 Job이라도 이전 작업 스레드가 아직 돌면 같은 세션을 다시 받지 않는다
@@ -213,7 +222,8 @@ def start_background_job(session_id: str, file_path: str, background_tasks: Back
         _running_sessions.add(session_id)
     try:
         job_id = jm.create_job(session_id)
-        background_tasks.add_task(_run_infer_job, session_id, file_path, mode, video_seconds, phrase_set)
+        background_tasks.add_task(_run_infer_job, session_id, file_path, mode, video_seconds, phrase_set,
+                                  **enroll_kwargs)
     except Exception:
         with _running_lock:
             _running_sessions.discard(session_id)
@@ -275,7 +285,8 @@ def _service_model_info(service: Any) -> dict | None:
 
 def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: str = MODE_UPLOAD,
                     video_seconds: float | None = None,
-                    phrase_set: str = PHRASE_SET_DEFAULT) -> tuple[list[dict], dict | None]:
+                    phrase_set: str = PHRASE_SET_DEFAULT,
+                    **enroll_kwargs: str | None) -> tuple[list[dict], dict | None]:
     """olkavs 경로: 상주 워커로 입술 추출(구간별 NPZ) → 구간별 인식. NPZ 폴더는 바로 지운다.
 
     record 모드(utterance=True)는 녹화 전체를 한 발화로 보고 앞뒤 무발화 구간을 잘라 낸다.
@@ -283,6 +294,7 @@ def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: 
     warnings에는 결과와 함께 보여 줄 품질 경고(낮은 프레임률 등)를 덧붙인다.
     phrase_set이 디코더를 정하는 묶음(ward → ctc)이면 모델 정보의 decoder를 이 Job이 인식 요청에 쓰는 디코더로 바꾼다.
     모든 구간이 무발화·검출 실패라 인식 요청이 한 번도 없던 Job도 같다(기본 묶음이 워커 기본값을 알리는 것과 같은 뜻).
+    enroll_kwargs(enroll_profile·enroll_command, ward 녹화 전용)는 있을 때만 서비스에 그대로 넘긴다.
 
     Returns:
         (결과 목록, 완료 시점의 모델 정보 또는 None).
@@ -317,6 +329,7 @@ def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: 
             warnings=warnings,
             utterance=(mode == MODE_RECORD),
             phrase_set=phrase_set,
+            **enroll_kwargs,
         )
         model_info = _service_model_info(service)
         decoder = phrase_set_config(phrase_set).decoder
@@ -330,7 +343,8 @@ def _run_olkavs_job(session_id: str, file_path: str, warnings: list[str], mode: 
 
 
 def _run_infer_job(session_id: str, file_path: str, mode: str = MODE_UPLOAD,
-                   video_seconds: float | None = None, phrase_set: str = PHRASE_SET_DEFAULT) -> None:
+                   video_seconds: float | None = None, phrase_set: str = PHRASE_SET_DEFAULT,
+                   **enroll_kwargs: str | None) -> None:
     """백그라운드 추론 작업.
 
     선택된 모델 경로로 인식 → 진행률 갱신 → 완료 처리 → 임시 파일 즉시 삭제. 예외 시 fail_job.
@@ -342,13 +356,15 @@ def _run_infer_job(session_id: str, file_path: str, mode: str = MODE_UPLOAD,
         mode: 'upload' 또는 'record'.
         video_seconds: 서버가 잰 영상 길이(초, record 모드). 없으면 메타데이터로 어림한다.
         phrase_set: 지정 문장 묶음 ID (record 모드, 기본 'sentences').
+        enroll_kwargs: (ward 녹화 전용) enroll_profile·enroll_command. 없으면 등록 기능 이전과 같다.
     """
     try:
         warnings: list[str] = []
         model_info: dict | None = None
         if MODEL_BACKEND == "olkavs":
             results, model_info = _run_olkavs_job(session_id, file_path, warnings, mode=mode,
-                                                  video_seconds=video_seconds, phrase_set=phrase_set)
+                                                  video_seconds=video_seconds, phrase_set=phrase_set,
+                                                  **enroll_kwargs)
         elif mode == MODE_RECORD:
             raise _UserFacingError(MSG_RECORD_BACKEND)
         else:

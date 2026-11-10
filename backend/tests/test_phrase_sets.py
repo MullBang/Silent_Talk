@@ -186,10 +186,13 @@ def test_ward_set_uses_ward_list_thresholds_and_ctc(tmp_path, monkeypatch) -> No
         service, _roi, infer = _service(monkeypatch, output)
         item = service.transcribe_video("v.webm", str(tmp_path), utterance=True, phrase_set="ward")[0]
         assert _wire(infer.calls[0]) == _wire({"cmd": "infer", "npz": "a.npz", "phrases": _WARD, "decoder": "ctc"})
-        assert item["phrase"] == {**best, "accepted": expected, "set": "ward"}, (margin, score)
+        rule = {"min_margin": 0.6, "min_score": -3.0, "possible_min_score": svc.config.OLKAVS_WARD_POSSIBLE_MIN_SCORE,
+                "enroll_max_distance": svc.config.OLKAVS_WARD_ENROLL_MAX_DISTANCE}  # ward에는 쓴 기준값이 붙는다
+        assert item["phrase"] == {**best, "accepted": expected, "set": "ward", "rule": rule}, (margin, score)
         assert item["text"] == "목이 말라" and item["confidence"] == 0.9  # 자유 인식 결과 처리는 같다
         sentences_item = _service(monkeypatch, output)[0].transcribe_video("v.webm", str(tmp_path), utterance=True)[0]
         assert sentences_item["phrase"]["accepted"] is True  # 같은 점수라도 문장 묶음은 자기 기준으로 판정한다
+        assert "rule" not in sentences_item["phrase"]  # 문장 묶음 결과에는 새 키가 없다
 
 
 def test_ward_set_uses_ctc_for_every_window_but_phrases_only_for_single_window(tmp_path, monkeypatch) -> None:
@@ -349,9 +352,13 @@ def test_ward_phrase_status_disabled_by_empty_path(monkeypatch, caplog) -> None:
 def test_status_includes_ward_phrases_without_paths(tmp_path, monkeypatch) -> None:
     """/health(service.status())에 병실 목록 상태가 있고, 목록 파일 경로는 보이지 않는다."""
     monkeypatch.setattr(svc.config, "OLKAVS_WARD_PHRASE_FILE", str(tmp_path / "secret_dir" / "commands.json"))
+    monkeypatch.setattr(svc.config, "WARD_PROFILE_DIR", str(tmp_path / "secret_profiles"))
     status = svc.OlkavsService(_StubWorker(lambda p, _p: {}), _StubWorker(lambda p, _p: {})).status()
-    assert status["ward_phrases"] == {"enabled": True, "count": 0, "version": None}
+    ward = status["ward_phrases"]
+    assert {k: ward[k] for k in ("enabled", "count", "version")} == {"enabled": True, "count": 0, "version": None}
+    assert set(ward) == {"enabled", "count", "version", "thresholds", "enroll"}  # 등록 기능은 키를 더하기만 한다
     assert "secret_dir" not in json.dumps(status, ensure_ascii=False, default=str)
+    assert "secret_profiles" not in json.dumps(status, ensure_ascii=False, default=str)
 
 
 def test_get_service_logs_error_once_when_ward_list_unreadable(tmp_path, monkeypatch, caplog) -> None:
@@ -390,7 +397,8 @@ def test_phrase_match_schema_set_field() -> None:
     assert ResultItem(**item, phrase=phrase).phrase.set is None
     with pytest.raises(ValueError):  # pydantic ValidationError는 ValueError의 하위 클래스다
         ResultItem(**item, phrase={**phrase, "set": "prompts"})
-    assert list(PhraseMatch.model_fields) == ["id", "text", "score", "margin", "runner_up_id", "accepted", "set"]
+    assert list(PhraseMatch.model_fields) == ["id", "text", "score", "margin", "runner_up_id", "accepted", "set",
+                                              "rule"]  # rule은 ward 결과에만 있고 없으면 응답에서 키가 빠진다
     literal = typing.get_args(PhraseMatch.model_fields["set"].annotation)[0]
     assert typing.get_args(literal) == config.PHRASE_SET_IDS
     dumped = ResultItem(**item, phrase={**phrase, "set": "sentences"}).model_dump()["phrase"]

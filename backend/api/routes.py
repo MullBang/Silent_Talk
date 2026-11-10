@@ -1,6 +1,6 @@
 """라우터 통합 등록 모듈.
 
-upload / infer / record / evaluation 서브 라우터를 '/api' prefix 아래로 묶어 main.py에
+upload / infer / record / evaluation / ward(내 입 모양 등록 관리) 서브 라우터를 '/api' prefix 아래로 묶어 main.py에
 노출한다.
 """
 
@@ -20,6 +20,7 @@ from api.evaluation import router as evaluation_router  # noqa: E402
 from api.infer import router as infer_router  # noqa: E402
 from api.record import router as record_router  # noqa: E402
 from api.upload import router as upload_router  # noqa: E402
+from api.ward_profiles import router as ward_profiles_router  # noqa: E402
 
 
 def get_api_router() -> APIRouter:
@@ -33,4 +34,5 @@ def get_api_router() -> APIRouter:
     router.include_router(infer_router, tags=["infer"])
     router.include_router(record_router, tags=["record"])
     router.include_router(evaluation_router, tags=["evaluation"])
+    router.include_router(ward_profiles_router, tags=["ward"])
     return router
