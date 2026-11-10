@@ -48,6 +48,8 @@ def headline_rows(s: dict[str, Any]) -> list[tuple[str, str, str]]:
         ("표시 비율 (명령 전체)", "참고 70% 이상", _c(cmd["shown"])),
         ("표시 비율 (소리 없이)", "참고", _c(silent["shown"]) if silent else "-"),
         ("1등 정답 (명령 전체)", "참고", f"{cmd['top1_correct']}/{cmd['n']}" if cmd["n"] else "-"),
+        ("등록 거리로 고른 표시 (그중 오답)", "참고", f"{cmd.get('via_enroll', 0)} ({cmd.get('via_enroll_wrong', 0)})"
+         if cmd["n"] else "-"),
         ("짧은 긴급 표현 → 긴급(빨간 카드·가능성)", "참고", _c(s["short"]["reached_alarm"])),
         ("짧은 긴급 표현 → 일반 요청으로 실행 (틀린 요청)", "0", _c(s["short"]["shown_as_request"])),
         ("기댄 자세 표시 비율", "참고", _c(s["posture"]["reclined"]["shown"])),
@@ -103,39 +105,99 @@ def accepted_line(check: dict[str, Any] | None) -> str:
             + (f" ({', '.join(files)})" if files else ""))
 
 
+def rule_line(check: dict[str, Any] | None) -> str:
+    """서버가 결과에 적은 기준값(phrase.rule)과 동결 값의 비교 한 줄."""
+    if not check or not check.get("n"):
+        return "- 서버 기준값(phrase.rule) 대조: 기준값을 적은 결과가 없음(옛 서버)"
+    fields = ", ".join(f"{k} {v}개" for k, v in (check.get("fields") or {}).items())
+    return (f"- 서버가 결과에 적은 기준값(phrase.rule)과 동결 값: 비교 {check['n']}개 중 다름 {check['mismatch']}개"
+            + (f" ({fields})" if fields else ""))
+
+
+def enroll_line(check: dict[str, Any] | None) -> str:
+    """서버 등록 판정(enroll.within·agree·accepted)과 동결 D로 다시 판정한 값의 비교 한 줄."""
+    if not check or not check.get("n"):
+        return "- 서버 등록 판정 대조: 서버 등록(match) 결과 없음"
+    st = ", ".join(f"{k} {v}" for k, v in sorted((check.get("statuses") or {}).items()))
+    return (f"- 서버 등록 판정(within·agree·accepted)과 D {check.get('rule_max_distance')}로 다시 판정한 값: 비교 {check['n']}개 중 "
+            f"다름 {check['mismatch']}개, 서버 max_distance 다름 {check.get('max_distance_mismatch', 0)}개, 1등 거리 불일치 "
+            f"{check.get('top_inconsistent', 0)}개 (등록 상태: {st})")
+
+
+def _src(s: dict[str, Any] | None) -> str:
+    """표 제목에 붙일 등록 거리 출처 개수."""
+    used = (s or {}).get("enroll_sources") or {}
+    if not used.get("service") and not used.get("offline"):
+        return "등록 1등을 본 클립 없음"
+    parts = [f"{name} {used[k]}개" for k, name in (("service", "서버 등록"), ("offline", "오프라인 등록")) if used.get(k)]
+    return "등록 거리 출처: " + ", ".join(parts) + f", 거리 없음 {used.get('none', 0)}개"
+
+
 def markdown_report(result: dict[str, Any]) -> str:
-    """ward_eval_tools report 결과 → Markdown."""
+    """ward_eval_tools report 결과 → Markdown. 표마다 등록 거리 출처(서버 등록·오프라인 등록)를 제목에 적는다."""
     f = result["freeze"]
-    check = (result["full"].get("all") or {}).get("server_accepted_check")
+    main = result.get("main") or {}
+    all_main = result["full"].get("all") or {}
+    check = all_main.get("server_accepted_check")
+    echeck = all_main.get("server_enroll_check")
+    rcheck = result.get("server_rule_check")
+    floor = f["full"].get("possible_min_score")
     lines = ["# 병실 명령 평가 결과 (동결 파일 기준)", ""]
     if check and check.get("mismatch"):
         lines += [f"> **주의: 서버 accepted가 동결 기준값과 다른 클립이 {check['mismatch']}개입니다.** 서버가 동결 기준값"
                   "(full_list.env)으로 켜지지 않았을 수 있습니다. 화면은 서버 accepted를 쓰므로 이 표와 시연 동작이 다를 수 있습니다.", ""]
+    if rcheck and rcheck.get("mismatch"):
+        lines += [f"> **주의: 서버가 결과에 적은 기준값(phrase.rule)이 동결 값과 다른 클립이 {rcheck['mismatch']}개입니다.** "
+                  "서버를 full_list.env의 환경 변수 4개로 켰는지 확인하세요.", ""]
+    if echeck and (echeck.get("mismatch") or echeck.get("max_distance_mismatch") or echeck.get("top_inconsistent")):
+        lines += ["> **주의: 서버 등록 판정이 동결 D로 다시 판정한 값과 다른 클립이 있습니다.** 화면은 서버 enroll.accepted·within을 "
+                  "쓰므로 이 표와 시연 동작이 다를 수 있습니다.", ""]
+    if main.get("enrollment_source") == "service":
+        enroll_desc = (f"서버 등록 거리 D {f.get('max_distance')} (앱 경로, 등록 영상 {main.get('templates_excluded')}개는 시험에서 뺌, "
+                       "거리가 없는 클립은 글자 규칙만)")
+    elif main.get("service_enroll_rows"):
+        enroll_desc = "등록 거리 쓰지 않음(동결 D 없음, 등록 영상은 시험에서 뺌)"
+    else:
+        enroll_desc = "등록 없음(결과 행에 서버 등록 결과가 없음)"
     lines += [f"- 동결 파일: `{f['path']}` (상태 {f['status']}, 커밋 {f.get('commit') or '확인 안 함'})",
-              f"- 전체 목록 기준: 1·2등 차이 ≥ {f['full']['min_margin']}, 1등 점수 ≥ {f['full']['min_score']}, "
-              "긴급 가능성은 화면과 같게 점수 하한 없음(고르지 못했을 때 1·2등에 긴급이면 긴급 가능성)"
-              + (f" · 동결 파일의 하한 {f['full']['possible_min_score']}은 보조 결과(1-2)에만 적용"
-                 if f['full'].get('possible_min_score') is not None else ""),
-              f"- 등록 거리 D: {f.get('max_distance')} (템플릿 {f.get('template')})  · 축소 목록: {f.get('reduced_ids') or '없음'}",
+              f"- 주 결과(앱과 같은 판정): 1·2등 차이 ≥ {f['full']['min_margin']}, 1등 점수 ≥ {f['full']['min_score']}, "
+              + (f"긴급 가능성 하한 {floor}" if floor is not None
+                 else "긴급 가능성 하한 없음(고르지 못했을 때 1·2등에 긴급이면 긴급 가능성)") + f", {enroll_desc}",
+              f"- 동결 등록 거리 D: {f.get('max_distance')} (템플릿 {f.get('template')}, D를 정한 출처 {f.get('enroll_source')})"
+              f"  · 축소 목록: {f.get('reduced_ids') or '없음'}",
               f"- 결과 행 파일: {', '.join(result['inputs']['rows_files'])}",
-              accepted_line(check),
+              accepted_line(check), rule_line(rcheck), enroll_line(echeck),
               "- 0건은 표본 수와 한쪽 95% 상한(1 − 0.05^(1/n))을 함께 적었다. 처음 보는 사람이 1명뿐이면 그 한계도 함께 밝힌다.",
               ""]
+    for rf in (result.get("inputs") or {}).get("rows_info") or []:
+        e = rf.get("enroll")
+        if e:
+            counts = rf.get("service_enroll_rows") or {}
+            lines.append(f"- 서버 등록 `{e.get('profile')}` ({e.get('mode')}): `{rf['path']}` 등록 영상 {counts.get('store', 0)}개, "
+                         f"시험 {counts.get('match', 0)}개, 실행 전 {e.get('status_before')}, 실행 뒤 {e.get('status_after')}, "
+                         f"지움 {e.get('deleted')}")
+    lines.append("")
     for fc in (result.get("inputs") or {}).get("folder_checks") or []:
         if fc.get("checked") and not fc.get("same_as_run"):
             lines += [f"> 주의: 촬영 폴더가 실행 뒤 바뀌었습니다: `{fc['clips_dir']}`", ""]
     if result.get("code_changed"):
         lines += [f"> 주의: 동결 뒤 바뀐 코드 파일 {len(result['code_changed'])}개: {', '.join(result['code_changed'])}", ""]
-    lines.append(table(result["full"]["by_group"], "1. 전체 목록, 글자 규칙, 화면과 같은 판정 (주 결과, 사람·촬영 묶음별)"))
+    lines.append(table(result["full"]["by_group"], f"1. 앱과 같은 판정 (주 결과, 사람·촬영 묶음별; {_src(all_main)})"))
     if len(result["full"]["by_person"]) < len(result["full"]["by_group"]):
         lines.append(table(result["full"]["by_person"], "1-1. 사람별 (촬영 묶음 합침)"))
-    if result.get("full_floored"):
-        lines.append(table(result["full_floored"]["by_group"],
-                           f"1-2. 긴급 가능성 점수 하한 {f['full'].get('possible_min_score')} 적용 (보조: 화면이 하한을 쓸 때만 해당)"))
+    if result.get("full_text_only"):
+        lines.append(table(result["full_text_only"]["by_group"], "1-2. 같은 클립, 등록 없이 글자 규칙만 (등록 효과 비교)"))
+    if result.get("full_no_floor"):
+        lines.append(table(result["full_no_floor"]["by_group"], f"1-3. 같은 클립, 긴급 가능성 하한 {floor} 없이 (비교)"))
+    if result.get("all_rows_text"):
+        lines.append(table(result["all_rows_text"]["by_group"],
+                           "1-4. 등록 영상까지 모든 클립, 글자 규칙만 (참고: 등록 없이 쓸 때와 같은 묶음)"))
     for key, s in result["full"]["by_group"].items():
         lines += [f"#### {key} 세부", "", detail(s)]
     if result.get("enroll"):
-        lines.append(table(result["enroll"]["by_group"], "2. 등록 거리 규칙 함께 적용 (오프라인, 등록 템플릿을 뺀 시험 클립만)"))
+        lines.append(table(result["enroll"]["by_group"],
+                           f"2. 오프라인 등록(ward_enroll.py) 거리 규칙 (보조, 등록 템플릿을 뺀 시험 클립만; "
+                           f"{_src(result['enroll'].get('all'))})"))
         lines.append(table(result["enroll_text_only"]["by_group"], "2-1. 같은 시험 클립, 글자 규칙만 (비교)"))
     if result.get("reduced"):
         lines.append(table(result["reduced"]["by_group"], "3. 축소 목록 (보조 결과, 오프라인 후보별 점수로 다시 순위)"))
@@ -154,8 +216,11 @@ def calibration_markdown(draft: dict[str, Any]) -> str:
              f"- 긴급 가능성 점수 하한: {draft['decision_rule'].get('possible_min_score')} ({draft['decision_rule'].get('chosen_by')}; "
              f"화면 구현 {draft['decision_rule'].get('floor_implemented_in_ui')})",
              f"- 등록 거리 D: {(draft.get('enrollment') or {}).get('max_distance')} "
-             f"({(draft.get('enrollment') or {}).get('chosen_by')}; 템플릿 {(draft.get('enrollment') or {}).get('template')}, "
+             f"({(draft.get('enrollment') or {}).get('chosen_by')}; 출처 {(draft.get('enrollment') or {}).get('source')}, "
+             f"템플릿 {(draft.get('enrollment') or {}).get('template')}, "
              f"거리가 있는 목록 밖 클립 {(draft.get('enrollment') or {}).get('negatives_with_dist')})",
+             "- 서버 환경 변수(full_list.env): " + (", ".join(f"{k}={v}" for k, v in
+                                                        ((draft.get("full_list") or {}).get("env") or {}).items()) or "없음"),
              "- 봉인 폴더 지문: " + (", ".join(f"{sf.get('path')} {sf.get('files')}개 {str(sf.get('listing_sha256'))[:12]}…"
                                             for sf in draft.get("sealed_folders") or []) or "없음"),
              f"- 축소 목록({(draft.get('reduced_list') or {}).get('size')}개): {(draft.get('reduced_list') or {}).get('ids')}",
@@ -179,10 +244,10 @@ def calibration_markdown(draft: dict[str, Any]) -> str:
         lines += ["", f"## 임시값 {prov.get('rule', {}).get('min_margin')} / {prov.get('rule', {}).get('min_score')}", "",
                   _hl(prov)]
     if ev.get("proposal_on_all"):
-        lines += ["", "## 제안 기준(화면과 같은 판정, 점수 하한 없음)을 조정 자료 전체에 적용", "", _hl(ev["proposal_on_all"])]
+        lines += ["", "## 제안 기준(점수 하한·등록 거리 없이)을 조정 자료 전체에 적용", "", _hl(ev["proposal_on_all"])]
     floor = ev.get("possible_floor") or {}
     if floor:
-        lines += ["", "## 참고: 긴급 가능성 점수 하한 (한 사람으로 정해 다른 사람에게 적용, 화면에는 없음)", "",
+        lines += ["", "## 참고: 긴급 가능성 점수 하한 (한 사람으로 정해 다른 사람에게 적용, --floor일 때만 초안에 넣음)", "",
                   "| 맞춘 사람 | 하한 | 필요한 값(클립) | 다른 사람 결과 |", "|---|---|---|---|"]
         for key, v in floor.items():
             f = v["fit"] if "fit" in v else v

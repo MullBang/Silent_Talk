@@ -5,13 +5,17 @@
                 동결 초안 JSON을 쓴다. 봉인 자료(P02·ward_eval)는 어떤 옵션으로도 받지 않는다. 초안은 사람이 검토해 커밋한다.
                 --sealed-folder로 봉인 폴더의 목록 지문(해시만, 메타데이터·영상은 열지 않음)을 초안에 넣는다.
   report      : 동결 파일 한 벌을 결과 행(+ 등록 거리)에 그대로 적용해 사전 등록 지표 표(한국어)를 낸다.
+                주 결과는 앱과 같은 판정이다: 글자 규칙 + 긴급 가능성 하한(동결 값) + 결과 행에 서버 등록 결과가 있으면 서버 등록
+                거리(ward_service_batch.py --enroll-profile, 등록 영상(store) 행은 뺌). 오프라인 등록(--enroll)은 보조 결과다.
                 봉인 자료는 --allow-sealed와 커밋된(status frozen) 동결 파일, 동결 뒤에 만든 결과 파일, 동결한 폴더 지문이 필요하다.
   fingerprint : 폴더 목록 지문 (해시만, 봉인 폴더에도 쓸 수 있다: 8단계 문서 2절과 같은 형식)
-  validate    : 동결 파일 형식 검사
+  validate    : 동결 파일 형식 검사 (full_list.env가 기준값 4개와 같은지 포함)
+  env         : 동결 파일의 서버 환경 변수 4개를 PowerShell 줄로 출력
 
 판정 규칙과 지표 정의는 scripts/ward_tools/metrics.py 머리말에 있다. 서버 accepted는 쓰지 않고 저장된 margin·score로 다시 판정하며,
-서버 accepted와 다시 판정한 값이 다른 클립 수를 보고서에 적는다(서버가 동결 기준값으로 켜졌는지 확인).
-긴급 가능성 점수 하한은 화면에 없으므로 기본으로 쓰지 않는다(calibrate --floor로만 초안에 넣고, 화면에 넣기 전에는 동결할 수 없다).
+서버 accepted·서버가 적은 기준값(phrase.rule)·서버 등록 판정(enroll.within·accepted)과 다시 판정한 값이 다른 클립 수를 보고서에
+적는다(서버가 동결 기준값으로 켜졌는지 확인). 긴급 가능성 점수 하한은 화면이 서버 값(phrase.rule)으로 쓴다. 기본은 null이고
+calibrate --floor일 때만 초안에 넣는다. 등록 거리 출처(서버 등록 / 오프라인 등록)는 섞지 않고 --enroll-source로 고른다.
 
 사용 예:
   py -3.11 scripts/ward_eval_tools.py calibrate \
@@ -27,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,24 +48,37 @@ CODE_FILES = (
     "scripts/ward_eval_tools.py", "scripts/ward_service_batch.py", "scripts/ward_enroll.py",
     "scripts/ward_tools/__init__.py", "scripts/ward_tools/common.py", "scripts/ward_tools/metrics.py",
     "scripts/ward_tools/calibrate.py", "scripts/ward_tools/enroll.py", "scripts/ward_tools/report.py",
-    "scripts/olkavs_transcribe.py", "scripts/pilot_evaluate.py", "backend/config.py", "backend/api/record.py",
+    "scripts/olkavs_transcribe.py", "scripts/pilot_evaluate.py", "backend/config.py", "backend/main.py",
+    "backend/api/record.py", "backend/api/ward_profiles.py",
     "backend/services/olkavs_service.py", "backend/services/olkavs_worker.py",
+    "backend/services/ward_profiles.py", "backend/services/ward_templates.py",
     "frontend/src/ward/commands.json", "frontend/src/capture/ward_prompts.json",
-    "frontend/src/ward/wardMachine.js", "frontend/src/ward/wardResult.js",
+    "frontend/src/ward/wardMachine.js", "frontend/src/ward/wardResult.js", "frontend/src/ward/wardSettings.js",
+    "frontend/src/pages/WardPage.jsx", "frontend/src/pages/NursePage.jsx", "frontend/src/pages/EnrollPage.jsx",
+    "frontend/src/api/client.js", "backend/api/routes.py", "backend/api/infer.py", "backend/schemas/models.py",
 )
+# 화면 코드는 폴더째 지문을 남긴다(등록 화면·설정·결과 해석 파일 이름이 늘어도 빠지지 않게). 저장소 기준 glob.
+CODE_GLOBS = ("frontend/src/ward/*.js", "frontend/src/ward/*.jsx", "frontend/src/**/*[Ee]nroll*.js",
+              "frontend/src/**/*[Ee]nroll*.jsx")
 CONFLICT_RULE = ("글자 규칙을 통과하면 등록 거리와 관계없이 글자 1등을 고른다. 통과하지 못했고 등록 1등 거리가 D 이하일 때만 "
                  "글자 1등과 등록 1등이 같은지 보고(require_agreement), 같으면 등록 1등을 고른다. 고르지 못했을 때 글자 1·2등에 "
                  "긴급이 있거나 거리 D 이하인 등록 1등이 긴급이면 긴급 가능성이다.")
 
 
+def code_paths() -> list[str]:
+    """지문을 남길 코드 파일 (CODE_FILES + CODE_GLOBS에 맞는 파일, 저장소 기준 경로, 겹침 없이 정렬)."""
+    rels = {rel for rel in CODE_FILES if (ROOT / rel).is_file()}
+    try:
+        for pattern in CODE_GLOBS:
+            rels.update(p.relative_to(ROOT).as_posix() for p in ROOT.glob(pattern) if p.is_file())
+    except (OSError, ValueError) as exc:
+        raise OSError(f"코드 파일 목록을 만들지 못했습니다: {exc}") from exc
+    return sorted(rels)
+
+
 def code_fingerprints() -> dict[str, str]:
-    """CODE_FILES의 SHA-256 (없는 파일은 뺀다)."""
-    out = {}
-    for rel in CODE_FILES:
-        path = ROOT / rel
-        if path.is_file():
-            out[rel] = common.file_sha256(path)
-    return out
+    """코드 파일(code_paths)의 SHA-256 (없는 파일은 뺀다)."""
+    return {rel: common.file_sha256(ROOT / rel) for rel in code_paths()}
 
 
 def git(*args: str) -> str | None:
@@ -142,7 +160,13 @@ def load_bases(rows_paths: list[str], commands: dict[str, Any], extras: dict[tup
             b["synthetic"] = bool(head.get("synthetic") or r.get("synthetic"))
             bases.append(b)
         listing = (head.get("clips_listing") or {}).get("listing_sha256")
+        mine = bases[-len(rows):] if rows else []
+        enr_head = head.get("enroll") if isinstance(head.get("enroll"), dict) else None
         info.append({"path": str(p), "sha256": common.file_sha256(p), "schema": head.get("schema"),
+                     "enroll": ({k: enr_head.get(k) for k in ("profile", "mode", "run_id", "profile_sha256", "deleted",
+                                                              "status_before", "status_after")} if enr_head else None),
+                     "service_enroll_rows": {m: sum(1 for b in mine if b.get("svc_enroll_mode") == m)
+                                             for m in ("store", "match")},
                      "phrase_set": head.get("phrase_set"), "clips_dir": head.get("clips_dir"),
                      "clips_listing_sha256": listing, "n_rows": len(rows),
                      "participants": sorted({str(r.get("participant")) for r in rows}),
@@ -175,6 +199,33 @@ def rule_from_args(args: argparse.Namespace, commands: dict[str, Any]) -> mt.Rul
                    max_distance=args.D, require_agreement=not args.no_agreement, possible_min_score=args.possible_floor)
 
 
+def resolve_enroll_source(choice: str, bases: list[dict[str, Any]], n_enroll_files: int) -> str:
+    """등록 거리 출처를 하나로 정한다 (서버 등록과 오프라인 등록을 섞지 않는다).
+
+    auto: 결과 행에 서버 등록 결과가 있으면 service, --enroll 파일이 있으면 offline, 둘 다 있으면 고르라고 거부, 둘 다 없으면 none.
+
+    Raises:
+        ValueError: 둘 다 있는데 auto이거나, 고른 출처의 자료가 없을 때
+    """
+    svc = mt.has_service_enroll(bases)
+    off = n_enroll_files > 0
+    if choice == "auto":
+        if svc and off:
+            raise ValueError("결과 행에 서버 등록 결과가 있고 --enroll(오프라인 등록) 파일도 있습니다. 두 출처를 섞지 않으므로 "
+                             "--enroll-source service 또는 offline을 고르세요")
+        return "service" if svc else ("offline" if off else "none")
+    if choice == "service" and not svc:
+        raise ValueError("--enroll-source service인데 결과 행에 서버 등록 결과(ward_service_batch.py --enroll-profile)가 없습니다")
+    if choice == "offline" and not off:
+        raise ValueError("--enroll-source offline인데 --enroll 파일이 없습니다")
+    if choice not in mt.ENROLL_SOURCES:
+        raise ValueError(f"알 수 없는 등록 거리 출처: {choice}")
+    return choice
+
+
+ENROLL_SOURCE_KO = {"service": "서버 등록(앱 경로)", "offline": "오프라인 등록(ward_enroll.py)", "none": "등록 없음"}
+
+
 # ---------------------------------------------------------------------------
 # metrics
 # ---------------------------------------------------------------------------
@@ -188,19 +239,30 @@ def cmd_metrics(args: argparse.Namespace) -> int:
         extras, _einfo = load_enroll_extras(args.enroll or [], commands)
         bases, info = load_bases(args.rows, commands, extras)
         common.require_unsealed([f.get("clips_dir") for f in info], bases, args.allow_sealed, "지표 계산")
+        source = resolve_enroll_source(args.enroll_source, bases, len(args.enroll or []))
+        if args.D is not None and source == "none":
+            raise ValueError("--D를 주었지만 등록 거리가 없습니다(서버 등록 결과 행 또는 --enroll 파일이 필요)")
     except (common.SealedDataError, ValueError, OSError) as exc:
         print(f"시작하지 않았습니다: {exc}", file=sys.stderr)
         return 2
     rule = rule_from_args(args, commands)
-    sel = [b for b in bases if b.get("tmpl_dists")] if rule.max_distance is not None else bases
+    for problem in mt.profile_problems(bases):
+        print(f"주의: {problem}", file=sys.stderr)
+    bases = mt.use_enroll_source(bases, source)
+    sel = mt.enroll_population(bases, source) if rule.max_distance is not None else bases
     summary = mt.summarize_groups(mt.evaluate_all(sel, rule), rule, commands)
+    used = summary["all"]["enroll_sources"]
     md = rp.table(summary["by_group"], f"기준 {rule.min_margin} / {rule.min_score}"
-                  + (f", D {rule.max_distance}" if rule.max_distance is not None else "")
+                  + (f", D {rule.max_distance} (등록 거리 출처: {ENROLL_SOURCE_KO[source]}, 등록 1등을 본 클립 "
+                     f"서버 {used['service']} · 오프라인 {used['offline']} · 없음 {used['none']})"
+                     if rule.max_distance is not None else "")
                   + (f", 긴급 가능성 하한 {rule.possible_min_score}" if rule.possible_min_score is not None else ""))
     print(md)
     if args.out:
         common.atomic_write_json(args.out, {"schema": "ward-metrics-v1", "created": datetime.now(timezone.utc).isoformat(),
-                                            "rule": rule.describe(), "inputs": info, "freeze": gate, "summary": summary})
+                                            "rule": rule.describe(), "enroll_source": source, "inputs": info,
+                                            "freeze": gate, "profile_problems": mt.profile_problems(bases),
+                                            "summary": summary})
     return 0
 
 
@@ -210,17 +272,29 @@ def cmd_metrics(args: argparse.Namespace) -> int:
 
 def enrollment_block(bases: list[dict[str, Any]], rule: mt.Rule, enroll_info: list[dict[str, Any]],
                      opts: dict[str, Any], notes: list[str]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """동결 초안의 enrollment 칸과 근거. 템플릿 방식·특징·거리 이름이 등록 파일마다 같아야 D를 정한다."""
+    """동결 초안의 enrollment 칸과 근거. 템플릿 방식·특징·거리 이름이 등록 파일마다 같아야 D를 정한다.
+
+    opts['enroll_source']: 'service'(서버 등록 거리, bases는 use_enroll_source(.., 'service')를 거친 기록),
+    'offline'(ward_enroll.py 파일, 기본), 'none'. 서버 등록은 템플릿 방식 voiced, 특징·거리 이름은 ward_enroll.py와 같다.
+    """
+    source = opts.get("enroll_source") or ("offline" if enroll_info else "none")
     block: dict[str, Any] = {"max_distance": None, "template": None, "feature": common.FEATURE_NAME,
-                             "distance": common.DISTANCE_NAME, "require_agreement": True, "conflict_rule": CONFLICT_RULE,
+                             "distance": common.DISTANCE_NAME, "source": None if source == "none" else source,
+                             "require_agreement": True, "conflict_rule": CONFLICT_RULE,
                              "unbounded": None, "min_negatives_with_dist": opts.get("min_negatives", cal.MIN_NEGATIVES_FOR_D),
                              "negatives_with_dist": None, "chosen_by": "등록 거리 자료가 없어 정하지 않음"}
-    if not any(b.get("tmpl_dists") for b in bases):
-        if enroll_info:
+    if source == "none" or not any(b.get("tmpl_dists") for b in bases):
+        if source == "service":
+            notes.append("서버 등록 결과에 거리가 있는 클립이 없어(등록 미완성 등) D를 정하지 않았다.")
+        elif enroll_info:
             notes.append("등록 파일에 등록 거리가 있는 클립이 없어(병실 묶음의 등록 템플릿 없음) D를 정하지 않았다.")
         return block, {}
-    templates = sorted({str(e.get("template")) for e in enroll_info})
-    names = sorted({(str(e.get("feature")), str(e.get("distance"))) for e in enroll_info})
+    if source == "service":
+        templates = [common.SERVICE_TEMPLATE]
+        names = [(common.FEATURE_NAME, common.DISTANCE_NAME)]
+    else:
+        templates = sorted({str(e.get("template")) for e in enroll_info})
+        names = sorted({(str(e.get("feature")), str(e.get("distance"))) for e in enroll_info})
     lopo = cal.lopo_distance(bases, rule)
     block["negatives_with_dist"] = {k: v["fit"].get("n_negatives_with_dist") for k, v in lopo.items()}
     block["unbounded"] = any(v["fit"].get("D") is not None and v["fit"].get("unbounded") for v in lopo.values())
@@ -245,7 +319,8 @@ def build_draft(bases: list[dict[str, Any]], commands: dict[str, Any], rows_info
     """조정 기록 → 동결 초안 (CLI와 테스트가 같이 쓴다).
 
     opts: target_size, keep, max_loss, delta, d_rule, min_negatives, floor_clearance, use_floor(기본 False), deltas,
-          folder_checks, sealed_folders
+          folder_checks, sealed_folders, enroll_source('service'·'offline'·'none', 기본은 등록 파일이 있으면 offline)
+    full_list.env에는 서버 환경 변수 4개(M·S·긴급 가능성 하한·등록 거리 D, 없으면 'none')를 쓴다.
     """
     emergency = commands["emergency"]
     prov_rule = cal.rule_at(*cal.PROVISIONAL, emergency)
@@ -254,9 +329,9 @@ def build_draft(bases: list[dict[str, Any]], commands: dict[str, Any], rows_info
     pooled = cal.pooled_thresholds(bases, emergency, opts.get("deltas", cal.DEFAULT_DELTAS))
     prop = cal.choose_proposal(pooled, opts.get("max_loss", 0.10), opts.get("delta"))
     rule = cal.rule_at(prop["M"], prop["S"], emergency)
-    # 긴급 가능성 점수 하한: 화면(wardMachine.js)에 없으므로 근거로만 계산하고, --floor일 때만 초안에 넣는다
-    floor_block: dict[str, Any] = {"possible_min_score": None, "floor_implemented_in_ui": False,
-                                   "chosen_by": "기획 9.3·화면 그대로(점수 하한 없음: 고르지 못했을 때 1·2등에 긴급이면 긴급 가능성)"}
+    # 긴급 가능성 점수 하한: 화면이 서버 값(phrase.rule.possible_min_score)을 쓴다. 근거로는 늘 계산하고 --floor일 때만 넣는다
+    floor_block: dict[str, Any] = {"possible_min_score": None, "floor_implemented_in_ui": True,
+                                   "chosen_by": "기본: 기획 9.3 그대로(점수 하한 없음: 고르지 못했을 때 1·2등에 긴급이면 긴급 가능성)"}
     floor_lopo = cal.lopo_possible_floor(bases, rule, opts.get("floor_clearance", 0.2))
     if opts.get("use_floor", False):
         floors = {k: (v["fit"]["floor"] if k != "pooled" else v["floor"]) for k, v in floor_lopo.items()}
@@ -266,8 +341,8 @@ def build_draft(bases: list[dict[str, Any]], commands: dict[str, Any], rows_info
             floor_block.update(possible_min_score=round(floors[key], 3),
                                chosen_by=f"긴급 명령 클립을 하나도 놓치지 않는 하한에서 여유 {opts.get('floor_clearance', 0.2)}를 "
                                          f"뺀 값 중 가장 낮은 값({key})")
-            notes.append("긴급 가능성 점수 하한을 넣었지만 화면(wardMachine.js)은 하한을 쓰지 않는다. 화면에 먼저 넣고 "
-                         "decision_rule.floor_implemented_in_ui를 true로 바꾸기 전에는 형식 검사가 동결을 막는다.")
+            notes.append("긴급 가능성 점수 하한을 넣었다. 서버는 full_list.env의 LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE로 켜고, "
+                         "화면은 서버가 결과에 적는 하한(phrase.rule.possible_min_score)으로 판정한다.")
         else:
             notes.append("긴급 명령 클립 중 '1·2등에 긴급' 길로만 긴급에 닿는 클립이 없어 긴급 가능성 점수 하한을 정하지 않았다.")
     # 축소 목록
@@ -290,6 +365,8 @@ def build_draft(bases: list[dict[str, Any]], commands: dict[str, Any], rows_info
     synthetic = any(f.get("synthetic") for f in rows_info + enroll_info)
     if synthetic:
         notes.insert(0, "합성(가짜) 자료가 섞인 초안이다. 동결에 쓸 수 없다(파이프라인 시험용).")
+    expected = {"min_margin": prop["M"], "min_score": prop["S"], "possible_min_score": floor_block["possible_min_score"],
+                "enroll_max_distance": enr_block["max_distance"]}
     sealed_folders = opts.get("sealed_folders") or []
     if not sealed_folders:
         notes.append("봉인 폴더 지문(--sealed-folder)이 없다. 봉인 자료 보고(report)는 동결한 폴더 지문과 결과 행의 지문이 "
@@ -300,7 +377,8 @@ def build_draft(bases: list[dict[str, Any]], commands: dict[str, Any], rows_info
         "commands": {"path": "frontend/src/ward/commands.json", "version": commands["version"], "sha256": commands["sha256"],
                      "ids": commands["ids"], "emergency_ids": emergency},
         "full_list": {"min_margin": prop["M"], "min_score": prop["S"], "delta": prop["delta"], "chosen_by": prop["chosen_by"],
-                      "env": {"LIPNET_OLKAVS_WARD_MIN_MARGIN": str(prop["M"]), "LIPNET_OLKAVS_WARD_MIN_SCORE": str(prop["S"])}},
+                      "env": common.server_env(expected),
+                      "env_note": "서버 환경 변수. 기준값·하한·D를 고치면 env도 같게 고친다(validate가 확인, ward_eval_tools.py env로 출력)"},
         "reduced_list": red_block,
         "enrollment": enr_block,
         "decision_rule": {"table": "docs/병실무음도우미_기획_및_개발계획_2026-11-09.md 9.3 (scripts/ward_tools/metrics.py)",
@@ -346,13 +424,18 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
             f["role"] = "negatives" if str(Path(f["path"])) in neg_files else "tune"
         if len(cal.persons(bases)) < 2:
             raise ValueError("한 사람으로 정해 다른 사람에게 적용하려면 참가자가 2명 이상 필요합니다")
+        source = resolve_enroll_source(args.enroll_source, bases, len(args.enroll or []))
+        problems = mt.profile_problems(bases)
+        if problems and source == "service":
+            raise ValueError("서버 등록 결과가 사람마다 등록 하나·같은 등록 상태가 아닙니다: " + "; ".join(problems))
+        bases = mt.use_enroll_source(bases, source)
         sealed_folders = sealed_folder_fingerprints(args.sealed_folder or [])
     except (common.SealedDataError, ValueError, OSError) as exc:
         print(f"시작하지 않았습니다: {exc}", file=sys.stderr)
         return 2
     opts = {"target_size": args.target_size, "keep": args.keep or [], "max_loss": args.max_loss, "delta": args.delta,
             "d_rule": args.d_rule, "min_negatives": args.min_negatives, "floor_clearance": args.floor_clearance,
-            "use_floor": bool(args.floor), "sealed_folders": sealed_folders,
+            "use_floor": bool(args.floor), "sealed_folders": sealed_folders, "enroll_source": source,
             "folder_checks": [] if args.skip_folder_check else folder_check(info)}
     draft = build_draft(bases, commands, info, einfo, opts)
     problems = cal.validate_freeze(draft)
@@ -370,21 +453,39 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def run_report(freeze: dict[str, Any], bases: list[dict[str, Any]], commands: dict[str, Any]) -> dict[str, Any]:
-    """동결 규칙을 기록에 적용한 결과 (전체 목록, 등록, 축소 목록).
+    """동결 규칙을 기록에 적용한 결과 (주 결과, 비교, 오프라인 등록, 축소 목록).
 
-    주 결과는 화면이 실제로 쓰는 규칙(긴급 가능성 점수 하한 없음)이다. 동결 파일에 하한이 있으면 하한을 적용한 결과를
-    full_floored(보조)로 따로 낸다.
+    주 결과(full)는 앱과 같은 판정이다: 글자 규칙 + 동결 파일의 긴급 가능성 하한(있으면) + 결과 행에 서버 등록 결과가 있고
+    동결 D가 있으면 서버 등록 거리(등록 영상 = store 행은 뺀다, 거리가 없는 클립은 앱처럼 글자 규칙만).
+    비교: full_text_only(같은 클립, 등록 없이), full_no_floor(하한 없이), all_rows_text(등록 영상까지 모든 클립, 글자 규칙).
+    오프라인 등록(ward_enroll.py, --enroll 파일)은 enroll·enroll_text_only(보조)로 따로 내며 서버 등록과 섞지 않는다.
     """
-    full = cal.rule_from_freeze(freeze, "full")
-    out: dict[str, Any] = {"full": mt.summarize_groups(mt.evaluate_all(bases, full), full, commands)}
-    if (freeze.get("decision_rule") or {}).get("possible_min_score") is not None:
-        ff = cal.rule_from_freeze(freeze, "full", apply_floor=True)
-        out["full_floored"] = mt.summarize_groups(mt.evaluate_all(bases, ff), ff, commands)
-    tests = [b for b in bases if b.get("tmpl_dists")]
-    if tests and (freeze.get("enrollment") or {}).get("max_distance") is not None:
+    app = cal.rule_from_freeze(freeze, "full")  # 글자 규칙 + 하한(동결 값)
+    D = (freeze.get("enrollment") or {}).get("max_distance")
+    floor = (freeze.get("decision_rule") or {}).get("possible_min_score")
+    svc = mt.has_service_enroll(bases)
+    sb = mt.use_enroll_source(bases, "service" if svc else "none")
+    pop = mt.enroll_population(sb, "service") if svc else sb
+    main_rule = cal.rule_from_freeze(freeze, "full", with_enrollment=True) if (svc and D is not None) else app
+    main_evals = mt.evaluate_all(pop, main_rule)
+    out: dict[str, Any] = {"full": mt.summarize_groups(main_evals, main_rule, commands)}
+    out["main"] = {"rule": main_rule.describe(), "enrollment_source": "service" if (svc and D is not None) else None,
+                   "service_enroll_rows": svc, "templates_excluded": len(sb) - len(pop), "n": len(pop),
+                   "profile_problems": mt.profile_problems(bases)}
+    out["server_rule_check"] = mt.rule_check(main_evals, main_rule, common.expected_server_rule(freeze))
+    if main_rule.max_distance is not None:
+        out["full_text_only"] = mt.summarize_groups(mt.evaluate_all(pop, app), app, commands)
+    if floor is not None:
+        nf = replace(main_rule, possible_min_score=None)
+        out["full_no_floor"] = mt.summarize_groups(mt.evaluate_all(pop, nf), nf, commands)
+    if len(pop) < len(sb):
+        out["all_rows_text"] = mt.summarize_groups(mt.evaluate_all(sb, app), app, commands)
+    ob = mt.use_enroll_source(bases, "offline")
+    tests = mt.enroll_population(ob, "offline")
+    if tests and D is not None:
         er = cal.rule_from_freeze(freeze, "full", with_enrollment=True)
         out["enroll"] = mt.summarize_groups(mt.evaluate_all(tests, er), er, commands)
-        out["enroll_text_only"] = mt.summarize_groups(mt.evaluate_all(tests, full), full, commands)
+        out["enroll_text_only"] = mt.summarize_groups(mt.evaluate_all(tests, app), app, commands)
     red = freeze.get("reduced_list") or {}
     if red.get("min_margin") is not None and any(b.get("text_scores") for b in bases):
         rr = cal.rule_from_freeze(freeze, "reduced")
@@ -467,6 +568,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         mismatch = enroll_consistency(freeze, einfo)
         if mismatch:
             raise ValueError("등록 파일이 동결 설정과 다릅니다: " + "; ".join(mismatch))
+        prof = mt.profile_problems(bases)
+        if prof:
+            raise ValueError("서버 등록 결과가 사람마다 등록 하나·같은 등록 상태가 아닙니다: " + "; ".join(prof))
     except (common.SealedDataError, ValueError, OSError) as exc:
         print(f"시작하지 않았습니다: {exc}", file=sys.stderr)
         return 2
@@ -475,6 +579,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     result = run_report(freeze, bases, commands)
     full = freeze["full_list"]
     check = result["full"]["all"].get("server_accepted_check") or {}
+    echeck = result["full"]["all"].get("server_enroll_check") or {}
+    rcheck = result.get("server_rule_check") or {}
     result.update({
         "schema": "ward-report-v1", "created": datetime.now(timezone.utc).isoformat(),
         "freeze": {"path": str(freeze_path), "status": freeze.get("status"), "commit": state.get("commit"),
@@ -484,19 +590,25 @@ def cmd_report(args: argparse.Namespace) -> int:
                             "floor_implemented_in_ui": (freeze.get("decision_rule") or {}).get("floor_implemented_in_ui")},
                    "max_distance": (freeze.get("enrollment") or {}).get("max_distance"),
                    "template": (freeze.get("enrollment") or {}).get("template"),
+                   "enroll_source": (freeze.get("enrollment") or {}).get("source"),
+                   "env": (freeze.get("full_list") or {}).get("env"),
                    "reduced_ids": (freeze.get("reduced_list") or {}).get("ids")},
         "inputs": {"rows_files": [f["path"] for f in info], "rows_info": info, "enroll_files": einfo,
                    "folder_checks": [] if args.skip_folder_check else folder_check(info)},
         "code_changed": changed, "sealed_data": bool(reasons),
-        "server_threshold_mismatch": int(check.get("mismatch") or 0)})
+        "server_threshold_mismatch": int(check.get("mismatch") or 0),
+        "server_rule_mismatch": int(rcheck.get("mismatch") or 0),
+        "server_enroll_mismatch": int(echeck.get("mismatch") or 0) + int(echeck.get("max_distance_mismatch") or 0)
+        + int(echeck.get("top_inconsistent") or 0)})
     md = rp.markdown_report(result)
     if args.out:
         common.atomic_write_json(args.out, result)
         Path(args.out).with_suffix(".md").write_text(md, encoding="utf-8")
     print(md)
-    if result["server_threshold_mismatch"] and reasons:
-        print(f"주의: 서버 accepted가 동결 기준값과 다른 클립이 {result['server_threshold_mismatch']}개입니다. 봉인 자료 결과를 "
-              "주 결과로 쓰기 전에 서버를 full_list.env로 켰는지 확인하세요.", file=sys.stderr)
+    bad = {k: result[k] for k in ("server_threshold_mismatch", "server_rule_mismatch", "server_enroll_mismatch") if result[k]}
+    if bad and reasons:
+        print(f"주의: 서버가 동결 기준값과 다르게 판정·기록한 클립이 있습니다({bad}). 봉인 자료 결과를 주 결과로 쓰기 전에 "
+              "서버를 full_list.env로 켰는지 확인하세요.", file=sys.stderr)
         return 1
     return 0
 
@@ -522,6 +634,23 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if not problems else 1
 
 
+def cmd_env(args: argparse.Namespace) -> int:
+    """동결 파일의 서버 환경 변수 4개(full_list.env와 같아야 함)를 PowerShell 줄로 출력한다."""
+    try:
+        freeze = common.read_json(args.freeze)
+        problems = cal.validate_freeze(freeze, allow_synthetic=True)
+        env = cal.freeze_env(freeze)
+    except ValueError as exc:
+        print(f"환경 변수를 만들지 못했습니다: {exc}", file=sys.stderr)
+        return 2
+    for name, value in env.items():
+        print(f'$env:{name} = "{value}"')
+    if problems:
+        print("동결 파일 형식 문제: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """명령줄 진입점."""
     try:
@@ -536,7 +665,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--margin", type=float, default=cal.PROVISIONAL[0])
     p.add_argument("--score", type=float, default=cal.PROVISIONAL[1])
     p.add_argument("--possible-floor", type=float, default=None, help="긴급 가능성 점수 하한 (기본 없음 = 기획 9.3·화면)")
-    p.add_argument("--D", type=float, default=None, help="등록 거리 D (주면 거리 있는 시험 클립만)")
+    p.add_argument("--D", type=float, default=None,
+                   help="등록 거리 D (서버 등록: 등록 영상 행만 뺀 모든 클립, 오프라인 등록: 거리 있는 시험 클립만)")
+    p.add_argument("--enroll-source", choices=("auto",) + mt.ENROLL_SOURCES, default="auto",
+                   help="등록 거리 출처 (auto: 서버 등록 결과 행이면 service, --enroll 파일이면 offline, 둘 다면 거부)")
     p.add_argument("--no-agreement", action="store_true")
     p.add_argument("--allow-sealed", action="store_true", help="봉인 자료도 계산 (--freeze 필요)")
     p.add_argument("--freeze", help="커밋된 동결 파일 (--allow-sealed와 함께 필수)")
@@ -546,6 +678,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tune-rows", action="append", required=True, help="P01·P03 ward_tune 결과 행")
     p.add_argument("--negative-rows", action="append", help="문장 촬영 클립을 phrase_set=ward로 채점한 결과 행")
     p.add_argument("--enroll", action="append", help="ward_enroll.py apply 출력 (후보별 점수·등록 거리)")
+    p.add_argument("--enroll-source", choices=("auto",) + mt.ENROLL_SOURCES, default="auto",
+                   help="D를 정할 등록 거리 출처 (auto: 서버 등록 결과 행이면 service, --enroll 파일이면 offline, 둘 다면 거부)")
     p.add_argument("--sealed-folder", action="append", help="봉인 폴더 (목록 지문만 계산해 초안 sealed_folders에 넣음)")
     p.add_argument("--out", required=True)
     p.add_argument("--target-size", type=int, default=12)
@@ -557,7 +691,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="D를 정하려면 사람마다 필요한, 등록 거리가 있는 목록 밖 클립 수")
     p.add_argument("--floor-clearance", type=float, default=0.2)
     p.add_argument("--floor", action="store_true",
-                   help="긴급 가능성 점수 하한을 초안에 넣음 (화면에 없으므로 floor_implemented_in_ui=true 전에는 동결 불가)")
+                   help="긴급 가능성 점수 하한을 초안에 넣음 (기본 없음. 서버 환경 변수로 켜고 화면은 서버 값을 씀)")
     p.add_argument("--skip-folder-check", action="store_true", help="촬영 폴더 지문 재계산을 건너뜀")
     p.set_defaults(func=cmd_calibrate)
     p = sub.add_parser("report", help="동결 파일로 평가")
@@ -575,6 +709,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("validate", help="동결 파일 형식 검사")
     p.add_argument("freeze")
     p.set_defaults(func=cmd_validate)
+    p = sub.add_parser("env", help="동결 파일의 서버 환경 변수 (PowerShell)")
+    p.add_argument("freeze")
+    p.set_defaults(func=cmd_env)
     args = parser.parse_args(argv)
     return args.func(args)
 

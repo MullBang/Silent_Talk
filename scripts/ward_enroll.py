@@ -10,7 +10,9 @@
 
 봉인 자료(P02, ward_eval)는 모든 단계에서 --allow-sealed --freeze <커밋된 status frozen 동결 파일>이 있어야 한다.
 동결 파일은 클립 기록·특징을 읽기 전에 확인하고, 그 SHA-256·커밋과 실행 때 git HEAD를 각 출력 파일 머리에 남긴다.
-apply --freeze는 동결 파일의 기준값·D·템플릿 방식을 쓰며, 다른 --template을 주면 거부한다.
+apply --freeze는 동결 파일의 기준값·긴급 가능성 하한·D·템플릿 방식을 쓰며, 다른 --template을 주면 거부한다.
+이 도구는 오프라인 등록(보조 결과)이다. 앱이 실제로 쓰는 서버 등록은 ward_service_batch.py --enroll-profile로 채점한다.
+특징(서버 hidden_out과 같은 계산)과 DTW(backend/services/ward_templates.py와 같은 코드)는 서버 등록과 같아야 한다.
 영상·특징·결과는 저장소 밖 또는 experiments/ 아래(gitignore)에 둔다. 등록 특징은 P번호로만 저장하고 시연 뒤 지운다(기획 11).
 
 사용 예:
@@ -72,15 +74,11 @@ def clip_info(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_template(row: dict[str, Any], template: str) -> bool:
-    """등록 템플릿 클립인가: 병실 묶음의 서 있는 자세 명령 중 소리 내어 1회(voiced), 소리 없이 1회(silent1), 또는 둘 다(both)."""
-    if template not in TEMPLATES:
-        raise ValueError(f"알 수 없는 템플릿 방식: {template}")
-    if not (isinstance(row.get("session"), str) and row["session"].startswith("ward_")) or row.get("kind") != "fixed":
-        return False
-    if (row.get("posture") or "upright") != "upright" or row.get("rep") != 1:
-        return False
-    cond = row.get("condition")
-    return (template in ("voiced", "both") and cond == "voiced") or (template in ("silent1", "both") and cond == "silent")
+    """등록 템플릿 클립인가: 병실 묶음의 서 있는 자세 명령 중 소리 내어 1회(voiced), 소리 없이 1회(silent1), 또는 둘 다(both).
+
+    규칙은 common.is_template에 있다(서버 등록을 채우는 ward_service_batch.py --enroll-from voiced와 같은 클립을 고른다).
+    """
+    return common.is_template(row, template)
 
 
 def pseudo_row(rec: dict[str, Any]) -> dict[str, Any]:

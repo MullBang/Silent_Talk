@@ -4,7 +4,9 @@
   글자 규칙 통과 + 긴급 명령        → emergency          (빨간 카드 즉시)
   글자 규칙 통과 + 일반 명령        → request            (확인 카운트다운 뒤 전송)
   글자 규칙 실패, 등록 거리 통과, 글자 1등 = 등록 1등 + 긴급 → emergency_possible (긴급 가능성 카드, chosen_id 있음)
-  글자 규칙 실패, 등록 거리 통과, 글자 1등 = 등록 1등 + 일반 → request
+  글자 규칙 실패, 등록 거리 통과, 글자 1등 = 등록 1등 + 일반, 글자 2등이 긴급(하한이 있으면 그 점수 이상)
+                                    → emergency_possible (chosen_id 있음. 등록 없이도 나던 알림을 등록이 없애지 않는다)
+  글자 규칙 실패, 등록 거리 통과, 글자 1등 = 등록 1등 + 일반 (그 밖) → request
   글자 규칙 실패, 등록 거리 통과, 글자 1등 ≠ 등록 1등(require_agreement) → 고르지 않음 (conflict)
   고르지 않음 + (글자 1·2등에 긴급 또는 거리 ≤ D인 등록 1등이 긴급) → emergency_possible (chosen_id 없음)
   고르지 않음                       → not_chosen         (스캐닝 선택 + 확인 필요)
@@ -15,7 +17,15 @@
 등록 1등이 긴급이면 고르지 않더라도 긴급 가능성으로 올린다(기획 11.3: 놓치는 쪽보다 확인하는 쪽).
 '표시(shown)'는 화면에 명령 하나가 뜬 것(chosen_id가 있음)이다. 서버 accepted는 쓰지 않고 저장된 margin·score로 다시 판정한다.
 화면(frontend/src/ward/wardResult.js)과 같게 phrase.set이 ward가 아니거나 1등 ID가 명령 목록 밖이면 결과 없음, 2등 ID가 목록
-밖이면 2등 없음으로 본다. 긴급 가능성 점수 하한(possible_min_score)은 화면에 없으므로 기본은 None(기획 9.3 그대로)이다.
+밖이면 2등 없음으로 본다. 긴급 가능성 점수 하한(possible_min_score)은 화면이 서버의 phrase.rule.possible_min_score로 쓴다.
+기본은 None(기획 9.3 그대로: 점수와 관계없이 1·2등에 긴급이면 긴급 가능성)이다.
+
+등록 거리의 출처는 둘이고 섞지 않는다(use_enroll_source로 하나를 고른다):
+  service : 서버 등록(POST /api/record의 enroll_profile, 결과 results[0].enroll의 match 결과). 앱이 실제로 쓰는 경로.
+            tmpl_top/tmpl_dist = 서버 top_id/distance. store(등록 영상) 행은 등록 템플릿이다(svc_is_template).
+  offline : ward_enroll.py apply 출력(--enroll 파일)의 tmpl_dists. 보조 결과.
+판정 기록의 enroll_from이 그 클립의 등록 판정에 쓴 출처('service'·'offline'·None)다. 서버의 enroll.within·accepted와
+phrase.rule(서버가 쓴 기준값)은 판정에 쓰지 않고, 다시 판정한 값과 비교만 한다(enroll_check·rule_check).
 
 입력 역할(role):
   command(병실 명령 W01~W20), decoy(목록 밖 함정 문장), short(목록 밖 짧은 긴급 표현 E01~E03), nonspeech(말하지 않는 동작),
@@ -55,6 +65,9 @@ ALARM_OUTCOMES = (OUT_EMERGENCY, OUT_POSSIBLE)  # 간호사실에 긴급(확정 
 
 NEAR_END_MS = 500.0     # 말 끝이 녹화 끝 이 시간 안이면 '녹화가 짧았을 수 있음' (기획 10.2 녹화 길이)
 NEAR_END_TOL_MS = 50.0  # 프레임 시각 반올림 여유
+
+ENROLL_SOURCES = ("service", "offline", "none")
+ENROLL_DIST_TOL = 1e-9  # 서버 top_id·distance와 distances 최솟값이 같다고 볼 차이
 
 
 @dataclass(frozen=True)
@@ -106,7 +119,8 @@ def decide(top: str | None, runner_up: str | None, margin: float | None, score: 
     """글자 순위(와 등록 1등)로 판정표를 적용한다. top이 None이면 no_result.
 
     글자 규칙을 통과하면 등록 거리와 관계없이 글자 1등을 고른다. 통과하지 못했고 등록 1등 거리가 D 이하이면
-    (require_agreement일 때 글자 1등과 같을 때만) 등록 1등을 고른다. 고르지 못했을 때 글자 1·2등에 긴급이 있거나
+    (require_agreement일 때 글자 1등과 같을 때만) 등록 1등을 고른다. 등록으로 고른 명령이 일반이어도 글자 1·2등에
+    긴급(하한 이상)이 있으면 긴급 가능성이다(등록은 알림을 없애지 않는다). 고르지 못했을 때 글자 1·2등에 긴급이 있거나
     거리 D 이하인 등록 1등이 긴급이면 긴급 가능성이다.
 
     Returns:
@@ -133,6 +147,10 @@ def decide(top: str | None, runner_up: str | None, margin: float | None, score: 
         if chosen is not None:
             if chosen in rule.emergency_ids:
                 outcome = OUT_EMERGENCY if via == "text" else OUT_POSSIBLE
+            elif via == "enroll" and possible_score(top, runner_up, margin, score, rule) is not None:
+                # 등록으로 고른 일반 명령이라도 글자 2등(하한 이상)이 긴급이면 등록이 없을 때처럼 긴급 가능성으로 둔다.
+                # 등록은 알림을 더하기만 하고 없애지 않는다(고른 명령은 chosen_id로 남아 후보 맨 앞에 온다).
+                outcome = OUT_POSSIBLE
             else:
                 outcome = OUT_REQUEST
         else:
@@ -229,12 +247,62 @@ def phrase_issue(phrase: dict[str, Any] | None, commands: dict[str, Any], phrase
     return None
 
 
+def server_rule_of(phrase: dict[str, Any] | None) -> dict[str, float | None] | None:
+    """phrase.rule(서버가 쓴 기준값) → {min_margin, min_score, possible_min_score, enroll_max_distance}. 없으면 None (옛 서버)."""
+    rule = phrase.get("rule") if isinstance(phrase, dict) else None
+    if not isinstance(rule, dict):
+        return None
+    return {k: (_float(rule.get(k)) if rule.get(k) is not None else None) for k in common.SERVER_RULE_KEYS}
+
+
+def row_enroll(row: dict[str, Any], commands: dict[str, Any]) -> dict[str, Any]:
+    """서비스 결과 행의 서버 등록 결과(results[0].enroll) → 판정 전 기록의 svc_* 칸.
+
+    match 결과의 status가 ok이고 top_id가 명령 목록 안이고 distance가 숫자일 때만(화면이 쓰는 조건과 같다)
+    svc_tmpl_top·svc_tmpl_dist·svc_tmpl_dists를 채운다(그 밖은 None = 앱도 등록으로 고르지 않는다). svc_tmpl_dists는
+    distances 중 명령 목록 안의 숫자 값(서버는 20개 모두 준다)이며 1등은 늘 들어간다. 처리 실패 행(status가 done이 아님)은 읽지 않는다.
+    """
+    empty = {"svc_enroll_mode": None, "svc_enroll": None, "svc_enroll_status": None, "svc_is_template": False,
+             "svc_profile": None, "svc_tmpl_dists": None, "svc_tmpl_top": None, "svc_tmpl_dist": None,
+             "svc_within": None, "svc_agree": None, "svc_accepted": None, "svc_max_distance": None,
+             "svc_profile_sha256": row.get("profile_sha256")}
+    if row.get("status") != "done":
+        return empty
+    results = row.get("results") or []
+    first = results[0] if results and isinstance(results[0], dict) else {}
+    enr = first.get("enroll")
+    if not isinstance(enr, dict) or enr.get("mode") not in ("store", "match"):
+        return empty
+    out = dict(empty)
+    out.update(svc_enroll_mode=enr["mode"], svc_profile=enr.get("profile"),
+               svc_enroll={k: enr.get(k) for k in ("mode", "profile", "command", "stored", "reason", "status", "count",
+                                                    "top_id", "distance", "runner_up_id", "runner_up_distance",
+                                                    "max_distance", "within", "agree", "accepted", "text_top",
+                                                    "text_top_matches", "complete")})
+    if enr["mode"] == "store":
+        out.update(svc_is_template=True, svc_enroll_status="stored" if enr.get("stored") else
+                   f"not_stored:{enr.get('reason')}")
+        return out
+    out.update(svc_enroll_status=enr.get("status"), svc_within=enr.get("within"), svc_agree=enr.get("agree"),
+               svc_accepted=enr.get("accepted"),
+               svc_max_distance=_float(enr.get("max_distance")) if enr.get("max_distance") is not None else None)
+    raw = enr.get("distances") if isinstance(enr.get("distances"), dict) else {}
+    top, dist = enr.get("top_id"), _float(enr.get("distance"))
+    if enr.get("status") == "ok" and isinstance(top, str) and top in commands["texts"] and dist is not None:
+        dists = {i: float(raw[i]) for i in commands["ids"] if _float(raw.get(i)) is not None}
+        dists.setdefault(top, dist)
+        out.update(svc_tmpl_dists=dists, svc_tmpl_top=top, svc_tmpl_dist=dist)
+    return out
+
+
 def prepare(row: dict[str, Any], commands: dict[str, Any], extras: dict[str, Any] | None = None) -> dict[str, Any]:
     """결과 행 → 판정 전 기록 (규칙과 무관한 정보).
 
     extras(선택, ward_enroll.py 출력의 같은 클립): text_scores{명령 ID: 토큰당 점수}, tmpl_dists{명령 ID: 등록 거리}, is_template.
     phrase가 병실 묶음(set 'ward')이 아니거나 1등 ID가 명령 목록 밖이면 화면처럼 지정 문장 결과 없음(phrase_problem에 사유)이고,
     2등 ID가 목록 밖이거나 1등과 같으면 2등 없음으로 본다.
+    서버 등록 결과(results[0].enroll)는 svc_* 칸에 따로 둔다. tmpl_dists는 오프라인(extras) 값이며 enroll_source는
+    'offline'(거리 있음) 또는 None이다. 서버 등록 거리로 판정하려면 use_enroll_source(bases, 'service')를 거친다.
     """
     try:
         role = role_of(row)
@@ -273,6 +341,10 @@ def prepare(row: dict[str, Any], commands: dict[str, Any], extras: dict[str, Any
             "tail_gap_ms": tail_gap,
             "text_scores": extras.get("text_scores"), "tmpl_dists": extras.get("tmpl_dists"),
             "is_template": bool(extras.get("is_template")), "has_extras": has_extras,
+            "enroll_source": "offline" if extras.get("tmpl_dists") else None,
+            "phrase_top": phrase.get("id") if phrase else None,
+            "server_rule": server_rule_of(phrase),
+            **row_enroll(row, commands),
         }
     except (AttributeError, KeyError, TypeError) as exc:
         raise ValueError(f"결과 행 형식 오류({row.get('file') if isinstance(row, dict) else row!r}): {exc}") from exc
@@ -284,12 +356,18 @@ def evaluate(base: dict[str, Any], rule: Rule) -> dict[str, Any]:
     tmpl_top = tmpl_dist = None
     dists = base.get("tmpl_dists")
     if rule.max_distance is not None and dists:
-        # 등록 템플릿이 없는(등록 영상 검출 실패) 명령은 빼고 남은 템플릿 안에서 가장 가까운 명령을 본다
-        avail = [i for i in (rule.ids or list(dists)) if dists.get(i) is not None]
-        tr = rank_scores(dists, avail, higher_is_better=False) if len(avail) >= 2 else None
-        if tr is not None:
-            tmpl_top, tmpl_dist = tr["id"], tr["score"]
+        if (base.get("enroll_source") == "service" and rule.ids is None and base.get("svc_tmpl_top") in dists
+                and base.get("svc_tmpl_dist") is not None):
+            # 서버 등록: 앱과 같게 서버의 top_id·distance를 그대로 쓴다 (distances 최솟값과 같은지는 enroll_check가 본다)
+            tmpl_top, tmpl_dist = base["svc_tmpl_top"], float(base["svc_tmpl_dist"])
+        else:
+            # 등록 템플릿이 없는(등록 영상 검출 실패) 명령은 빼고 남은 템플릿 안에서 가장 가까운 명령을 본다
+            avail = [i for i in (rule.ids or list(dists)) if dists.get(i) is not None]
+            tr = rank_scores(dists, avail, higher_is_better=False) if len(avail) >= 2 else None
+            if tr is not None:
+                tmpl_top, tmpl_dist = tr["id"], tr["score"]
     out["tmpl_top"], out["tmpl_dist"] = tmpl_top, tmpl_dist
+    out["enroll_from"] = (base.get("enroll_source") or "offline") if tmpl_top is not None else None
     if rule.ids is None:
         top, runner, margin, score = base["top"], base["runner_up"], base["margin"], base["score"]
         if top is None:
@@ -319,6 +397,162 @@ def evaluate(base: dict[str, Any], rule: Rule) -> dict[str, Any]:
 def evaluate_all(bases: Iterable[dict[str, Any]], rule: Rule) -> list[dict[str, Any]]:
     """기록 전체에 같은 규칙을 적용한다."""
     return [evaluate(b, rule) for b in bases]
+
+
+# ---------------------------------------------------------------------------
+# 등록 거리 출처 (서버 등록 / 오프라인 등록)
+# ---------------------------------------------------------------------------
+
+def has_service_enroll(bases: Iterable[dict[str, Any]]) -> bool:
+    """서버 등록 결과(store 또는 match)가 있는 행이 있는가."""
+    return any(b.get("svc_enroll_mode") in ("store", "match") for b in bases)
+
+
+def has_offline_enroll(bases: Iterable[dict[str, Any]]) -> bool:
+    """오프라인 등록 파일(ward_enroll.py apply)에서 읽은 행이 있는가."""
+    return any(b.get("has_extras") for b in bases)
+
+
+def use_enroll_source(bases: Iterable[dict[str, Any]], source: str) -> list[dict[str, Any]]:
+    """판정 전 기록의 등록 거리 출처를 하나로 정한 복사본 (두 출처를 섞지 않는다).
+
+    service: tmpl_dists = 서버 match 결과의 distances(status ok일 때만), is_template = 서버 store(등록 영상) 행.
+    offline: tmpl_dists·is_template = ward_enroll.py 출력 그대로(prepare 기본값).
+    none   : 등록 거리를 쓰지 않는다.
+
+    Raises:
+        ValueError: 알 수 없는 출처
+    """
+    if source not in ENROLL_SOURCES:
+        raise ValueError(f"알 수 없는 등록 거리 출처: {source!r} ({ENROLL_SOURCES})")
+    out = []
+    for b in bases:
+        c = dict(b)
+        if source == "service":
+            c["tmpl_dists"] = b.get("svc_tmpl_dists")
+            c["is_template"] = bool(b.get("svc_is_template"))
+            c["enroll_source"] = "service" if c["tmpl_dists"] else None
+        elif source == "offline":
+            c["enroll_source"] = "offline" if c.get("tmpl_dists") else None
+        else:
+            c["tmpl_dists"] = None
+            c["enroll_source"] = None
+        out.append(c)
+    return out
+
+
+def enroll_population(bases: Iterable[dict[str, Any]], source: str) -> list[dict[str, Any]]:
+    """등록 규칙을 적용할 시험 클립.
+
+    service: 서버 store(등록 영상) 행만 빼고 모두. 등록 거리가 없는 클립(등록 미완성·창 여럿 등)은 앱처럼 글자 규칙만 받는다.
+    offline: 등록 템플릿을 뺀, 거리가 있는 클립만(ward_enroll.py 오프라인 평가와 같다).
+    """
+    bases = list(bases)
+    if source == "service":
+        return [b for b in bases if not b.get("is_template")]
+    if source == "offline":
+        return [b for b in bases if b.get("tmpl_dists")]
+    return bases
+
+
+def profile_problems(bases: Iterable[dict[str, Any]]) -> list[str]:
+    """서버 등록 결과가 사람마다 등록 하나·같은 등록 상태로 채점됐는지 (문제 목록).
+
+    한 사람의 클립이 서로 다른 등록 ID나 서로 다른 등록 상태(profile_sha256: ward_service_batch.py가 match 단계 시작 때 잰
+    등록 지문)로 채점됐거나, 한 등록 ID를 두 사람 이상이 썼으면 문제다(다른 사람의 등록으로 채점하면 등록 효과가 아니다).
+    """
+    ids_by_pid: dict[str, set[str]] = {}
+    state_by_pid: dict[str, set[Any]] = {}
+    pids_by_profile: dict[str, set[str]] = {}
+    for b in bases:
+        mode = b.get("svc_enroll_mode")
+        if mode not in ("store", "match"):
+            continue
+        pid, prof = str(b.get("participant")), str(b.get("svc_profile"))
+        ids_by_pid.setdefault(pid, set()).add(prof)
+        pids_by_profile.setdefault(prof, set()).add(pid)
+        if mode == "match":
+            state_by_pid.setdefault(pid, set()).add(b.get("svc_profile_sha256"))
+    problems = [f"{pid}: 등록 ID가 여럿입니다({', '.join(sorted(v))})" for pid, v in sorted(ids_by_pid.items()) if len(v) > 1]
+    problems += [f"{pid}: 서로 다른 등록 상태로 채점한 클립이 섞여 있습니다(profile_sha256 {len(v)}가지)"
+                 for pid, v in sorted(state_by_pid.items()) if len(v) > 1]
+    problems += [f"등록 {prof}을(를) 여러 사람이 썼습니다({', '.join(sorted(v))})"
+                 for prof, v in sorted(pids_by_profile.items()) if len(v) > 1]
+    return problems
+
+
+def enroll_source_counts(evals: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """판정에서 등록 1등을 본 출처별 클립 수 {service, offline, none}."""
+    out = {"service": 0, "offline": 0, "none": 0}
+    for e in evals:
+        out[e.get("enroll_from") or "none"] += 1
+    return out
+
+
+def _close(a: float | None, b: float | None, tol: float) -> bool:
+    """둘 다 None이거나 차이가 tol 이하."""
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(float(a) - float(b)) <= tol
+
+
+def enroll_check(evals: list[dict[str, Any]], rule: Rule) -> dict[str, Any]:
+    """서버 등록 match 결과의 within·agree·accepted가 이 규칙의 D로 다시 판정한 값과 같은지 (서버 기준값·계산 확인용).
+
+    다시 판정: within = status ok이고 D가 있고 거리 ≤ D, agree = 등록 1등 = 서버 글자 1등, accepted = within and agree.
+    서버가 적은 max_distance가 D와 다른 클립, top_id·distance가 distances의 최솟값과 다른 클립도 센다.
+    """
+    sel = [e for e in evals if e.get("svc_enroll_mode") == "match"]
+    mism: list[str] = []
+    dmism: list[str] = []
+    incons: list[str] = []
+    statuses: dict[str, int] = {}
+    D = rule.max_distance
+    for e in sel:
+        st = str(e.get("svc_enroll_status"))
+        statuses[st] = statuses.get(st, 0) + 1
+        ok = st == "ok" and e.get("svc_tmpl_dist") is not None
+        within = bool(ok and D is not None and float(e["svc_tmpl_dist"]) <= D)
+        agree = bool(ok and e.get("svc_tmpl_top") == e.get("phrase_top") and e.get("phrase_top") is not None)
+        want = {"within": within, "agree": agree, "accepted": within and agree}
+        got = {"within": bool(e.get("svc_within")), "agree": bool(e.get("svc_agree")), "accepted": bool(e.get("svc_accepted"))}
+        if want != got:
+            mism.append(f"{e['file']}:{','.join(k for k in want if want[k] != got[k])}")
+        if not _close(e.get("svc_max_distance"), D, common.RULE_TOL):
+            dmism.append(e["file"])
+        dists = e.get("svc_tmpl_dists")
+        if dists:
+            best = min(dists.values())
+            if not _close(dists.get(e.get("svc_tmpl_top")), best, ENROLL_DIST_TOL) or \
+                    not _close(e.get("svc_tmpl_dist"), best, ENROLL_DIST_TOL):
+                incons.append(e["file"])
+    return {"n": len(sel), "statuses": statuses, "mismatch": len(mism), "mismatch_files": sorted(mism)[:20],
+            "max_distance_mismatch": len(dmism), "max_distance_mismatch_files": sorted(dmism)[:20],
+            "top_inconsistent": len(incons), "top_inconsistent_files": sorted(incons)[:20], "rule_max_distance": D}
+
+
+def rule_check(evals: list[dict[str, Any]], rule: Rule, expected: dict[str, float | None] | None = None) -> dict[str, Any]:
+    """서버가 phrase.rule에 적은 기준값이 기대 값과 같은지 (서버를 같은 기준값으로 켰는지 확인용, 전체 목록만).
+
+    expected를 주지 않으면 이 규칙의 값(등록 거리는 rule.max_distance)과 비교한다. 동결 파일로 볼 때는
+    common.expected_server_rule(동결 파일)을 준다(등록 결과가 없는 행도 서버는 동결 D로 켜져 있어야 한다).
+    """
+    want = expected if expected is not None else {
+        "min_margin": rule.min_margin, "min_score": rule.min_score, "possible_min_score": rule.possible_min_score,
+        "enroll_max_distance": rule.max_distance}
+    with_rule = [e for e in evals if isinstance(e.get("server_rule"), dict)]
+    mism: list[str] = []
+    fields: dict[str, int] = {}
+    for e in with_rule:
+        bad = [k for k in common.SERVER_RULE_KEYS if not _close(e["server_rule"].get(k), want[k], common.RULE_TOL)]
+        for k in bad:
+            fields[k] = fields.get(k, 0) + 1
+        if bad:
+            mism.append(e["file"])
+    values = sorted({tuple(e["server_rule"].get(k) for k in common.SERVER_RULE_KEYS) for e in with_rule},
+                    key=lambda t: str(t))
+    return {"n": len(with_rule), "mismatch": len(mism), "mismatch_files": sorted(mism)[:20], "fields": fields,
+            "server_values": [dict(zip(common.SERVER_RULE_KEYS, v)) for v in values][:5], "expected": want}
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +601,8 @@ def command_table(evals: list[dict[str, Any]]) -> dict[str, Any]:
     return {"n": len(cmd), "ranked": len(ranked), "top1_correct": sum(e["top"] == e["truth"] for e in ranked),
             "shown": count(len(shown), len(cmd)), "shown_wrong": count(len(wrong), len(shown)),
             "shown_wrong_clips": sorted(f"{e['file']}->{e['chosen_id']}" for e in wrong),
-            "via_enroll": sum(e.get("via") == "enroll" for e in shown), "outcomes": outcome_counts(cmd)}
+            "via_enroll": sum(e.get("via") == "enroll" for e in shown),
+            "via_enroll_wrong": sum(e.get("via") == "enroll" for e in wrong), "outcomes": outcome_counts(cmd)}
 
 
 def emergency_recall(evals: list[dict[str, Any]], rule: Rule) -> dict[str, Any]:
@@ -496,6 +731,9 @@ def summarize(evals: list[dict[str, Any]], rule: Rule, commands: dict[str, Any])
         "window_length": window_length_table(evals, commands),
         "latency_seconds": latency_table(evals),
         "server_accepted_check": accepted_check(evals, rule) if rule.ids is None else None,
+        "server_rule_check": rule_check(evals, rule) if rule.ids is None else None,
+        "server_enroll_check": enroll_check(evals, rule) if rule.ids is None else None,
+        "enroll_sources": enroll_source_counts(evals),
     }
 
 

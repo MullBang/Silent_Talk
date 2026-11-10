@@ -36,6 +36,21 @@ FREEZE_SCHEMA = "ward-freeze-v1"
 FEATURE_NAME = "olkavs_medium_hidden_256"
 DISTANCE_NAME = "dtw_cosine_unit_steps_over_path_length"
 ENROLL_TEMPLATES = ("voiced", "silent1", "both")
+# 서버 등록(내 입 모양 등록, backend/services/ward_profiles.py)이 쓰는 템플릿 방식: 명령마다 소리 내어 한 번
+SERVICE_TEMPLATE = "voiced"
+# 서버 등록 ID 규칙 (backend/services/ward_profiles.py와 같다)
+PROFILE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
+"""서버 등록 이름 규칙 (fullmatch로 쓴다: '$'는 끝의 줄바꿈도 받아들이므로 쓰지 않는다)."""
+WINDOWS_RESERVED_NAMES = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(10)),
+                                    *(f"LPT{i}" for i in range(10))})
+"""서버(backend/services/ward_profiles.py)가 거부하는 Windows 장치 이름 (대소문자 무관)."""
+# 서버가 병실 결과 phrase.rule에 적는 기준값 키와 그 환경 변수 (backend/config.py)
+SERVER_RULE_KEYS = ("min_margin", "min_score", "possible_min_score", "enroll_max_distance")
+SERVER_RULE_ENV = {"min_margin": "LIPNET_OLKAVS_WARD_MIN_MARGIN", "min_score": "LIPNET_OLKAVS_WARD_MIN_SCORE",
+                   "possible_min_score": "LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE",
+                   "enroll_max_distance": "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE"}
+ENV_NONE = "none"  # 환경 변수로 '쓰지 않음'을 줄 때의 값 (backend/config.py가 ''·none을 None으로 읽는다)
+RULE_TOL = 1e-9    # 서버가 쓴 기준값과 동결 값을 같다고 볼 차이
 
 VIDEO_SUFFIXES = (".webm", ".mp4")
 LISTING_FORMAT = ("UTF-8 text, one line per regular file 'name<TAB>size_bytes<TAB>sha256_hex', lines sorted by name "
@@ -242,10 +257,135 @@ def freeze_gate(freeze_path: str | os.PathLike[str] | None, allow_sealed: bool) 
     problems = sealed_ok(freeze, state)
     if allow_sealed and problems:
         raise SealedDataError("봉인 자료 처리 조건이 맞지 않습니다: " + "; ".join(problems))
+    fz = freeze if isinstance(freeze, dict) else {}
     return {"path": str(path), "sha256": file_sha256(path),
-            "status": freeze.get("status") if isinstance(freeze, dict) else None,
+            "status": fz.get("status"),
             "commit": state.get("commit"), "commit_time": state.get("commit_time"), "sealed_ok": not problems,
-            "full_list": freeze.get("full_list") if isinstance(freeze, dict) else None}
+            "full_list": fz.get("full_list"),
+            "decision_rule": fz.get("decision_rule") if isinstance(fz.get("decision_rule"), dict) else None,
+            "enrollment": fz.get("enrollment") if isinstance(fz.get("enrollment"), dict) else None}
+
+
+# ---------------------------------------------------------------------------
+# 서버 기준값 (phrase.rule·/health thresholds)과 동결 값
+# ---------------------------------------------------------------------------
+
+def is_template(row: dict[str, Any], template: str) -> bool:
+    """등록 템플릿 클립인가: 병실 묶음의 서 있는 자세 명령 중 소리 내어 1회(voiced), 소리 없이 1회(silent1), 또는 둘 다(both).
+
+    ward_enroll.py(오프라인 등록)와 ward_service_batch.py --enroll-from voiced(서버 등록)가 같은 규칙으로 등록 영상을 고른다.
+
+    Raises:
+        ValueError: 알 수 없는 템플릿 방식
+    """
+    if template not in ENROLL_TEMPLATES:
+        raise ValueError(f"알 수 없는 템플릿 방식: {template}")
+    try:
+        if not (isinstance(row.get("session"), str) and row["session"].startswith("ward_")) or row.get("kind") != "fixed":
+            return False
+        if (row.get("posture") or "upright") != "upright" or row.get("rep") != 1:
+            return False
+        cond = row.get("condition")
+    except AttributeError as exc:
+        raise ValueError(f"클립 기록 형식 오류: {row!r}") from exc
+    return (template in ("voiced", "both") and cond == "voiced") or (template in ("silent1", "both") and cond == "silent")
+
+
+def valid_profile_id(value: Any) -> bool:
+    """서버 등록 ID 규칙(영문·숫자·_·- 1~32자, Windows 장치 이름 제외)에 맞는가 (서버 is_valid_profile_id와 같다)."""
+    try:
+        return (isinstance(value, str) and PROFILE_ID_RE.fullmatch(value) is not None
+                and value.upper() not in WINDOWS_RESERVED_NAMES)
+    except TypeError:
+        return False
+
+
+def _num_or_none(value: Any) -> float | None | str:
+    """숫자면 float, None이면 None, 그 밖은 '?'(형식 오류 표시)."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return "?"
+
+
+def expected_server_rule(freeze: dict[str, Any] | None) -> dict[str, float | None] | None:
+    """동결 파일(또는 freeze_gate 결과) → 서버가 써야 할 병실 기준값 {min_margin, min_score, possible_min_score,
+    enroll_max_distance}. 동결 파일이 없거나 full_list가 없으면 None.
+
+    긴급 가능성 하한은 decision_rule.possible_min_score, 등록 거리는 enrollment.max_distance다(없으면 None = 쓰지 않음).
+    """
+    try:
+        if not isinstance(freeze, dict) or not isinstance(freeze.get("full_list"), dict):
+            return None
+        full = freeze["full_list"]
+        rule = freeze.get("decision_rule") if isinstance(freeze.get("decision_rule"), dict) else {}
+        enr = freeze.get("enrollment") if isinstance(freeze.get("enrollment"), dict) else {}
+        out = {"min_margin": _num_or_none(full.get("min_margin")), "min_score": _num_or_none(full.get("min_score")),
+               "possible_min_score": _num_or_none(rule.get("possible_min_score")),
+               "enroll_max_distance": _num_or_none(enr.get("max_distance"))}
+    except (AttributeError, TypeError) as exc:
+        raise ValueError(f"동결 파일 기준값 형식 오류: {exc}") from exc
+    if any(v == "?" for v in out.values()):
+        raise ValueError(f"동결 파일 기준값이 숫자가 아닙니다: {out}")
+    return out  # type: ignore[return-value]
+
+
+def rule_values_problems(server: Any, expected: dict[str, float | None] | None,
+                         keys: Iterable[str] = SERVER_RULE_KEYS) -> list[str]:
+    """서버가 쓴 기준값(phrase.rule 또는 /health thresholds)이 기대 값과 다른 항목 (문제 목록, 없으면 빈 목록).
+
+    expected가 None이면 확인하지 않는다. 서버 값이 없으면(옛 서버): 기대 값 중 하한·등록 거리가 None이 아니면 문제다
+    (옛 서버는 하한·등록을 쓰지 않으므로 글자 규칙만 같으면 같은 판정이다).
+    """
+    if expected is None:
+        return []
+    keys = tuple(keys)
+    if not isinstance(server, dict):
+        missing = [k for k in ("possible_min_score", "enroll_max_distance") if k in keys and expected.get(k) is not None]
+        return [f"서버가 기준값(rule)을 알려 주지 않습니다(옛 서버). 동결 값 {', '.join(f'{k}={expected[k]}' for k in missing)}"
+                "을 쓰는지 알 수 없습니다"] if missing else []
+    problems = []
+    for k in keys:
+        want, got = expected.get(k), _num_or_none(server.get(k))
+        if got == "?":
+            problems.append(f"{k}: 서버 값이 숫자가 아닙니다({server.get(k)!r})")
+        elif (want is None) != (got is None) or (want is not None and abs(float(want) - float(got)) > RULE_TOL):
+            problems.append(f"{k}: 서버 {got} ≠ 동결 {want}")
+    return problems
+
+
+def env_value(value: float | None) -> str:
+    """기준값 → 환경 변수 문자열 (None이면 'none')."""
+    if value is None:
+        return ENV_NONE
+    try:
+        return repr(float(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"환경 변수 값으로 바꿀 수 없습니다: {value!r}") from exc
+
+
+def parse_env_value(text: Any) -> float | None:
+    """환경 변수 문자열 → 기준값 (''·none은 None).
+
+    Raises:
+        ValueError: 숫자가 아닐 때
+    """
+    s = str(text if text is not None else "").strip()
+    if s == "" or s.lower() == ENV_NONE:
+        return None
+    try:
+        return float(s)
+    except ValueError as exc:
+        raise ValueError(f"환경 변수 값이 숫자가 아닙니다: {text!r}") from exc
+
+
+def server_env(expected: dict[str, float | None]) -> dict[str, str]:
+    """기준값 4개 → 서버 환경 변수 {LIPNET_OLKAVS_WARD_*: 문자열} (동결 파일 full_list.env)."""
+    try:
+        return {SERVER_RULE_ENV[k]: env_value(expected.get(k)) for k in SERVER_RULE_KEYS}
+    except (AttributeError, KeyError) as exc:
+        raise ValueError(f"기준값 형식 오류: {exc}") from exc
 
 
 def parse_time(value: Any) -> datetime | None:

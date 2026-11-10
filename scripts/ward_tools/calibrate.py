@@ -9,7 +9,8 @@ clearance(δ)를 주면 나쁜 클립은 한 축에서 δ 이상 떨어져야 �
 등록 거리 D: 글자 규칙을 통과하지 못한 클립 중 등록 거리만으로 표시되거나 긴급 가능성이 될 나쁜 클립의 최소 거리(막는 값)와,
 그보다 작은 정답 거리 중 최대값의 가운데. 막는 값을 모르거나(나쁜 클립 없음) 거리가 있는 목록 밖 클립이 사람마다 MIN_NEGATIVES_FOR_D개
 미만이면 D를 정하지 않는다. 세 함수 모두 P02·ward_eval 자료를 받지 않는다(호출하는 CLI가 막는다).
-긴급 가능성 점수 하한은 화면(wardMachine.js)에 없으므로 참고로만 계산하고, 동결 초안에는 --floor를 줄 때만 넣는다.
+긴급 가능성 점수 하한은 화면이 서버의 phrase.rule.possible_min_score로 쓴다. 근거로는 늘 계산하지만 동결 초안에는 --floor를 줄 때만
+넣는다(기본 null = 기획 9.3 그대로). 동결 파일의 기준값 4개는 full_list.env로 서버 환경 변수가 된다(validate_freeze가 값이 같은지 본다).
 """
 from __future__ import annotations
 
@@ -496,7 +497,8 @@ def fit_possible_floor(bases: list[dict[str, Any]], rule: mt.Rule, clearance: fl
                        conditions: Iterable[str] | None = None) -> dict[str, Any]:
     """긴급 명령 클립을 하나도 긴급(빨간 카드·가능성)에서 빼지 않는 가장 높은 긴급 가능성 점수 하한에서 clearance를 뺀 값.
 
-    글자 규칙으로 고르지 못해 '1·2등에 긴급' 길로만 긴급에 닿는 긴급 명령 클립의 긴급 후보 점수 중 최솟값이 필요한 하한이다.
+    글자 규칙으로 고르지 못해 '1·2등에 긴급' 길로 긴급에 닿는 긴급 명령 클립(등록으로 일반 명령을 고른 클립 포함)의
+    긴급 후보 점수 중 최솟값이 필요한 하한이다.
     그런 클립이 없으면 하한을 정할 근거가 없어 floor=None이다. conditions를 주면 그 조건의 긴급 명령 클립만 본다.
     """
     conds = set(conditions) if conditions is not None else None
@@ -504,7 +506,10 @@ def fit_possible_floor(bases: list[dict[str, Any]], rule: mt.Rule, clearance: fl
     ev = mt.evaluate_all(bases, plain)
     em = [e for e in ev if e["role"] == mt.ROLE_COMMAND and e["truth"] in rule.emergency_ids
           and (conds is None or e["condition"] in conds)]
-    rely = [(ps, e["file"]) for e in em if e.get("chosen_id") is None and e["outcome"] == mt.OUT_POSSIBLE
+    # 고르지 못한 클립, 그리고 등록으로 일반 명령을 골랐지만 글자 2등 긴급 때문에 긴급 가능성이 된 클립이 하한에 기댄다.
+    rely = [(ps, e["file"]) for e in em if e["outcome"] == mt.OUT_POSSIBLE
+            and (e.get("chosen_id") is None
+                 or (e.get("via") == "enroll" and e["chosen_id"] not in rule.emergency_ids))
             and (ps := mt.possible_score(e["top"], e["runner_up"], e["margin"], e["score"], plain)) is not None]
     needed = min(rely)[0] if rely else None
     floor = (needed - clearance) if needed is not None else None
@@ -547,6 +552,46 @@ def _is_sha(value: Any) -> bool:
 
 def _finite(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+
+
+def freeze_env(d: dict[str, Any]) -> dict[str, str]:
+    """동결 파일의 기준값 4개(전체 목록 M·S, 긴급 가능성 하한, 등록 거리 D) → 서버 환경 변수 (full_list.env에 쓰는 값).
+
+    Raises:
+        ValueError: 기준값 형식이 틀렸을 때
+    """
+    expected = common.expected_server_rule(d)
+    if expected is None:
+        raise ValueError("동결 파일에 full_list가 없습니다")
+    return common.server_env(expected)
+
+
+def env_problems(d: dict[str, Any]) -> list[str]:
+    """full_list.env가 동결 기준값 4개와 같은지 (문제 목록). 사람이 값을 고친 뒤 env를 고치지 않으면 서버가 다른 값으로 켜진다."""
+    try:
+        want = common.expected_server_rule(d)
+    except ValueError as exc:
+        return [str(exc)]
+    if want is None:
+        return []
+    env = (d.get("full_list") or {}).get("env")
+    if not isinstance(env, dict):
+        return ["full_list.env가 없습니다(서버 환경 변수)"]
+    problems = []
+    for key in common.SERVER_RULE_KEYS:
+        name = common.SERVER_RULE_ENV[key]
+        if name not in env:
+            problems.append(f"full_list.env에 {name}이(가) 없습니다(값 {want[key]} → {common.env_value(want[key])!r})")
+            continue
+        try:
+            got = common.parse_env_value(env[name])
+        except ValueError as exc:
+            problems.append(f"full_list.env.{name}: {exc}")
+            continue
+        if (got is None) != (want[key] is None) or (got is not None and abs(got - float(want[key])) > common.RULE_TOL):
+            problems.append(f"full_list.env.{name}={env[name]!r}이(가) 동결 값 {want[key]}과 다릅니다"
+                            f"(값을 고쳤으면 env도 {common.env_value(want[key])!r}로 고치세요)")
+    return problems
 
 
 def validate_freeze(d: Any, allow_synthetic: bool = False) -> list[str]:
@@ -603,8 +648,13 @@ def validate_freeze(d: Any, allow_synthetic: bool = False) -> list[str]:
                 problems.append("enrollment.max_distance가 막는 거리 없이(unbounded) 정한 값입니다")
             if enr.get("template") not in common.ENROLL_TEMPLATES:
                 problems.append(f"enrollment.template은 {common.ENROLL_TEMPLATES} 중 하나여야 합니다: {enr.get('template')!r}")
+            elif enr.get("template") != common.SERVICE_TEMPLATE:
+                problems.append(f"enrollment.template이 {enr.get('template')!r}입니다. D는 서버 환경 변수로 들어가고 서버 등록은 "
+                                f"{common.SERVICE_TEMPLATE!r}(소리 내어 한 번)만 쓰므로 {common.SERVICE_TEMPLATE!r}로 정한 D만 동결합니다")
             if enr.get("feature") != common.FEATURE_NAME or enr.get("distance") != common.DISTANCE_NAME:
                 problems.append("enrollment.feature·distance 이름이 ward_enroll.py와 다릅니다")
+        if isinstance(enr, dict) and enr.get("source") not in (None, "service", "offline"):
+            problems.append(f"enrollment.source는 service·offline·null 중 하나여야 합니다: {enr.get('source')!r}")
     rule = d.get("decision_rule") or {}
     if rule.get("possible_ranks") not in (1, 2):
         problems.append("decision_rule.possible_ranks는 1 또는 2여야 합니다")
@@ -612,8 +662,9 @@ def validate_freeze(d: Any, allow_synthetic: bool = False) -> list[str]:
     if floor is not None and not (_finite(floor) and float(floor) <= 0):
         problems.append(f"decision_rule.possible_min_score는 0 이하의 수 또는 null이어야 합니다: {floor!r}")
     elif floor is not None and rule.get("floor_implemented_in_ui") is not True:
-        problems.append("decision_rule.possible_min_score가 있지만 화면(wardMachine.js)에 하한이 없습니다"
-                        "(floor_implemented_in_ui가 true가 아님). 화면에 먼저 넣거나 null로 두세요")
+        problems.append("decision_rule.possible_min_score가 있지만 floor_implemented_in_ui가 true가 아닙니다(하한을 쓰는 "
+                        "화면 코드로 만든 초안이 아님). 지금 도구로 초안을 다시 만들거나 null로 두세요")
+    problems += env_problems(d)
     for sf in d.get("sealed_folders") or []:
         if not isinstance(sf, dict) or not _is_sha(sf.get("listing_sha256")) or not isinstance(sf.get("files"), int):
             problems.append(f"sealed_folders 항목에 listing_sha256·files가 없습니다: {sf!r}"[:200])
@@ -637,10 +688,11 @@ def validate_freeze(d: Any, allow_synthetic: bool = False) -> list[str]:
 
 
 def rule_from_freeze(freeze: dict[str, Any], which: str = "full", with_enrollment: bool = False,
-                     apply_floor: bool = False) -> mt.Rule:
+                     apply_floor: bool = True) -> mt.Rule:
     """동결 파일 → 판정 규칙. which = 'full'(전체 목록, 서비스 phrase) 또는 'reduced'(축소 목록, 후보별 점수 필요).
 
-    긴급 가능성 점수 하한은 apply_floor일 때만 넣는다(기본은 화면이 실제로 쓰는 규칙 = 하한 없음).
+    긴급 가능성 점수 하한은 기본으로 넣는다(화면이 서버의 phrase.rule.possible_min_score를 쓰므로 앱과 같은 규칙).
+    apply_floor=False는 하한 없이 비교할 때만 쓴다.
 
     Raises:
         ValueError: 동결 파일 형식이 틀렸거나 요청한 목록·D가 없을 때
