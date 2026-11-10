@@ -226,7 +226,7 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
 /**
  * 설정 창.
  * @param {object} props
- * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string, inputMode:'switch'|'direct'}} props.settings
+ * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string, inputMode:'switch'|'direct', showPhrases:boolean}} props.settings
  * @param {(patch: object) => void} props.onChange
  * @param {() => void} props.onClose
  * @param {object|null} props.voice 오프라인 한국어 음성(없으면 null).
@@ -372,6 +372,11 @@ export default function WardSettingsPanel({
             <label className="settings-check">
               <input type="checkbox" checked={settings.nightMute} onChange={(e) => onChange({ nightMute: e.target.checked })} className="settings-check-input" />
               <span>밤 무음 ({NIGHT_START_HOUR}시~{NIGHT_END_HOUR}시 음성 읽기 끔)</span>
+            </label>
+
+            <label className="settings-check">
+              <input type="checkbox" checked={settings.showPhrases !== false} onChange={(e) => onChange({ showPhrases: e.target.checked })} className="settings-check-input" />
+              <span>말할 수 있는 문장 목록 보이기 (환자 화면 아래쪽)</span>
             </label>
           </section>
 

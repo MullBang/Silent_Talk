@@ -89,3 +89,20 @@
 /* 좁은 화면에서도 '시연용 연구 시제품 · 실제 환자 미검증'을 숨기지 않는다. */
 @media(max-width:1023px){.patient-prototype{display:inline;font-size:11px;}}
 @media(max-width:600px){.patient-preview-msg{font-size:11px;line-height:1.35;padding:4px;}}
+/* 말할 수 있는 문장 (지금 쓰는 목록의 입 모양 문장, 분류별). */
+.patient-phrases{padding:18px 20px;border:1px solid #d7dfeb;border-radius:16px;background:white;}
+.patient-phrases-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.patient-phrases-heading h2{font-size:17px;font-weight:800;}
+.patient-phrases-heading h2 span{font-size:13px;font-weight:600;color:#52647a;margin-left:6px;}
+.patient-phrases-heading p{font-size:14px;color:#3d5069;margin-top:4px;}
+.patient-phrase-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px;}
+.patient-phrase-group{background:#f5f8fc;border:1px solid #e5ebf3;border-radius:12px;padding:12px 14px;min-width:0;}
+.patient-phrase-group h3{font-size:13px;font-weight:800;color:#38587c;margin-bottom:8px;}
+.patient-phrase-group ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;}
+.patient-phrase-group li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:19px;font-weight:700;line-height:1.45;color:#172b45;word-break:keep-all;overflow-wrap:anywhere;}
+.patient-phrase-group li.is-emergency .patient-phrase-text{color:#991b1b;}
+.patient-phrase-text{min-width:0;}
+.patient-phrase-tag{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:750;border:1px solid #c5d0de;border-radius:5px;padding:1px 6px;color:#42536c;background:#fff;}
+.patient-phrase-tag.is-emergency{color:#991b1b;border-color:#f3c7c7;}
+.patient-phrase-tag svg{width:13px;height:13px;}
+@media(max-width:600px){.patient-phrases{padding:15px;}.patient-phrase-groups{grid-template-columns:1fr;gap:9px;}.patient-phrase-group li{font-size:18px;}}

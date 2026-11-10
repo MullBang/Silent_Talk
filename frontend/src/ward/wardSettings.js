@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   commandList: '', // 병실 화면이 쓰는 명령 목록. ''이면 기본 목록.
   enrollProfileByList: Object.freeze({}), // 내 목록 ID → 그 목록의 등록 이름.
   inputMode: 'switch', // 'switch': 아무 키·화면 누름 = 스위치(스캐닝), 'direct': 고를 항목을 직접 누름.
+  showPhrases: true, // 환자 화면에 말할 수 있는 입 모양 문장 목록을 펼쳐 둘지 (외우지 않아도 되게).
 });
 
 /**
@@ -166,6 +167,7 @@ export function normalizeSettings(raw) {
       commandList: normalizeCommandList(src.commandList),
       enrollProfileByList: normalizeEnrollProfileByList(src.enrollProfileByList),
       inputMode: src.inputMode === 'direct' ? 'direct' : 'switch',
+      showPhrases: src.showPhrases !== false,
     };
   } catch {
     return { ...DEFAULT_SETTINGS, enrollProfileByList: {} };

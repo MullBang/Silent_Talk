@@ -16,6 +16,7 @@ import useRecorder from '../hooks/useRecorder';
 import { blurAfterPointerClick } from '../record/pointerFocus';
 import COMMANDS from '../ward/commands.json';
 import PracticePanel from '../ward/PracticePanel';
+import PhrasePanel from '../ward/PhrasePanel';
 import RoomPanel from '../ward/RoomPanel';
 import { AlertIcon, CheckIcon } from '../ward/WardIcons';
 import WardSettingsPanel from '../ward/WardSettingsPanel';
@@ -508,7 +509,7 @@ export default function WardPage() {
   const displayedHeadline = welcome ? '어떤 도움이 필요하세요?' : view.headline;
   const displayedSub = machine.phase === 'scan'
     ? (direct ? '원하는 항목을 직접 누르세요' : '파란 항목이 원하는 요청일 때 스위치를 누르세요')
-    : welcome ? `${settings.recordSeconds}초 동안 입 모양을 촬영합니다. 준비되면 시작해 주세요.`
+    : welcome ? `${settings.recordSeconds}초 동안 입 모양을 촬영합니다. 준비되면 시작해 주세요.${settings.showPhrases ? ' 말할 문장은 아래 목록에 있어요.' : ''}`
       : machine.phase === 'idle' && machine.screen?.kind === 'sent' && !machine.cards[machine.screen.cardId]?.acked ? '요청 전송 · 간호사 확인 대기' : view.sub;
   const press = (intent) => { unlockAudio(); dispatch({ type: 'PRESS', intent }); };
   const scanHighlight = machine.phase === 'scan' && !direct ? `${scanToken(machine)}:${machine.scan?.index}` : null;
@@ -688,6 +689,14 @@ export default function WardPage() {
       </main>
 
       <div className="patient-secondary-content">
+        {/* 말할 수 있는 입 모양 문장 (지금 쓰는 목록, 연습 모드는 기본 목록). 내 목록을 쓸 수 없는 동안에는 보이지 않는다. */}
+        {!machine.lipBlock && (
+          <PhrasePanel
+            index={machine.index}
+            open={settings.showPhrases}
+            onToggle={() => changeSettings({ showPhrases: !settings.showPhrases })}
+          />
+        )}
         <RoomPanel room={machine.room} />
         {practice && (
           <PracticePanel

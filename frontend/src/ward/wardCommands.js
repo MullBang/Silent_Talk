@@ -160,6 +160,29 @@ export function isCancelCommand(command) {
 }
 
 /**
+ * 환자 화면 '말할 수 있는 문장' 칸에 보일 묶음. 지금 쓰는 목록(기본 목록 또는 내 목록)의 분류 순서대로,
+ * 명령이 없는 분류는 뺀다. 문장은 인식용 입 모양 문장(text)이고, 화면용 문장(display)은 함께 넘겨 보조로 쓴다.
+ * @param {{list?: Array<object>, categories?: Array<{id:string, label:string, commands:Array<object>}>}|null} index
+ * @returns {Array<{id:string, label:string, commands:Array<{id:string, text:string, display:string, emergency:boolean, cancel:boolean}>}>}
+ */
+export function phraseGroups(index) {
+  try {
+    const cats = Array.isArray(index?.categories) ? index.categories : [];
+    return cats
+      .map((cat) => ({
+        id: String(cat.id),
+        label: String(cat.label),
+        commands: (Array.isArray(cat.commands) ? cat.commands : []).map((c) => ({
+          id: c.id, text: c.text, display: c.display, emergency: c.emergency === true, cancel: isCancelCommand(c),
+        })),
+      }))
+      .filter((cat) => cat.commands.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * ID로 명령을 찾는다. 없으면 null.
  * @param {{byId: Map<string, object>}} index
  * @param {string|null|undefined} id
