@@ -17,10 +17,12 @@ import { safeLocalStorage } from '../ward/wardSettings';
 import { ALARM_REPEAT_MS, createBeeper } from '../ward/wardSound';
 import {
   ackNurseCard, cardEnrollNote, cardHeadline, cardLabel, cardListNote, clearAcked, dropRoom, hasOpenAlarm, hhmm, isAlarmKind, isOverdue, loadNurseCards,
-  loadNursePrefs, noteRoomState, pruneRooms, saveNurseCards, saveNursePrefs, sortNewestFirst, upsertNurseCard,
+  loadNursePrefs, noteRoomState, pruneRooms, saveNurseCards, saveNursePrefs, upsertNurseCard,
   NURSE_STORAGE_KEY,
 } from '../ward/wardStore';
 import { WARD_COLORS } from '../ward/wardTheme';
+import { NURSE_FILTERS, ackClickAllowed, nurseSummary, visibleNurseCards, waitingText } from '../ward/nursePresentation';
+import '../ward/nurse-ui.css';
 
 /**
  * 카드 색 (색만으로 구분하지 않고 글자 표시와 아이콘을 함께 쓴다).
@@ -29,8 +31,8 @@ import { WARD_COLORS } from '../ward/wardTheme';
  * @returns {object}
  */
 function cardStyle(card, overdue) {
-  const ring = overdue ? { boxShadow: `0 0 0 6px ${WARD_COLORS.overdueBg}, 0 0 0 9px ${WARD_COLORS.ink}` } : {};
-  if (card.acked) return { background: WARD_COLORS.paper, color: WARD_COLORS.inkSoft, borderColor: WARD_COLORS.line };
+  const ring = overdue ? { boxShadow: `0 0 0 3px ${WARD_COLORS.overdueBg}, 0 6px 20px rgba(20,45,78,.05)` } : {};
+  if (card.acked) return { background: '#f8fafc', color: WARD_COLORS.inkSoft, borderColor: '#d7dfeb' };
   if (card.kind === 'emergency' || card.kind === 'emergency_call') {
     return { background: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyInk, borderColor: WARD_COLORS.emergencyBg, ...ring };
   }
@@ -40,7 +42,7 @@ function cardStyle(card, overdue) {
   if (card.kind === 'check') {
     return { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: WARD_COLORS.line, borderStyle: 'dashed', ...ring };
   }
-  return { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: WARD_COLORS.ink, ...ring };
+  return { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: '#d7dfeb', ...ring };
 }
 
 /**
@@ -60,9 +62,17 @@ export default function NursePage() {
   const [now, setNow] = useState(() => Date.now());
   const [rooms, setRooms] = useState({});
   const [channelOk, setChannelOk] = useState(true);
+  const [filter, setFilter] = useState('open');
+  const [notice, setNotice] = useState(null);
   const beeperRef = useRef(null);
   if (!beeperRef.current) beeperRef.current = createBeeper();
   const channelRef = useRef(null);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   /** 카드 목록 바꾸기 + 저장. */
   const commit = useCallback((next) => {
@@ -145,16 +155,24 @@ export default function NursePage() {
     if (ok) beeperRef.current.play('normal');
   }, []);
 
-  const ack = useCallback((cardId) => {
-    const r = ackNurseCard(cardsRef.current, cardId, Date.now());
+  // 확인한 카드는 목록에서 빠지거나 자리를 옮겨 다음 카드가 같은 자리로 온다. 두 번 누르기의 두 번째 누름이
+  // 보지 못한 다음 카드(긴급일 수도 있음)를 확인하지 않게, 방금 확인한 직후의 누름은 무시한다.
+  const lastAckAtRef = useRef(null);
+  const ack = useCallback((cardId, event) => {
+    const at = Date.now();
+    if (!ackClickAllowed(lastAckAtRef.current, at, event?.detail)) return;
+    const r = ackNurseCard(cardsRef.current, cardId, at);
     if (!r.ackedIds.length) return;
+    lastAckAtRef.current = at;
     commit(r.cards);
     channelRef.current?.post('CARD_ACK', { cardIds: r.ackedIds, room: r.room });
+    setNotice({ text: `${r.room}호 카드를 확인 완료로 이동했습니다.`, id: Date.now() });
   }, [commit]);
 
   const clearDone = useCallback(() => {
     if (!globalThis.confirm?.('확인한 카드를 이 화면 기록에서 지울까요?')) return;
     commit(clearAcked(cardsRef.current));
+    setNotice({ text: '확인한 카드 기록을 지웠습니다.', id: Date.now() });
   }, [commit]);
 
   const setForward = useCallback((value) => {
@@ -163,65 +181,82 @@ export default function NursePage() {
     saveNursePrefs(storage, next);
   }, [storage]);
 
-  const sorted = sortNewestFirst(cards);
+  const sorted = useMemo(() => visibleNurseCards(cards, filter), [cards, filter]);
+  const summary = useMemo(() => nurseSummary(cards), [cards]);
   const openAlarm = hasOpenAlarm(cards);
+  const hiddenAlarms = summary.alarms - sorted.filter((card) => !card.acked && isAlarmKind(card.kind)).length;
   const roomList = Object.entries(rooms);
 
   return (
-    <div className="min-h-screen" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
-      <header data-no-switch className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.paper }} onClick={blurAfterPointerClick}>
-        <h1 className="text-2xl font-bold">간호사실 <span className="text-base font-semibold" style={{ color: WARD_COLORS.bannerInk }}>(시연용 모의 화면 · 실제 환자 미검증)</span></h1>
-        <button
-          type="button"
-          onClick={toggleSound}
-          aria-pressed={soundOn}
-          className="rounded-lg px-4 py-2 text-lg font-bold"
-          style={soundOn
-            ? { background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }
-            : { background: WARD_COLORS.bannerInk, color: WARD_COLORS.ink }}
-        >
-          {soundOn ? '소리 켜짐 (끄기)' : '소리 켜기'}
-        </button>
-        <label className="flex items-center gap-2 text-base">
-          <input type="checkbox" checked={prefs.forwardSwitch} onChange={(e) => setForward(e.target.checked)} className="h-5 w-5" />
-          이 창의 스위치(키) 입력을 환자 화면으로 넘기기
-        </label>
-        <button
-          type="button"
-          onClick={clearDone}
-          className="ml-auto rounded-lg border-2 px-3 py-1 text-base font-semibold"
-          style={{ borderColor: WARD_COLORS.paper, color: WARD_COLORS.paper }}
-        >
-          확인한 카드 지우기
-        </button>
+    <div className="nurse-page">
+      <header data-no-switch className="nurse-heading" onClick={blurAfterPointerClick}>
+        <div>
+          <p className="nurse-eyebrow">NURSE STATION</p>
+          <h1>간호사실</h1>
+          <p className="nurse-description">도착한 요청을 한눈에 확인하세요. <span className="nurse-prototype-inline">시연용 모의 화면 · 실제 환자 미검증</span></p>
+        </div>
+        <div className="nurse-heading-actions">
+          <button type="button" onClick={toggleSound} aria-pressed={soundOn}
+            className={`nurse-button nurse-sound ${soundOn ? 'is-on' : ''}`}>
+            <span aria-hidden="true">♪</span> {soundOn ? '소리 켜짐 · 끄기' : '소리 켜기'}
+          </button>
+          <a href="#ward" target="_blank" rel="noopener noreferrer" className="nurse-button nurse-button-secondary">
+            환자 화면 열기 <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </header>
 
       {!soundOn && (
-        <p role="alert" className="px-4 py-2 text-lg font-bold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-          소리가 꺼져 있습니다. [소리 켜기]를 한 번 눌러 주세요{openAlarm ? ' — 확인하지 않은 긴급 카드가 있습니다' : ''}.
+        <p role={openAlarm ? 'alert' : 'status'} className={`nurse-sound-note ${openAlarm ? 'has-alarm' : ''}`}>
+          {openAlarm && <AlertIcon />} 소리가 꺼져 있습니다. 위의 ‘소리 켜기’를 눌러 주세요.
+          {openAlarm && <strong> 미확인 경보 카드 {summary.alarms}개가 있습니다.</strong>}
         </p>
       )}
       {!channelOk && (
-        <p role="alert" className="px-4 py-2 font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-          이 브라우저는 환자 화면과 연결할 수 없습니다 (BroadcastChannel 없음)
+        <p role="alert" className="nurse-sound-note has-alarm">
+          이 브라우저는 환자 화면과 연결할 수 없습니다. 다른 최신 브라우저로 열어 주세요.
         </p>
       )}
 
-      {roomList.length > 0 && (
-        <section aria-label="병실 상태" className="px-4 pt-3 text-base" style={{ color: WARD_COLORS.inkSoft }}>
-          {roomList.map(([key, info]) => (
-            <p key={key}>
-              <strong style={{ color: WARD_COLORS.ink }}>{info.room}호</strong> 환자 화면: {PHASE_LABELS[info.phase] || '알 수 없음'} · 가상 병실: {roomSummary(info.state)}
-            </p>
-          ))}
-        </section>
-      )}
+      <section className="nurse-summary" aria-label="요청 카드 요약">
+        <div className="nurse-stat"><span>미확인 카드</span><strong data-summary="open">{summary.open}<small>개</small></strong></div>
+        <div className="nurse-stat nurse-stat-alarm"><span>그중 경보 카드</span><strong data-summary="alarms">{summary.alarms}<small>개</small></strong><p>긴급 · 긴급 호출 · 긴급 가능성</p></div>
+        <div className="nurse-stat"><span>확인 완료</span><strong data-summary="acked">{summary.acked}<small>개</small></strong></div>
+      </section>
 
-      <main className="p-4">
+      <main className="nurse-main">
+        <div className="nurse-list-heading">
+          <div><h2>요청 목록</h2><p>같은 요청은 카드 하나에 횟수로 표시합니다.</p></div>
+          <div data-no-switch className="nurse-filters" role="group" aria-label="카드 목록 필터" onClick={blurAfterPointerClick}>
+            {NURSE_FILTERS.map((item) => (
+              <button key={item.id} type="button" data-filter={item.id} aria-pressed={filter === item.id}
+                onClick={() => setFilter(item.id)} className={filter === item.id ? 'is-active' : ''}>
+                {item.label} <span>{item.id === 'open' ? summary.open : item.id === 'acked' ? summary.acked : summary.total}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="nurse-feedback" role="status" aria-live="polite">{notice?.text || ''}</div>
+        {hiddenAlarms > 0 && (
+          <p className="nurse-hidden-alarm" data-no-switch onClick={blurAfterPointerClick}>
+            <AlertIcon /> 미확인 경보 카드 {hiddenAlarms}개가 다른 목록에 있습니다.
+            <button type="button" onClick={() => setFilter('open')}>미확인 보기</button>
+          </p>
+        )}
         {sorted.length === 0 ? (
-          <p className="text-xl" style={{ color: WARD_COLORS.inkSoft }}>아직 받은 요청이 없습니다. 환자 화면(#ward)을 같은 주소(localhost:5173)로 열어 두세요.</p>
+          <section className="nurse-empty" data-no-switch aria-label="빈 요청 목록" onClick={blurAfterPointerClick}>
+            <span className="nurse-empty-icon" aria-hidden="true"><CheckIcon /></span>
+            <h3>{summary.total === 0 ? '아직 도착한 요청이 없어요' : filter === 'acked' ? '확인 완료한 카드가 없어요' : '미확인 요청을 모두 확인했어요'}</h3>
+            <p>{summary.total === 0 ? '환자 화면에서 요청을 보내면 이곳에 카드가 나타납니다. 환자 화면은 이 화면과 같은 주소로 열어 주세요.' : filter === 'acked' ? '요청 카드의 ‘확인’을 누르면 이 목록에서 다시 볼 수 있습니다.' : '확인한 카드는 ‘확인 완료’ 목록에 보관되어 있습니다.'}</p>
+            {summary.total === 0 ? (
+              <div className="nurse-empty-actions">
+                <a href="#ward" target="_blank" rel="noopener noreferrer" className="nurse-button">환자 화면 새 창으로 열기 ↗</a>
+                <a href="#ward?practice=1" target="_blank" rel="noopener noreferrer" className="nurse-button nurse-button-secondary">연습 화면 열기</a>
+              </div>
+            ) : filter === 'open' && <button type="button" className="nurse-button nurse-button-secondary" onClick={() => setFilter('acked')}>확인 완료 보기</button>}
+          </section>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="nurse-card-list">
             {sorted.map((card) => {
               const overdue = isOverdue(card, now);
               const alarm = isAlarmKind(card.kind);
@@ -232,66 +267,82 @@ export default function NursePage() {
               const enrollNote = cardEnrollNote(card);
               const listNote = cardListNote(card);
               return (
-                <li key={card.id} data-card-id={card.id} data-kind={card.kind} className="rounded-xl border-4 px-4 py-3" style={style}>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <span className="text-2xl font-bold">{card.room}호</span>
+                <li key={card.id} data-card-id={card.id} data-kind={card.kind} data-acked={card.acked ? 'true' : 'false'} className={`nurse-card ${card.acked ? 'is-acked' : ''}`} style={style}>
+                  <div className="nurse-card-top">
+                    <strong className="nurse-room">{card.room}호</strong>
                     {label && (
-                      <span className="flex items-center gap-1 text-2xl font-black">
+                      <span className="nurse-kind">
                         {alarm && <AlertIcon />} {label}
                       </span>
                     )}
-                    {headline && <span className="text-3xl font-bold">{headline}</span>}
+                    {!label && <span className="nurse-kind">일반 요청</span>}
+                    {card.count > 1 && <span className="nurse-count">같은 요청 ×{card.count}</span>}
+                    {listNote && <span data-list-tag={card.list?.id} className="nurse-list-tag">{listNote}</span>}
+                    {alarm && !card.acked && <span className="nurse-alarm-label">{soundOn ? '반복음 켜짐' : '알림음 꺼짐'}</span>}
+                  </div>
+                  <div className="nurse-card-content">
+                    {headline && <h3>{headline}</h3>}
                     {card.candidates?.length > 0 && !card.selectedId && (
-                      <span className="text-2xl font-semibold" style={{ color: estimateColor }}>
+                      <p className="nurse-candidates" style={{ color: estimateColor }}>
                         추정: {card.candidates.map((c) => c.text).join(' / ')}
-                      </span>
+                      </p>
                     )}
-                    {card.count > 1 && <span className="text-2xl font-black">×{card.count}</span>}
-                    {listNote && (
-                      <span
-                        data-list-tag={card.list?.id}
-                        className="rounded-md border-2 px-2 py-0.5 text-base font-semibold"
-                        style={{ borderColor: 'currentColor' }}
-                      >
-                        {listNote}
-                      </span>
-                    )}
-                    <span className="text-xl">{hhmm(card.firstAt)}{card.count > 1 || card.lastAt !== card.firstAt ? ` · 최근 ${hhmm(card.lastAt)}` : ''}</span>
-                    {alarm && !card.acked && <span className="text-lg font-bold">반복음</span>}
-                    <span data-no-switch className="ml-auto" onClick={blurAfterPointerClick}>
+                    {card.cancelRequested && <p className="nurse-cancel-request"><AlertIcon /> 환자가 취소 요청함</p>}
+                    {card.hint && <p className="nurse-card-hint">{card.hint}</p>}
+                    {card.note && !card.cancelRequested && <p className="nurse-card-note">{card.note}</p>}
+                    {enrollNote && <p data-enroll-note={card.enroll} className="nurse-card-note nurse-enroll-note">{enrollNote}</p>}
+                  </div>
+                  {((card.source === 'scan' && card.kind !== 'check') || (card.selectedId && card.candidates?.length > 0)) && (
+                    <details className="nurse-card-details" data-no-switch onClick={blurAfterPointerClick}>
+                      <summary>선택 정보 보기</summary>
+                      {card.selectedId && card.candidates?.length > 0 && <p>추정이었던 후보: {card.candidates.map((c) => c.text).join(' / ')}</p>}
+                      {card.source === 'scan' && card.kind !== 'check' && <p>환자가 항목을 직접 고름</p>}
+                    </details>
+                  )}
+                  <div className="nurse-card-footer">
+                    <div className="nurse-card-time">
+                      <span>도착 {hhmm(card.firstAt)}{card.count > 1 || card.lastAt !== card.firstAt ? ` · 최근 ${hhmm(card.lastAt)}` : ''}</span>
+                      {!card.acked && <strong className={overdue ? 'is-overdue' : ''}>{waitingText(card, now)}{overdue ? ' · 60초 넘게 미확인' : ''}</strong>}
+                    </div>
+                    <span data-no-switch onClick={blurAfterPointerClick}>
                       {card.acked ? (
-                        <span className="flex items-center gap-1 text-lg font-semibold"><CheckIcon /> 확인함 {hhmm(card.ackedAt)}</span>
+                        <span className="nurse-acknowledged"><CheckIcon /> 확인함 {hhmm(card.ackedAt)}</span>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => ack(card.id)}
-                          className="rounded-xl px-6 py-2 text-2xl font-black"
-                          style={{ background: WARD_COLORS.ink, color: WARD_COLORS.paper, outline: `3px solid ${WARD_COLORS.paper}` }}
+                          onClick={(e) => ack(card.id, e)}
+                          className="nurse-ack-button"
                         >
                           확인
                         </button>
                       )}
                     </span>
                   </div>
-                  {card.cancelRequested && (
-                    <p className="mt-2 inline-block rounded-md px-2 py-1 text-2xl font-black" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-                      환자가 취소 요청함
-                    </p>
-                  )}
-                  {card.hint && <p className="mt-1 text-xl font-bold">{card.hint}</p>}
-                  {card.selectedId && card.candidates?.length > 0 && (
-                    <p className="mt-1 text-lg" style={{ color: estimateColor }}>추정이었던 후보: {card.candidates.map((c) => c.text).join(' / ')}</p>
-                  )}
-                  {card.note && !card.cancelRequested && <p className="mt-1 text-lg font-semibold">{card.note}</p>}
-                  {card.source === 'scan' && card.kind !== 'check' && <p className="mt-1 text-lg">환자가 스캐닝으로 직접 고름</p>}
-                  {enrollNote && <p data-enroll-note={card.enroll} className="mt-1 text-lg font-semibold">{enrollNote}</p>}
-                  {overdue && <p className="mt-1 text-lg font-black">60초 넘게 확인하지 않았습니다</p>}
                 </li>
               );
             })}
           </ul>
         )}
       </main>
+      <details className="nurse-tools" data-no-switch onClick={blurAfterPointerClick}>
+        <summary>시연 도구 <span>병실 상태 · 키 입력 전달 · 기록 정리</span></summary>
+        <div className="nurse-tools-body">
+          <label className="nurse-forward-option">
+            <input type="checkbox" checked={prefs.forwardSwitch} onChange={(e) => setForward(e.target.checked)} />
+            이 창의 스위치(키) 입력을 환자 화면으로 넘기기
+          </label>
+          {roomList.length > 0 && (
+            <section className="nurse-room-states" aria-label="병실 상태">
+              {roomList.map(([key, info]) => <p key={key}><strong>{info.room}호</strong> 환자 화면: {PHASE_LABELS[info.phase] || '알 수 없음'}<br /><span>가상 병실: {roomSummary(info.state)}</span></p>)}
+            </section>
+          )}
+          <div className="nurse-tools-clear">
+            <p>확인한 카드만 지웁니다. 미확인 카드는 유지됩니다.</p>
+            <button type="button" className="nurse-button nurse-button-danger" onClick={clearDone}>확인한 카드 지우기</button>
+          </div>
+          <p className="nurse-prototype-note">시연용 모의 화면 · 실제 환자 미검증</p>
+        </div>
+      </details>
     </div>
   );
 }

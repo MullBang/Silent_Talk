@@ -116,6 +116,7 @@ test('설정: 범위 맞추기·기본값·밤 무음·저장소 예외', () => 
   assert.ok(data.has(SETTINGS_STORAGE_KEY));
   assert.deepEqual(loadSettings(store), {
     recordSeconds: 8, confirmSeconds: 6, room: '412', tts: true, nightMute: true, enrollProfile: '', commandList: '', enrollProfileByList: {},
+    inputMode: 'switch',
   });
   // 내 입 모양 등록 이름: 기본 ''(등록 안 씀), 서버 규칙(영문·숫자·_·- 1~32자)에 맞지 않으면 ''.
   assert.equal(DEFAULT_SETTINGS.enrollProfile, '');

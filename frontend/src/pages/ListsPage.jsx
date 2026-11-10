@@ -6,6 +6,7 @@
 // 저장은 조건부다: 새 목록은 '없을 때만 만들기', 저장된 목록은 '불러온 판일 때만 고치기'라서 다른 탭이 만든·고친 목록을
 // 말없이 덮어쓰지 않는다(서버 409). [예시 목록 불러오기]는 언제나 새 목록으로 연다. 목록들을 불러오지 못했으면 새 목록을 막는다.
 // 이 목록에 입 모양 등록이 있으면 고친 문장 때문에 다시 찍어야 할 개수를 알려 준다.
+// 모양은 ward/lists-ui.css(.lists-ui 아래, 병실 공통 틀 WardShell 안)이며 1280·768·390px 폭에서 가로 스크롤 없이 쓴다.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -20,7 +21,7 @@ import {
   quickTitleProblem, reenrollSummary, requestBody, rowLength, saveCondition, stepListEditor, suggestListId,
 } from '../ward/wardLists';
 import { SETTINGS_STORAGE_KEY, enrollProfileFor, loadSettings, safeLocalStorage, saveSettings } from '../ward/wardSettings';
-import { WARD_COLORS } from '../ward/wardTheme';
+import '../ward/lists-ui.css';
 
 // 예시 목록 파일은 있으면 읽는다(없어도 빌드·화면이 동작하도록 glob으로 읽는다).
 const EXAMPLE_FILES = import.meta.glob('../ward/custom_list_examples.json', { eager: true, import: 'default' });
@@ -31,17 +32,6 @@ const PROTOTYPE_TEXT = '시연용 연구 시제품 · 실제 환자 미검증';
 /** 입력을 멈추고 이 시간(ms)이 지나면 서버 검사를 한다. */
 const CHECK_DEBOUNCE_MS = 500;
 const NEW_KEY = '__new__';
-
-/**
- * 큰 버튼 공통 모양.
- * @param {'primary'|'secondary'|'danger'} kind
- * @returns {object}
- */
-function buttonStyle(kind) {
-  if (kind === 'primary') return { background: WARD_COLORS.infoBg, color: WARD_COLORS.infoInk, borderColor: WARD_COLORS.infoBg };
-  if (kind === 'danger') return { background: WARD_COLORS.paper, color: WARD_COLORS.emergencyBg, borderColor: WARD_COLORS.emergencyBg };
-  return { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: WARD_COLORS.ink };
-}
 
 /**
  * 주소 해시를 바꾼다.
@@ -63,7 +53,7 @@ function goHash(hash) {
 function IssueLine({ issue }) {
   if (issue.level === 'error') {
     return (
-      <li data-issue="error" className="flex items-start gap-2 rounded-md border-2 px-2 py-1 text-base font-semibold" style={{ borderColor: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyBg, background: WARD_COLORS.paper }}>
+      <li data-issue="error" className="lists-issue is-error">
         <AlertIcon title="오류" /> <span>오류: {issue.message}</span>
       </li>
     );
@@ -71,8 +61,7 @@ function IssueLine({ issue }) {
   return (
     <li
       data-issue={issue.strong ? 'strong-warning' : 'warning'}
-      className="flex items-start gap-2 rounded-md px-2 py-1 text-base font-semibold"
-      style={{ background: issue.strong ? WARD_COLORS.possibleBg : WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}
+      className={`lists-issue ${issue.strong ? 'is-strong' : 'is-warning'}`}
     >
       <AlertIcon title="주의" /> <span>{issue.strong ? '강한 주의' : '주의'}: {issue.message}</span>
     </li>
@@ -86,30 +75,38 @@ function IssueLine({ issue }) {
  */
 function DefaultListView({ inUse, onUseDefault }) {
   return (
-    <section aria-label={LISTS_TEXT.defaultName} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-3xl font-black">{LISTS_TEXT.defaultName} ({DEFAULT_ROWS.length}개)</h2>
+    <section aria-label={LISTS_TEXT.defaultName} className="lists-panel lists-default">
+      <div className="lists-section-head">
+        <h2 className="lists-section-title">{LISTS_TEXT.defaultName} ({DEFAULT_ROWS.length}개)</h2>
         {inUse ? (
-          <span className="flex items-center gap-1 rounded-md px-2 py-1 text-lg font-bold" style={{ background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }}>
+          <span className="lists-chip lists-chip-ok lists-chip-lg">
             <CheckIcon /> {LISTS_TEXT.inUse}
           </span>
         ) : (
-          <button type="button" onClick={onUseDefault} className="rounded-xl border-4 px-4 py-2 text-lg font-bold" style={buttonStyle('secondary')}>
+          <button type="button" onClick={onUseDefault} className="lists-btn lists-btn-outline">
             {LISTS_TEXT.backToDefault}
           </button>
         )}
       </div>
-      <p className="text-lg" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.defaultReadOnly}</p>
-      <ol className="flex flex-col gap-2" data-default-list>
+      <p className="lists-help">{LISTS_TEXT.defaultReadOnly}</p>
+      {/* 표 머리 (넓은 화면에서만 보인다. 좁은 화면은 줄마다 카드로 쌓는다) */}
+      <div className="lists-default-columns" aria-hidden="true">
+        <span>#</span>
+        <span>{LISTS_TEXT.colText}</span>
+        <span>{LISTS_TEXT.colDisplay}</span>
+        <span>{LISTS_TEXT.colCategory}</span>
+        <span>{LISTS_TEXT.colEmergency} · {LISTS_TEXT.colCancel}</span>
+      </div>
+      <ol className="lists-default-rows" data-default-list>
         {DEFAULT_ROWS.map((r) => (
-          <li key={r.id} className="grid gap-x-4 gap-y-1 rounded-xl border-2 px-3 py-2 md:grid-cols-[4rem_minmax(0,1.2fr)_minmax(0,1fr)_7rem_auto]" style={{ borderColor: WARD_COLORS.line }}>
-            <span className="font-black">{r.id}</span>
-            <span className="text-lg font-semibold">{r.text}</span>
-            <span className="text-lg">{r.display}</span>
-            <span className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{r.categoryLabel}</span>
-            <span className="flex flex-wrap gap-2 text-base font-bold">
-              {r.emergency && <span className="flex items-center gap-1" style={{ color: WARD_COLORS.emergencyBg }}><AlertIcon /> 긴급</span>}
-              {r.cancel && <span>취소</span>}
+          <li key={r.id} className="lists-default-row">
+            <span className="lists-default-id">{r.id}</span>
+            <span className="lists-default-text">{r.text}</span>
+            <span className="lists-default-display">{r.display}</span>
+            <span className="lists-default-category">{r.categoryLabel}</span>
+            <span className="lists-default-marks">
+              {r.emergency && <span className="lists-mark lists-mark-emergency"><AlertIcon /> 긴급</span>}
+              {r.cancel && <span className="lists-mark">취소</span>}
             </span>
           </li>
         ))}
@@ -129,14 +126,15 @@ function EditorRow({ row, position, total, messages, normalizedText, dispatch, d
   const hasWarn = messages.warnings.length > 0;
   const n = position + 1;
   const showNormalized = normalizedText && row.text.trim() && normalizedText !== row.text;
-  const borderColor = hasError ? WARD_COLORS.emergencyBg : (hasWarn ? WARD_COLORS.bannerInk : WARD_COLORS.line);
+  const tone = hasError ? ' is-error' : (hasWarn ? ' is-warn' : '');
   return (
-    <li data-row-key={row.key} className="rounded-xl border-4 p-3" style={{ borderColor }}>
-      {/* 첫 줄: 번호 · 입 모양 문장 · 화면 문장 (문장 칸이 넓어야 9~13글자가 다 보인다). 둘째 줄: 종류 · 긴급 · 취소 · 순서 버튼. */}
-      <div className="grid items-start gap-3 md:grid-cols-[2.5rem_minmax(0,1.3fr)_minmax(0,1fr)]">
-        <span className="pt-2 text-xl font-black">{n}</span>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold md:hidden">{LISTS_TEXT.colText}</span>
+    <li data-row-key={row.key} className={`lists-row${tone}`}>
+      {/* 첫 줄: 번호 · 입 모양 문장 · 화면 문장 (문장 칸이 넓어야 9~13글자가 다 보인다). 둘째 줄: 종류 · 긴급 · 취소 · 순서 버튼.
+          좁은 화면(768px 미만)에서는 칸을 위아래로 쌓고 칸 이름을 줄마다 보인다. */}
+      <div className="lists-row-main">
+        <span className="lists-row-number">{n}</span>
+        <label className="lists-field">
+          <span className="lists-field-label">{LISTS_TEXT.colText}</span>
           <input
             type="text"
             lang="ko"
@@ -145,17 +143,16 @@ function EditorRow({ row, position, total, messages, normalizedText, dispatch, d
             disabled={disabled}
             aria-label={`${n}번 ${LISTS_TEXT.colText}`}
             onChange={(e) => dispatch({ type: 'SET_TEXT', key: row.key, value: e.target.value })}
-            className="w-full rounded-lg border-2 px-3 py-2 text-xl"
-            style={{ borderColor: messages.quick.text ? WARD_COLORS.emergencyBg : WARD_COLORS.line }}
+            className={`lists-input${messages.quick.text ? ' has-error' : ''}`}
           />
-          <span className="text-sm" style={{ color: WARD_COLORS.inkSoft }}>
+          <span className="lists-field-hint">
             {row.text.trim() ? `${LISTS_TEXT.rowLength(len.syllables)}${len.good ? ' · 길이 좋음' : ''}` : ' '}
           </span>
-          {messages.quick.text && <span className="text-base font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{messages.quick.text}</span>}
-          {showNormalized && <span className="text-sm" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.normalizedAs(normalizedText)}</span>}
+          {messages.quick.text && <span className="lists-field-error">{messages.quick.text}</span>}
+          {showNormalized && <span className="lists-field-hint">{LISTS_TEXT.normalizedAs(normalizedText)}</span>}
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold md:hidden">{LISTS_TEXT.colDisplay}</span>
+        <label className="lists-field">
+          <span className="lists-field-label">{LISTS_TEXT.colDisplay}</span>
           <input
             type="text"
             lang="ko"
@@ -164,57 +161,53 @@ function EditorRow({ row, position, total, messages, normalizedText, dispatch, d
             disabled={disabled}
             aria-label={`${n}번 ${LISTS_TEXT.colDisplay}`}
             onChange={(e) => dispatch({ type: 'SET_DISPLAY', key: row.key, value: e.target.value })}
-            className="w-full rounded-lg border-2 px-3 py-2 text-xl"
-            style={{ borderColor: messages.quick.display ? WARD_COLORS.emergencyBg : WARD_COLORS.line }}
+            className={`lists-input${messages.quick.display ? ' has-error' : ''}`}
           />
-          {messages.quick.display && <span className="text-base font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{messages.quick.display}</span>}
+          {messages.quick.display && <span className="lists-field-error">{messages.quick.display}</span>}
         </label>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 md:pl-[3.25rem]">
-        <label className="flex items-center gap-2">
-          <span className="text-base font-semibold">{LISTS_TEXT.colCategory}</span>
+      <div className="lists-row-controls">
+        <label className="lists-category">
+          <span>{LISTS_TEXT.colCategory}</span>
           <select
             value={row.category}
             disabled={disabled}
             aria-label={`${n}번 ${LISTS_TEXT.colCategory}`}
             onChange={(e) => dispatch({ type: 'SET_CATEGORY', key: row.key, value: e.target.value })}
-            className="w-40 rounded-lg border-2 px-2 py-2 text-lg"
-            style={{ borderColor: WARD_COLORS.line }}
+            className="lists-select"
           >
             {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-lg font-bold" style={row.emergency ? { color: WARD_COLORS.emergencyBg } : undefined}>
+        <label className={`lists-toggle lists-toggle-emergency${row.emergency ? ' is-on' : ''}`}>
           <input
             type="checkbox"
             checked={row.emergency}
             disabled={disabled}
             aria-label={`${n}번 ${LISTS_TEXT.colEmergency}`}
             onChange={(e) => dispatch({ type: 'SET_EMERGENCY', key: row.key, value: e.target.checked })}
-            className="h-6 w-6"
           />
           <span>{LISTS_TEXT.colEmergency}</span>
           {row.emergency && <AlertIcon title="긴급" />}
         </label>
-        <label className="flex items-center gap-2 text-lg font-bold">
+        <label className={`lists-toggle${row.cancel ? ' is-on' : ''}`}>
           <input
             type="checkbox"
             checked={row.cancel}
             disabled={disabled}
             aria-label={`${n}번 ${LISTS_TEXT.colCancel}`}
             onChange={(e) => dispatch({ type: 'SET_CANCEL', key: row.key, value: e.target.checked })}
-            className="h-6 w-6"
           />
           <span>{LISTS_TEXT.colCancel}</span>
         </label>
-        <div className="ml-auto flex flex-wrap gap-1">
-          <button type="button" disabled={disabled || position === 0} onClick={() => dispatch({ type: 'MOVE_ROW', key: row.key, delta: -1 })} aria-label={`${n}번 ${LISTS_TEXT.moveUp}`} className="rounded-lg border-2 px-3 py-1 text-lg font-bold disabled:opacity-40" style={buttonStyle('secondary')}>↑</button>
-          <button type="button" disabled={disabled || position === total - 1} onClick={() => dispatch({ type: 'MOVE_ROW', key: row.key, delta: 1 })} aria-label={`${n}번 ${LISTS_TEXT.moveDown}`} className="rounded-lg border-2 px-3 py-1 text-lg font-bold disabled:opacity-40" style={buttonStyle('secondary')}>↓</button>
-          <button type="button" disabled={disabled} onClick={() => dispatch({ type: 'REMOVE_ROW', key: row.key })} aria-label={`${n}번 ${LISTS_TEXT.removeRow}`} className="rounded-lg border-2 px-3 py-1 text-lg font-bold disabled:opacity-40" style={buttonStyle('danger')}>✕</button>
+        <div className="lists-row-order">
+          <button type="button" disabled={disabled || position === 0} onClick={() => dispatch({ type: 'MOVE_ROW', key: row.key, delta: -1 })} aria-label={`${n}번 ${LISTS_TEXT.moveUp}`} className="lists-icon-btn">↑</button>
+          <button type="button" disabled={disabled || position === total - 1} onClick={() => dispatch({ type: 'MOVE_ROW', key: row.key, delta: 1 })} aria-label={`${n}번 ${LISTS_TEXT.moveDown}`} className="lists-icon-btn">↓</button>
+          <button type="button" disabled={disabled} onClick={() => dispatch({ type: 'REMOVE_ROW', key: row.key })} aria-label={`${n}번 ${LISTS_TEXT.removeRow}`} className="lists-icon-btn lists-icon-btn-danger">✕</button>
         </div>
       </div>
       {(messages.errors.length > 0 || messages.warnings.length > 0) && (
-        <ul className="mt-2 flex flex-col gap-1">
+        <ul className="lists-issues">
           {messages.errors.map((m, i) => <IssueLine key={`e${i}`} issue={m} />)}
           {messages.warnings.map((m, i) => <IssueLine key={`w${i}`} issue={m} />)}
         </ul>
@@ -524,26 +517,32 @@ export default function ListsPage() {
   const busy = editor.saving || loadingList;
 
   return (
-    <div className="min-h-screen" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
-      <header className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.paper }}>
-        <h1 className="text-2xl font-bold">{LISTS_TEXT.title}</h1>
-        <p className="text-base font-semibold" style={{ color: WARD_COLORS.bannerInk }}>{PROTOTYPE_TEXT}</p>
-        <button
-          type="button"
-          onClick={() => leaveTo(wardReturnHash(globalThis.location))}
-          className="ml-auto rounded-lg px-3 py-1 font-semibold"
-          style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}
-        >
-          {LISTS_TEXT.backToWard}
-        </button>
+    <div className="lists-ui">
+      <header className="lists-heading">
+        <div className="lists-heading-text">
+          <p className="lists-eyebrow">병실 화면 설정</p>
+          <h1>{LISTS_TEXT.title}</h1>
+          <p className="lists-description">{LISTS_TEXT.intro}</p>
+          <p className="lists-prototype">{PROTOTYPE_TEXT}</p>
+        </div>
+        <div className="lists-heading-actions">
+          <button
+            type="button"
+            onClick={() => leaveTo(wardReturnHash(globalThis.location))}
+            className="lists-btn lists-btn-outline"
+          >
+            {LISTS_TEXT.backToWard}
+          </button>
+        </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-        <p data-using-list={settings.commandList || 'default'} className="text-xl font-bold">
+      {/* 지금 병실 화면이 쓰는 목록 (내 목록이면 노란 띠, 기본 목록이면 파란 띠) */}
+      <div className={`lists-using${settings.commandList ? ' is-custom' : ''}`}>
+        <p data-using-list={settings.commandList || 'default'} className="lists-using-text">
           {LISTS_TEXT.usingNow(usingName)}{settings.commandList ? ` · ${LISTS_TEXT.untested}` : ''}
         </p>
         {settings.commandList && (
-          <button type="button" onClick={applyDefault} className="rounded-lg border-2 px-3 py-1 text-lg font-semibold" style={buttonStyle('secondary')}>
+          <button type="button" onClick={applyDefault} className="lists-btn lists-btn-outline">
             {LISTS_TEXT.backToDefault}
           </button>
         )}
@@ -552,39 +551,39 @@ export default function ListsPage() {
       {notice && (
         <p
           role="status"
-          className="px-4 py-2 text-lg font-semibold"
-          style={notice.tone === 'ok' ? { background: WARD_COLORS.okBg, color: WARD_COLORS.okInk } : { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}
+          className={`lists-notice ${notice.tone === 'ok' ? 'is-ok' : 'is-warn'}`}
         >
           {notice.text}
         </p>
       )}
 
-      <main className="grid gap-4 p-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-        <aside aria-label="목록 고르기" className="flex flex-col gap-3">
-          <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.intro}</p>
+      <main className="lists-layout">
+        <aside aria-label="목록 고르기" className="lists-sidebar">
           <button
             type="button"
             aria-current={selected === '' ? 'true' : undefined}
             onClick={() => choose('')}
-            className="flex flex-col items-start rounded-xl border-4 px-3 py-2 text-left"
-            style={selected === '' ? buttonStyle('primary') : buttonStyle('secondary')}
+            className="lists-card"
           >
-            <span className="text-xl font-bold">{LISTS_TEXT.defaultName} ({DEFAULT_ROWS.length}개)</span>
-            <span className="text-sm">바꿀 수 없음{!settings.commandList ? ` · ${LISTS_TEXT.inUse}` : ''}</span>
+            <span className="lists-card-top">
+              <span className="lists-card-title">{LISTS_TEXT.defaultName} ({DEFAULT_ROWS.length}개)</span>
+              {!settings.commandList && <span className="lists-chip lists-chip-ok">{LISTS_TEXT.inUse}</span>}
+            </span>
+            <span className="lists-card-meta">바꿀 수 없음</span>
           </button>
-          <h2 className="mt-2 text-lg font-bold">{LISTS_TEXT.myLists} ({lists.items.length}/{MAX_LISTS})</h2>
-          {lists.status === 'loading' && <p className="text-base">불러오는 중이에요</p>}
+          <h2 className="lists-sidebar-title">{LISTS_TEXT.myLists} ({lists.items.length}/{MAX_LISTS})</h2>
+          {lists.status === 'loading' && <p className="lists-help">불러오는 중이에요</p>}
           {lists.status === 'error' && (
-            <div role="alert" className="flex flex-col gap-2">
-              <p className="text-base font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{lists.message}</p>
-              <p className="text-base">{LISTS_TEXT.listsNeedReload}</p>
-              <button type="button" onClick={refreshLists} className="self-start rounded-lg border-2 px-3 py-1 text-lg font-semibold" style={buttonStyle('secondary')}>
+            <div role="alert" className="lists-alert">
+              <p className="lists-alert-title">{lists.message}</p>
+              <p>{LISTS_TEXT.listsNeedReload}</p>
+              <button type="button" onClick={refreshLists} className="lists-btn lists-btn-outline">
                 {LISTS_TEXT.reloadLists}
               </button>
             </div>
           )}
-          {lists.status === 'ready' && lists.items.length === 0 && <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.noLists}</p>}
-          <ul className="flex flex-col gap-2">
+          {lists.status === 'ready' && lists.items.length === 0 && <p className="lists-empty">{LISTS_TEXT.noLists}</p>}
+          <ul className="lists-cards">
             {lists.items.map((l) => (
               <li key={l.id}>
                 <button
@@ -592,13 +591,14 @@ export default function ListsPage() {
                   data-list-id={l.id}
                   aria-current={selected === l.id ? 'true' : undefined}
                   onClick={() => choose(l.id)}
-                  className="flex w-full flex-col items-start rounded-xl border-4 px-3 py-2 text-left"
-                  style={selected === l.id ? buttonStyle('primary') : buttonStyle('secondary')}
+                  className="lists-card"
                 >
-                  <span className="text-xl font-bold">{l.title}</span>
-                  <span className="text-sm">
+                  <span className="lists-card-top">
+                    <span className="lists-card-title">{l.title}</span>
+                    {settings.commandList === l.id && <span className="lists-chip lists-chip-ok">{LISTS_TEXT.inUse}</span>}
+                  </span>
+                  <span className="lists-card-meta">
                     {l.id}{l.count !== null ? ` · ${l.count}개` : ''}{l.emergencyCount !== null ? ` · 긴급 ${l.emergencyCount}` : ''}
-                    {settings.commandList === l.id ? ` · ${LISTS_TEXT.inUse}` : ''}
                   </span>
                 </button>
               </li>
@@ -608,12 +608,11 @@ export default function ListsPage() {
             type="button"
             onClick={() => choose(NEW_KEY)}
             disabled={lists.status !== 'ready' || lists.items.length >= MAX_LISTS}
-            className="rounded-xl border-4 px-3 py-2 text-xl font-bold disabled:opacity-50"
-            style={buttonStyle('secondary')}
+            className="lists-btn lists-btn-new"
           >
             + {LISTS_TEXT.newList}
           </button>
-          {lists.items.length >= MAX_LISTS && <p className="text-base">{LISTS_TEXT.tooMany}</p>}
+          {lists.items.length >= MAX_LISTS && <p className="lists-help">{LISTS_TEXT.tooMany}</p>}
           {EXAMPLES.map((ex) => (
             <button
               key={ex.title}
@@ -621,8 +620,7 @@ export default function ListsPage() {
               data-example={ex.title}
               onClick={() => loadExample(ex)}
               disabled={busy || lists.status !== 'ready' || lists.items.length >= MAX_LISTS}
-              className="rounded-xl border-2 border-dashed px-3 py-2 text-lg font-semibold disabled:opacity-50"
-              style={buttonStyle('secondary')}
+              className="lists-btn lists-btn-example"
             >
               {LISTS_TEXT.loadExample} ({ex.title})
             </button>
@@ -631,78 +629,79 @@ export default function ListsPage() {
 
         {!editing && <DefaultListView inUse={!settings.commandList} onUseDefault={applyDefault} />}
 
-        {editing && loadingList && <p className="text-2xl font-semibold">{LISTS_TEXT.loading}</p>}
+        {editing && loadingList && <p className="lists-loading"><span className="lists-spinner" aria-hidden="true" />{LISTS_TEXT.loading}</p>}
 
         {editing && !loadingList && (
-          <section aria-label="목록 고치기" className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-end gap-4">
-              <label className="flex flex-col gap-1">
-                <span className="text-lg font-semibold">{LISTS_TEXT.listTitle}</span>
-                <input
-                  type="text"
-                  lang="ko"
-                  value={editor.title}
-                  maxLength={TITLE_MAX_CHARS + 10}
-                  disabled={busy}
-                  onChange={(e) => dispatch({ type: 'SET_TITLE', value: e.target.value })}
-                  className="w-72 max-w-full rounded-lg border-2 px-3 py-2 text-2xl font-bold"
-                  style={{ borderColor: titleProblem ? WARD_COLORS.emergencyBg : WARD_COLORS.line }}
-                />
-                {titleProblem && <span className="text-base font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{titleProblem}</span>}
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-lg font-semibold">{LISTS_TEXT.listId}</span>
-                {editor.mode === 'new' ? (
+          <section aria-label="목록 고치기" className="lists-editor">
+            <div className="lists-panel">
+              <div className="lists-meta-fields">
+                <label className="lists-field lists-field-title">
+                  <span className="lists-field-name">{LISTS_TEXT.listTitle}</span>
                   <input
                     type="text"
-                    value={editor.id}
-                    maxLength={32}
-                    autoComplete="off"
-                    spellCheck={false}
+                    lang="ko"
+                    value={editor.title}
+                    maxLength={TITLE_MAX_CHARS + 10}
                     disabled={busy}
-                    onChange={(e) => dispatch({ type: 'SET_ID', value: e.target.value })}
-                    className="w-56 max-w-full rounded-lg border-2 px-3 py-2 text-xl"
-                    style={{ borderColor: idProblem ? WARD_COLORS.emergencyBg : WARD_COLORS.line }}
+                    onChange={(e) => dispatch({ type: 'SET_TITLE', value: e.target.value })}
+                    className={`lists-input lists-input-title${titleProblem ? ' has-error' : ''}`}
                   />
-                ) : (
-                  <span className="px-1 py-2 text-xl font-semibold">{editor.savedId}</span>
+                  {titleProblem && <span className="lists-field-error">{titleProblem}</span>}
+                </label>
+                <label className="lists-field lists-field-id">
+                  <span className="lists-field-name">{LISTS_TEXT.listId}</span>
+                  {editor.mode === 'new' ? (
+                    <input
+                      type="text"
+                      value={editor.id}
+                      maxLength={32}
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={busy}
+                      onChange={(e) => dispatch({ type: 'SET_ID', value: e.target.value })}
+                      className={`lists-input${idProblem ? ' has-error' : ''}`}
+                    />
+                  ) : (
+                    <span className="lists-id-value">{editor.savedId}</span>
+                  )}
+                  {editor.mode === 'new' && <span className="lists-field-hint">{LISTS_TEXT.listIdHint}</span>}
+                  {idProblem && editor.id && <span className="lists-field-error">{idProblem}</span>}
+                </label>
+                {usingThis && (
+                  <span className="lists-chip lists-chip-ok lists-chip-lg">
+                    <CheckIcon /> {LISTS_TEXT.usingThis}
+                  </span>
                 )}
-                {editor.mode === 'new' && <span className="text-sm" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.listIdHint}</span>}
-                {idProblem && editor.id && <span className="text-base font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{idProblem}</span>}
-              </label>
-              {usingThis && (
-                <span className="flex items-center gap-1 rounded-md px-2 py-1 text-lg font-bold" style={{ background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }}>
-                  <CheckIcon /> {LISTS_TEXT.usingThis}
-                </span>
+              </div>
+
+              {checkLine && (
+                <p
+                  data-check-status={checkLine.tone}
+                  aria-live="polite"
+                  className={`lists-check is-${checkLine.tone}`}
+                >
+                  {checkLine.tone === 'ok' ? <CheckIcon /> : (checkLine.tone === 'neutral' ? null : <AlertIcon />)} {checkLine.text}
+                </p>
+              )}
+              {(msgs.global.errors.length > 0 || msgs.global.warnings.length > 0) && (
+                <ul className="lists-issues" aria-label="목록 전체 안내">
+                  {msgs.global.errors.map((m, i) => <IssueLine key={`ge${i}`} issue={m} />)}
+                  {msgs.global.warnings.map((m, i) => <IssueLine key={`gw${i}`} issue={m} />)}
+                </ul>
               )}
             </div>
 
-            {checkLine && (
-              <p
-                data-check-status={checkLine.tone}
-                aria-live="polite"
-                className="flex items-center gap-2 text-xl font-bold"
-                style={{ color: checkLine.tone === 'error' ? WARD_COLORS.emergencyBg : WARD_COLORS.ink }}
-              >
-                {checkLine.tone === 'ok' ? <CheckIcon /> : (checkLine.tone === 'neutral' ? null : <AlertIcon />)} {checkLine.text}
+            <div className="lists-rows-head">
+              <div className="lists-columns">
+                <span>#</span>
+                <span>{LISTS_TEXT.colText}</span>
+                <span>{LISTS_TEXT.colDisplay}</span>
+              </div>
+              <p className="lists-help">
+                {LISTS_TEXT.colTextHint} · {LISTS_TEXT.colDisplayHint} · 취소: {LISTS_TEXT.colCancelHint}
               </p>
-            )}
-            {(msgs.global.errors.length > 0 || msgs.global.warnings.length > 0) && (
-              <ul className="flex flex-col gap-1" aria-label="목록 전체 안내">
-                {msgs.global.errors.map((m, i) => <IssueLine key={`ge${i}`} issue={m} />)}
-                {msgs.global.warnings.map((m, i) => <IssueLine key={`gw${i}`} issue={m} />)}
-              </ul>
-            )}
-
-            <div className="hidden gap-3 px-3 text-base font-bold md:grid md:grid-cols-[2.5rem_minmax(0,1.3fr)_minmax(0,1fr)]" style={{ color: WARD_COLORS.inkSoft }}>
-              <span>#</span>
-              <span>{LISTS_TEXT.colText}</span>
-              <span>{LISTS_TEXT.colDisplay}</span>
             </div>
-            <p className="text-sm" style={{ color: WARD_COLORS.inkSoft }}>
-              {LISTS_TEXT.colTextHint} · {LISTS_TEXT.colDisplayHint} · 취소: {LISTS_TEXT.colCancelHint}
-            </p>
-            <ol className="flex flex-col gap-3">
+            <ol className="lists-rows">
               {editor.rows.map((row, i) => (
                 <EditorRow
                   key={row.key}
@@ -717,13 +716,12 @@ export default function ListsPage() {
               ))}
             </ol>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="lists-actions">
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'ADD_ROW' })}
                 disabled={busy || editor.rows.length >= MAX_COMMANDS}
-                className="rounded-xl border-4 px-5 py-2 text-xl font-bold disabled:opacity-50"
-                style={buttonStyle('secondary')}
+                className="lists-btn lists-btn-outline"
               >
                 + {LISTS_TEXT.addRow} ({editor.rows.length}/{MAX_COMMANDS})
               </button>
@@ -732,55 +730,53 @@ export default function ListsPage() {
                 data-save
                 onClick={save}
                 disabled={!saveState.ok || (editor.mode === 'new' && lists.status !== 'ready')}
-                className="rounded-xl border-4 px-6 py-2 text-2xl font-black disabled:opacity-50"
-                style={buttonStyle('primary')}
+                className="lists-btn lists-btn-primary lists-btn-save"
               >
                 {editor.saving ? LISTS_TEXT.saving : LISTS_TEXT.save}
               </button>
               {editor.mode === 'edit' && (
-                <button type="button" onClick={remove} disabled={busy} className="rounded-xl border-4 px-5 py-2 text-xl font-bold disabled:opacity-50" style={buttonStyle('danger')}>
+                <button type="button" onClick={remove} disabled={busy} className="lists-btn lists-btn-danger">
                   {LISTS_TEXT.deleteList}
                 </button>
               )}
             </div>
-            {saveState.reason && editor.dirty && <p className="text-lg font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{saveState.reason}</p>}
+            {saveState.reason && editor.dirty && <p className="lists-error-text">{saveState.reason}</p>}
             {editor.saveMessage && editor.saveMessage !== LISTS_TEXT.saved && (
-              <p role="alert" className="text-lg font-semibold" style={{ color: WARD_COLORS.emergencyBg }}>{editor.saveMessage}</p>
+              <p role="alert" className="lists-error-text">{editor.saveMessage}</p>
             )}
             {conflict && editor.mode === 'edit' && (
-              <button type="button" data-reload-list onClick={reloadCurrent} disabled={busy} className="self-start rounded-xl border-4 px-5 py-2 text-xl font-bold disabled:opacity-50" style={buttonStyle('secondary')}>
+              <button type="button" data-reload-list onClick={reloadCurrent} disabled={busy} className="lists-btn lists-btn-outline lists-btn-start">
                 {LISTS_TEXT.reloadList}
               </button>
             )}
             {reenroll && (
-              <div role="status" data-reenroll={reenroll.kind} className="flex flex-col gap-1 rounded-lg px-3 py-2" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-                <p className="flex items-center gap-2 text-xl font-bold"><AlertIcon /> {reenroll.text}</p>
-                <p className="text-base">{LISTS_TEXT.reenrollHowTo}</p>
+              <div role="status" data-reenroll={reenroll.kind} className="lists-reenroll">
+                <p className="lists-reenroll-title"><AlertIcon /> {reenroll.text}</p>
+                <p className="lists-reenroll-howto">{LISTS_TEXT.reenrollHowTo}</p>
               </div>
             )}
 
-            <div className="flex flex-col gap-3 rounded-xl border-4 p-4" style={{ borderColor: WARD_COLORS.infoBg }}>
+            <div className="lists-use-panel">
               {usingThis ? (
-                <p className="flex items-center gap-2 text-xl font-bold"><CheckIcon /> {LISTS_TEXT.usingThis} · {LISTS_TEXT.untested}</p>
+                <p className="lists-use-status"><CheckIcon /> {LISTS_TEXT.usingThis} · {LISTS_TEXT.untested}</p>
               ) : (
                 <button
                   type="button"
                   data-use-list
                   onClick={applyThisList}
                   disabled={!canUse}
-                  className="self-start rounded-xl border-4 px-6 py-3 text-2xl font-bold disabled:opacity-50"
-                  style={buttonStyle('primary')}
+                  className="lists-btn lists-btn-primary lists-btn-lg"
                 >
                   {LISTS_TEXT.useThis}
                 </button>
               )}
-              {!canUse && !usingThis && <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{LISTS_TEXT.useNeedsSave}</p>}
+              {!canUse && !usingThis && <p className="lists-help">{LISTS_TEXT.useNeedsSave}</p>}
               {(usingThis || justUsed) && (
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => leaveTo('#enroll')} className="rounded-xl border-4 px-5 py-2 text-xl font-bold" style={buttonStyle('primary')}>
+                <div className="lists-use-actions">
+                  <button type="button" onClick={() => leaveTo('#enroll')} className="lists-btn lists-btn-primary">
                     {LISTS_TEXT.enrollThis}
                   </button>
-                  <button type="button" onClick={() => leaveTo('#ward')} className="rounded-xl border-4 px-5 py-2 text-xl font-bold" style={buttonStyle('secondary')}>
+                  <button type="button" onClick={() => leaveTo('#ward')} className="lists-btn lists-btn-outline">
                     {LISTS_TEXT.backToWard}
                   </button>
                 </div>

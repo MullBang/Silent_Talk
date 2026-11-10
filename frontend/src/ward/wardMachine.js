@@ -151,6 +151,7 @@ export function createWardState({
     phase: 'idle', // idle | recording | analyzing | confirm | scan
     run: 0, // 녹화·분석 실행 번호: 늦게 온 이전 결과는 무시한다
     seq: 0, // 카드 번호
+    scanSeq: 0, // 선택 단계 식별자. 이전 목록의 늦은 직접 클릭을 무시한다.
     lastPressAt: null,
     pressTimes: [],
     recording: null, // {run, startedAt, endsAt}
@@ -360,6 +361,7 @@ function startCandidateScan(s, at, command, runnerUp, effects) {
   items.push({ key: 'none', label: candidates.length > 1 ? WARD_TEXT.noneOfTwo : WARD_TEXT.noneOfOne });
   return {
     ...s1,
+    scanSeq: s.scanSeq + 1,
     phase: 'scan',
     recording: null,
     analysis: null,
@@ -376,6 +378,7 @@ function startCategoryScan(s, at, reason, { cardId = null, detail = null } = {})
   items.push({ key: 'close', label: WARD_TEXT.close });
   return {
     ...s,
+    scanSeq: s.scanSeq + 1,
     phase: 'scan',
     recording: null,
     analysis: null,
@@ -391,7 +394,36 @@ function startCommandScan(s, at, categoryId) {
   if (!cat) return s;
   const items = cat.commands.map((c) => ({ key: 'command', commandId: c.id, label: c.display, emergency: c.emergency }));
   items.push({ key: 'back', label: WARD_TEXT.back });
-  return { ...s, scan: scanState(at, 'commands', items, { cardId: s.scan?.cardId ?? null, reason: s.scan?.reason ?? null, detail: s.scan?.detail ?? null, categoryId }) };
+  return { ...s, scanSeq: s.scanSeq + 1, scan: scanState(at, 'commands', items, { cardId: s.scan?.cardId ?? null, reason: s.scan?.reason ?? null, detail: s.scan?.detail ?? null, categoryId }) };
+}
+
+/** 화면 버튼 누름(PRESS intent)이 유효한 단계. */
+export const PRESS_INTENT_PHASES = Object.freeze({ start: 'idle', cancel: 'confirm', select: 'scan' });
+
+/**
+ * 스캐닝이 고르지 않은 채 끝나는 시각 (SCAN_MAX_ROUNDS 바퀴). 직접 선택 모드에서 남은 시간 표시에 쓴다.
+ * @param {object|null} scan
+ * @returns {{endsAt:number, startedAt:number}|null}
+ */
+export function scanDeadline(scan) {
+  try {
+    const n = scan?.items?.length || 0;
+    if (!n || !Number.isFinite(scan.stepEndsAt)) return null;
+    const stepsLeft = (SCAN_MAX_ROUNDS - 1 - scan.round) * n + (n - 1 - scan.index);
+    const endsAt = scan.stepEndsAt + stepsLeft * SCAN_STEP_MS;
+    return { endsAt, startedAt: endsAt - SCAN_MAX_ROUNDS * n * SCAN_STEP_MS };
+  } catch {
+    return null;
+  }
+}
+
+/** 직접 선택은 강조 위치와 독립적인 항목 키와 현재 목록 식별자를 사용한다. */
+export function scanItemKey(item) {
+  return `${item?.key || ''}:${item?.commandId || item?.categoryId || ''}`;
+}
+
+export function scanToken(state) {
+  return state?.phase === 'scan' ? `${state.run}:${state.scanSeq}` : null;
 }
 
 /** 스캐닝으로 명령을 골랐을 때. 확인 카운트다운 없이 바로 보낸다(고른 것 자체가 확인). */
@@ -562,6 +594,12 @@ function handlePress(state, at, repeat, effects) {
   if (repeat) return state; // 키를 누르고 있을 때의 자동 반복
   const gap = state.lastPressAt === null ? Infinity : at - state.lastPressAt;
   if (gap >= 0 && gap < PRESS_MERGE_MS) return state; // 0.5초 안의 연속 입력은 하나로
+  // 직접 선택 모드의 스캐닝: 강조를 그리지 않으므로 키(스위치)는 항목을 고르지 않는다. 3번 누르기 긴급 호출에만 센다.
+  if (state.phase === 'scan' && state.settings?.inputMode === 'direct') {
+    const pressed = [...state.pressTimes.filter((t) => at - t >= 0 && at - t <= TRIPLE_PRESS_WINDOW_MS), at];
+    if (pressed.length >= TRIPLE_PRESS_COUNT) return sendEmergencyCall({ ...state, lastPressAt: at, pressTimes: [] }, at, effects);
+    return { ...state, lastPressAt: at, pressTimes: pressed };
+  }
   // 스캐닝에서 단계를 옮기는 누름(분류 고르기·둘 다 아님·뒤로)은 일부러 고른 것이다. 3번 누르기에 세지 않고 앞선 누름도
   // 지운다. 원하는 항목이 앞쪽에 있어 빨리 이어 누른 선택(예: 둘 다 아님 → 호출·소통 → W01)이 긴급 호출로 바뀌지 않게 한다.
   if (highlightedIsScanMove(state)) {
@@ -677,7 +715,7 @@ function setIndex(s, index, lipBlockRaw) {
  * 상태도 한 단계.
  * @param {object} state createWardState 결과.
  * @param {{type:string, at:number, [key:string]: any}} event
- *   PRESS{repeat?} · TICK · RECORDING_DONE{run} · RECORD_FAILED{run, message} · RESULT{run, results}
+ *   PRESS{repeat?} · SELECT_ITEM{scanToken, itemKey} · TICK · RECORDING_DONE{run} · RECORD_FAILED{run, message} · RESULT{run, results}
  *   · ANALYSIS_ERROR{run, message, reason?} · SIMULATE{results} · NURSE_ACK{cardIds, room?} · SETTINGS{settings}
  *   · SET_INDEX{index, lipBlock?} (명령 목록 바꿈·내 목록 불러오기 결과)
  * @returns {{state: object, effects: Array<object>}} 바뀐 것이 없으면 state는 같은 객체다.
@@ -694,8 +732,21 @@ export function stepWard(state, event) {
       case 'TICK':
         break;
       case 'PRESS':
+        // 화면 버튼(녹화 시작·전송 취소·강조된 항목 선택)은 intent를 붙여 보낸다. 그사이 단계가 바뀌었으면(예: 카운트다운이 막
+        // 끝나 이미 보냄) 글자와 다른 일을 하지 않도록 무시한다. 스위치·키 누름은 intent가 없어 예전과 같다.
+        if (event.intent && PRESS_INTENT_PHASES[event.intent] !== s.phase) break;
         s = handlePress(s, at, event.repeat === true, effects);
         break;
+      case 'SELECT_ITEM': {
+        if (s.settings.inputMode !== 'direct' || s.phase !== 'scan' || event.scanToken !== scanToken(s)) break;
+        // 두 번 누르기(더블 클릭)의 두 번째 누름이 바로 다음 목록의 같은 자리 항목을 고르지 않게 0.5초 안의 연속 선택은 하나로 본다.
+        const gap = s.lastPressAt === null ? Infinity : at - s.lastPressAt;
+        if (gap >= 0 && gap < PRESS_MERGE_MS) break;
+        const selected = s.scan.items.findIndex((item) => scanItemKey(item) === event.itemKey);
+        if (selected < 0) break;
+        s = selectScanItem({ ...s, lastPressAt: at, pressTimes: [], scan: { ...s.scan, index: selected } }, at, effects);
+        break;
+      }
       case 'RECORDING_DONE':
         if (sameRun(['recording'])) s = { ...s, phase: 'analyzing', recording: null, analysis: { run: s.run, startedAt: at } };
         break;
@@ -720,6 +771,9 @@ export function stepWard(state, event) {
         s = handleAck(s, at, Array.isArray(event.cardIds) ? event.cardIds.map(String) : [], event.room);
         break;
       case 'SETTINGS':
+        if (event.settings?.inputMode && event.settings.inputMode !== s.settings.inputMode) {
+          s = { ...s, pressTimes: [], lastPressAt: null };
+        }
         s = { ...s, settings: normalizeSettings({ ...s.settings, ...(event.settings || {}) }) };
         break;
       case 'SET_INDEX':

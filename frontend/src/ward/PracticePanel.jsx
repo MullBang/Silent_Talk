@@ -1,11 +1,16 @@
 // PracticePanel.jsx — 연습 모드(#ward?practice=1) 버튼: 카메라 없이 가짜 서버 결과를 넣어 흐름을 리허설·검증한다.
 // 기본 화면에서는 보이지 않는다. 전체를 data-no-switch로 덮어 버튼 조작이 스위치 누름으로 잡히지 않게 한다.
 
-import React from 'react';
+import React, { useState } from 'react';
 
 import { blurAfterPointerClick } from '../record/pointerFocus';
 import { PRACTICE_SCENARIOS } from './wardPractice';
-import { WARD_COLORS } from './wardTheme';
+
+const LABELS = {
+  accepted_normal: '일반 요청 성공', accepted_emergency: '긴급 요청', uncertain_emergency: '긴급 가능성',
+  uncertain_normal: '후보에서 선택', enroll_normal: '개인 등록으로 선택', enroll_emergency: '개인 등록 · 긴급',
+  no_phrase: '문장 결과 없음', no_speech: '입 움직임 없음', not_detected: '입 검출 실패',
+};
 
 /**
  * 연습 모드 패널.
@@ -18,23 +23,24 @@ import { WARD_COLORS } from './wardTheme';
  * @returns {JSX.Element}
  */
 export default function PracticePanel({ commands, commandId, onCommandChange, onInject, onPress }) {
+  const [expanded, setExpanded] = useState(true);
   return (
-    <section
+    <details
       data-no-switch
       aria-label="연습 모드"
-      className="rounded-xl border-2 border-dashed p-3 text-sm"
-      style={{ borderColor: WARD_COLORS.line }}
+      className="patient-practice"
+      open={expanded}
+      onToggle={(e) => setExpanded(e.currentTarget.open)}
       onClick={blurAfterPointerClick}
     >
-      <h2 className="mb-2 font-bold">연습 모드 — 가짜 분석 결과 넣기 (카메라 없이 흐름 확인)</h2>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1">
-          고를 명령
+      <summary><span>시연 도구 <span aria-hidden="true">{expanded ? '−' : '+'}</span></span><span>가짜 분석 결과로 화면 흐름 확인 · 카메라 불필요</span></summary>
+      <div className="patient-practice-body">
+      <div className="patient-practice-controls">
+        <label>
+          시연할 명령
           <select
             value={commandId}
             onChange={(e) => onCommandChange(e.target.value)}
-            className="rounded border px-2 py-1"
-            style={{ borderColor: WARD_COLORS.line }}
           >
             {commands.map((c) => <option key={c.id} value={c.id}>{c.id} {c.display}</option>)}
           </select>
@@ -42,26 +48,25 @@ export default function PracticePanel({ commands, commandId, onCommandChange, on
         <button
           type="button"
           onClick={onPress}
-          className="rounded border-2 px-3 py-1 font-semibold"
-          style={{ borderColor: WARD_COLORS.ink }}
+          className="patient-small-button"
         >
           스위치 누르기
         </button>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="patient-scenarios">
         {PRACTICE_SCENARIOS.map((s) => (
           <button
             key={s.id}
             type="button"
             data-scenario={s.id}
             onClick={() => onInject(s.id)}
-            className="rounded px-3 py-1 font-semibold"
-            style={{ background: WARD_COLORS.checkBg, color: WARD_COLORS.checkInk }}
+            title={s.label}
           >
-            {s.label}{s.needsCommand ? ` (${commandId})` : ''}
+            {LABELS[s.id] || s.label}{s.needsCommand ? ` · ${commandId}` : ''}
           </button>
         ))}
       </div>
-    </section>
+      </div>
+    </details>
   );
 }

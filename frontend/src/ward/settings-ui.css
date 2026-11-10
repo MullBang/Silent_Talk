@@ -1,0 +1,268 @@
+/* settings-ui.css — 환자 화면 설정 창(WardSettingsPanel) 모양. 클래스는 모두 settings- 로 시작하고 이 창 안에서만 쓴다.
+   버튼·입력 칸 규칙은 .settings-dialog 아래에 둔다(공통 .ward-app 글꼴 규칙과 Tailwind 기본 버튼 배경보다 앞서도록). */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(23, 43, 69, .55);
+}
+
+.settings-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  background: #fff;
+  color: #172b45;
+  border: 1px solid #d7dfeb;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(23, 43, 69, .28);
+  text-align: left;
+}
+
+/* 머리: 제목과 자동 저장 안내 */
+.settings-header { flex: none; padding: 22px 24px 16px; border-bottom: 1px solid #e4ebf3; background: #fff; }
+.settings-title { font-size: 24px; font-weight: 800; line-height: 1.3; letter-spacing: -.03em; }
+.settings-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #eef4ff;
+  color: #52647a;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+/* 본문: 창 높이가 모자라면 이 부분만 스크롤한다 */
+.settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 24px;
+  background: #f4f7fb;
+}
+
+/* 묶음 카드 (section 또는 fieldset). legend는 float로 테두리 밖이 아니라 카드 안 제목이 된다. */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #d7dfeb;
+  border-radius: 16px;
+  box-shadow: 0 3px 14px #173e6d08;
+}
+.settings-card-title {
+  float: left;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  color: #172b45;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* 항목: 이름 + 조작 + 도움말 */
+.settings-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.settings-label {
+  float: left;
+  width: 100%;
+  padding: 0;
+  color: #172b45;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.settings-sublabel { color: #52647a; font-size: 14px; font-weight: 600; line-height: 1.5; word-break: keep-all; }
+.settings-help { color: #52647a; font-size: 13px; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 알약 모양 고르기 (녹화 길이·입력 방식). 고른 것은 파랑 바탕 흰 글자, aria-pressed로도 알린다. */
+.settings-segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px;
+  background: #eef2f7;
+  border: 1px solid #dce4ee;
+  border-radius: 12px;
+}
+.settings-dialog .settings-segment-button {
+  min-height: 44px;
+  min-width: 72px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #42536c;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.settings-dialog .settings-segment-button:hover:not([aria-pressed="true"]) { background: #fff; color: #172b45; }
+.settings-dialog .settings-segment-button[aria-pressed="true"] { background: #1e40af; color: #fff; box-shadow: 0 2px 6px #1e40af33; }
+
+/* 고르기 칸·입력 칸 */
+.settings-dialog .settings-select,
+.settings-dialog .settings-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #bdcadb;
+  border-radius: 10px;
+  background-color: #fff;
+  color: #172b45;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.settings-dialog .settings-select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2352647a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  text-overflow: ellipsis;
+}
+.settings-dialog .settings-select:hover:not(:disabled),
+.settings-dialog .settings-input:hover { border-color: #93a9da; }
+.settings-dialog .settings-select:focus,
+.settings-dialog .settings-input:focus { border-color: #1e40af; }
+.settings-dialog .settings-select:disabled { background-color: #f4f7fb; color: #52647a; cursor: not-allowed; }
+.settings-dialog .settings-select-short { max-width: 180px; }
+.settings-dialog .settings-input-short { max-width: 180px; }
+
+/* 켜기·끄기 (체크 상자 줄 전체를 누를 수 있다) */
+.settings-check-group { display: flex; flex-direction: column; gap: 6px; }
+.settings-dialog .settings-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid #d7dfeb;
+  border-radius: 12px;
+  background: #fff;
+  color: #172b45;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.45;
+  word-break: keep-all;
+  cursor: pointer;
+}
+.settings-dialog .settings-check:hover { border-color: #93a9da; background: #f7faff; }
+.settings-dialog .settings-check:has(.settings-check-input:checked) { border-color: #9fb6e6; background: #f0f5ff; }
+.settings-dialog .settings-check-input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: #1e40af;
+  cursor: pointer;
+}
+.settings-check-help { padding-left: 49px; }
+
+/* 상태 줄 (색만으로 구분하지 않고 글자로 알린다) */
+.settings-status {
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.settings-status.is-warn { background: #fef3c7; color: #78350f; border-color: #f4dfaa; }
+.settings-status.is-ok { background: #ecfdf3; color: #14532d; border-color: #bbebcd; }
+.settings-status.is-neutral { background: #f4f7fb; color: #52647a; border-color: #e1e8f1; }
+.settings-message { color: #172b45; font-size: 15px; font-weight: 700; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 버튼 */
+.settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.settings-dialog .settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  word-break: keep-all;
+}
+.settings-dialog .settings-btn:disabled { opacity: .5; box-shadow: none; }
+.settings-dialog .settings-btn-primary { background: #1e40af; border-color: #1e40af; color: #fff; box-shadow: 0 3px 7px #1e40af1f; }
+.settings-dialog .settings-btn-primary:hover:not(:disabled) { background: #172f86; border-color: #172f86; }
+.settings-dialog .settings-btn-outline { background: #fff; border-color: #bdcadb; color: #1e3a8a; }
+.settings-dialog .settings-btn-outline:hover:not(:disabled) { background: #eaf0f8; border-color: #93a9da; }
+.settings-dialog .settings-btn-danger { background: #fff; border-color: #b91c1c; color: #991b1b; }
+.settings-dialog .settings-btn-danger:hover:not(:disabled) { background: #fef2f2; }
+
+/* 바닥: 닫기 */
+.settings-footer { flex: none; display: flex; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid #e4ebf3; background: #fff; }
+.settings-dialog .settings-close { min-width: 160px; }
+
+/* 키보드 초점 */
+.settings-dialog .settings-btn:focus-visible,
+.settings-dialog .settings-segment-button:focus-visible,
+.settings-dialog .settings-select:focus-visible,
+.settings-dialog .settings-input:focus-visible,
+.settings-dialog .settings-check-input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+
+/* 좁은 화면: 아래에서 올라오는 전체 폭 시트 */
+@media (max-width: 600px) {
+  .settings-overlay { align-items: flex-end; padding: 0; }
+  .settings-dialog {
+    max-width: none;
+    max-height: 94vh;
+    max-height: 94dvh;
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+  }
+  .settings-header { padding: 18px 16px 14px; }
+  .settings-title { font-size: 22px; }
+  .settings-body { gap: 12px; padding: 14px 12px; }
+  .settings-card { padding: 16px 14px; border-radius: 14px; }
+  .settings-segment { display: flex; align-self: stretch; }
+  .settings-dialog .settings-segment-button { flex: 1 1 0; min-width: 0; padding-inline: 8px; }
+  .settings-dialog .settings-select-short,
+  .settings-dialog .settings-input-short { max-width: none; }
+  .settings-actions { flex-direction: column; }
+  .settings-actions > .settings-btn { width: 100%; }
+  .settings-footer { padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .settings-dialog .settings-close { width: 100%; }
+}
+
+/* 낮은 창(가로로 눕힌 휴대폰 등): 머리·바닥까지 창 전체를 스크롤한다 */
+@media (max-height: 520px) {
+  .settings-dialog { overflow-y: auto; }
+  .settings-body { flex: none; overflow: visible; }
+}
+.settings-dialog .settings-segment-button:disabled { opacity: .5; cursor: not-allowed; }

@@ -1,6 +1,7 @@
-// WardSettingsPanel.jsx — 환자 화면 설정 (녹화 길이·확인 시간·병실 번호·음성 읽기·밤 무음·명령 목록·내 입 모양 등록). 보호자·간호사가 마우스로 조작한다.
+// WardSettingsPanel.jsx — 환자 화면 설정 (입력 방식·녹화 길이·확인 시간·병실 번호·음성 읽기·밤 무음·명령 목록·내 입 모양 등록). 보호자·간호사가 마우스로 조작한다.
 // 전체를 data-no-switch로 덮어 설정 조작이 스위치 누름(녹화 시작)으로 잡히지 않게 한다.
 // 명령 목록은 기본 목록(측정한 목록) 또는 서버에 저장한 내 목록이다. 등록은 목록마다 따로라서, 등록 고르기는 지금 쓰는 목록의 등록만 보인다.
+// 모양은 settings-ui.css (흰 창 + 묶음 카드, 좁은 화면에서는 아래에서 올라오는 시트).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -15,12 +16,11 @@ import {
   CONFIRM_SECONDS_MAX, CONFIRM_SECONDS_MIN, NIGHT_END_HOUR, NIGHT_START_HOUR, RECORD_SECONDS_OPTIONS, enrollProfileFor, enrollProfilePatch,
 } from './wardSettings';
 import { voiceLabel } from './wardSpeech';
-import { WARD_COLORS } from './wardTheme';
+import './settings-ui.css';
 
 const CONFIRM_OPTIONS = Array.from({ length: CONFIRM_SECONDS_MAX - CONFIRM_SECONDS_MIN + 1 }, (_, i) => CONFIRM_SECONDS_MIN + i);
 const INDEX = buildCommandIndex(COMMANDS);
 const LIST_ERROR = '서버에서 등록 목록을 가져오지 못했어요';
-const WARN_LINE = { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk };
 
 /**
  * 명령 목록 고르기 (기본 목록 / 내 목록들) + 내 목록 관리 화면 열기.
@@ -59,17 +59,16 @@ function CommandListSection({ current, onSelect, practice, status, switchBlocked
   }
 
   return (
-    <fieldset className="mb-4 rounded-xl border-2 p-3" style={{ borderColor: WARD_COLORS.line }}>
-      <legend className="px-1 font-semibold">명령 목록</legend>
-      <label className="mb-2 block">
-        <span className="mb-1 block text-sm" style={{ color: WARD_COLORS.inkSoft }}>병실 화면이 쓸 문장 목록</span>
+    <fieldset className="settings-card">
+      <legend className="settings-card-title">명령 목록</legend>
+      <label className="settings-field">
+        <span className="settings-sublabel">병실 화면이 쓸 문장 목록</span>
         <select
           data-command-list-select
           value={current}
           disabled={!!switchBlocked}
           onChange={(e) => onSelect(e.target.value)}
-          className="w-full rounded-lg border-2 px-3 py-2 text-lg disabled:opacity-60"
-          style={{ borderColor: WARD_COLORS.line }}
+          className="settings-select"
         >
           <option value="">{LISTS_TEXT.defaultName} ({INDEX.list.length}개)</option>
           {lists.map((l) => (
@@ -83,26 +82,26 @@ function CommandListSection({ current, onSelect, practice, status, switchBlocked
       {line && (
         <p
           data-list-status={practice ? 'practice' : status?.state}
-          className="mb-2 rounded-md px-2 py-1 text-base font-semibold"
-          style={line.tone === 'warn' ? WARN_LINE : { color: WARD_COLORS.inkSoft }}
+          className={`settings-status ${line.tone === 'warn' ? 'is-warn' : 'is-neutral'}`}
         >
           {line.text}
         </p>
       )}
-      {loadError && <p className="mb-2 text-sm" style={{ color: WARD_COLORS.inkSoft }}>{loadError}</p>}
-      {switchBlocked && <p className="mb-2 rounded-md px-2 py-1 text-base font-semibold" style={WARN_LINE}>{switchBlocked}</p>}
+      {loadError && <p className="settings-help">{loadError}</p>}
+      {switchBlocked && <p className="settings-status is-warn">{switchBlocked}</p>}
       {listsBlocked && !switchBlocked && (
-        <p className="mb-2 rounded-md px-2 py-1 text-base font-semibold" style={WARN_LINE}>{listsBlocked}</p>
+        <p className="settings-status is-warn">{listsBlocked}</p>
       )}
-      <button
-        type="button"
-        onClick={() => onOpenLists?.()}
-        disabled={!!listsBlocked}
-        className="rounded-lg border-2 px-4 py-2 text-lg font-bold disabled:opacity-60"
-        style={{ borderColor: WARD_COLORS.infoBg, color: WARD_COLORS.infoBg, background: WARD_COLORS.paper }}
-      >
-        내 목록 관리
-      </button>
+      <div className="settings-actions">
+        <button
+          type="button"
+          onClick={() => onOpenLists?.()}
+          disabled={!!listsBlocked}
+          className="settings-btn settings-btn-outline"
+        >
+          내 목록 관리
+        </button>
+      </div>
     </fieldset>
   );
 }
@@ -168,15 +167,14 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
 
   const line = enrollStatusLine(current, info, { loadError: infoError });
   return (
-    <fieldset className="mb-4 rounded-xl border-2 p-3" style={{ borderColor: WARD_COLORS.line }}>
-      <legend className="px-1 font-semibold">{ENROLL_TEXT.title}{listName ? ` · ${listName}` : ''}</legend>
-      <label className="mb-2 block">
-        <span className="mb-1 block text-sm" style={{ color: WARD_COLORS.inkSoft }}>병실 화면이 비교할 등록</span>
+    <fieldset className="settings-card">
+      <legend className="settings-card-title">{ENROLL_TEXT.title}{listName ? ` · ${listName}` : ''}</legend>
+      <label className="settings-field">
+        <span className="settings-sublabel">병실 화면이 비교할 등록</span>
         <select
           value={current}
           onChange={(e) => { setMessage(null); onSelect(e.target.value); }}
-          className="w-full rounded-lg border-2 px-3 py-2 text-lg"
-          style={{ borderColor: WARD_COLORS.line }}
+          className="settings-select"
         >
           <option value="">등록 안 씀</option>
           {choices.map((c) => (
@@ -189,26 +187,24 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
       {line && (
         <p
           data-enroll-status={line.tone}
-          className="mb-2 rounded-md px-2 py-1 text-base font-semibold"
-          style={line.tone === 'warn' ? { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk } : { color: WARD_COLORS.ink }}
+          className={`settings-status is-${line.tone === 'warn' || line.tone === 'ok' ? line.tone : 'neutral'}`}
         >
           {line.text}
         </p>
       )}
-      {listError && <p className="mb-2 text-sm" style={{ color: WARD_COLORS.inkSoft }}>{listError}</p>}
-      {message && <p role="status" className="mb-2 text-base font-semibold">{message}</p>}
+      {listError && <p className="settings-help">{listError}</p>}
+      {message && <p role="status" className="settings-message">{message}</p>}
       {blocked && (
-        <p data-enroll-blocked className="mb-2 rounded-md px-2 py-1 text-base font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+        <p data-enroll-blocked className="settings-status is-warn">
           {blocked}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="settings-actions">
         <button
           type="button"
           onClick={() => onOpenEnroll?.(current)}
           disabled={!!blocked}
-          className="rounded-lg px-4 py-2 text-lg font-bold disabled:opacity-60"
-          style={{ background: WARD_COLORS.infoBg, color: WARD_COLORS.infoInk }}
+          className="settings-btn settings-btn-primary"
         >
           {current ? '등록 화면 열기 (이어 찍기·다시 찍기)' : '새로 등록하기'}
         </button>
@@ -217,8 +213,7 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
             type="button"
             onClick={remove}
             disabled={busy}
-            className="rounded-lg border-2 px-4 py-2 text-lg font-semibold"
-            style={{ borderColor: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyBg }}
+            className="settings-btn settings-btn-danger"
           >
             이 등록 지우기
           </button>
@@ -231,7 +226,7 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
 /**
  * 설정 창.
  * @param {object} props
- * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string}} props.settings
+ * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string, inputMode:'switch'|'direct'}} props.settings
  * @param {(patch: object) => void} props.onChange
  * @param {() => void} props.onClose
  * @param {object|null} props.voice 오프라인 한국어 음성(없으면 null).
@@ -244,11 +239,12 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
  * @param {string|null} [props.listSwitchBlocked] 지금 명령 목록을 바꿀 수 없는 이유.
  * @param {() => void} [props.onOpenLists] 내 목록 관리 화면 열기.
  * @param {string|null} [props.listsBlocked] 지금 목록 관리 화면을 열 수 없는 이유.
+ * @param {boolean} [props.inputModeBlocked] 녹화·분석 중이라 입력 방식을 바꿀 수 없음 (환자 화면 토글과 같은 조건).
  * @returns {JSX.Element}
  */
 export default function WardSettingsPanel({
   settings, onChange, onClose, voice, onOpenEnroll, enrollBlocked = null, activeList = '', practice = false, index = INDEX,
-  listStatus = null, listSwitchBlocked = null, onOpenLists, listsBlocked = null,
+  listStatus = null, listSwitchBlocked = null, onOpenLists, listsBlocked = null, inputModeBlocked = false,
 }) {
   // 병실 번호는 입력 중에 기본값으로 되돌아가지 않도록 초안으로 두고, 칸을 벗어나거나 닫을 때 반영한다.
   const [roomDraft, setRoomDraft] = useState(settings.room);
@@ -268,111 +264,148 @@ export default function WardSettingsPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [close]);
 
+  const direct = settings.inputMode === 'direct';
+
   return (
     <div
       data-no-switch
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(17, 24, 39, 0.6)' }}
+      className="settings-overlay"
       onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="환자 화면 설정"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl p-5 shadow-xl"
-        style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}
+        className="settings-dialog"
         onClick={blurAfterPointerClick}
       >
-        <h2 className="mb-4 text-2xl font-bold">설정</h2>
+        <div className="settings-header">
+          <h2 className="settings-title">설정</h2>
+          <p className="settings-note">변경사항은 자동 저장됩니다. 병실 번호는 입력을 마치거나 창을 닫을 때 저장합니다.</p>
+        </div>
 
-        <fieldset className="mb-4">
-          <legend className="mb-1 font-semibold">녹화 길이</legend>
-          <div className="flex flex-wrap gap-2">
-            {RECORD_SECONDS_OPTIONS.map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                aria-pressed={settings.recordSeconds === sec}
-                onClick={() => onChange({ recordSeconds: sec })}
-                className="rounded-lg border-2 px-4 py-2 text-lg font-semibold"
-                style={settings.recordSeconds === sec
-                  ? { background: WARD_COLORS.infoBg, color: WARD_COLORS.infoInk, borderColor: WARD_COLORS.infoBg }
-                  : { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: WARD_COLORS.line }}
+        <div className="settings-body">
+          <section className="settings-card">
+            <h3 className="settings-card-title">입력과 녹화</h3>
+
+            <fieldset className="settings-field">
+              <legend className="settings-label">입력 방식</legend>
+              <div className="settings-segment">
+                <button
+                  type="button"
+                  aria-pressed={!direct}
+                  disabled={inputModeBlocked}
+                  onClick={() => onChange({ inputMode: 'switch' })}
+                  className="settings-segment-button"
+                >
+                  스위치
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={direct}
+                  disabled={inputModeBlocked}
+                  onClick={() => onChange({ inputMode: 'direct' })}
+                  className="settings-segment-button"
+                >
+                  직접 선택
+                </button>
+              </div>
+              <p className="settings-help">스위치: 아무 키·화면 누름으로 고릅니다 · 직접 선택: 고를 항목을 바로 누릅니다 (키 3번은 두 방식 모두 긴급 호출)</p>
+              {inputModeBlocked && <p className="settings-help">녹화·분석 중에는 입력 방식을 바꿀 수 없어요</p>}
+            </fieldset>
+
+            <fieldset className="settings-field">
+              <legend className="settings-label">녹화 길이</legend>
+              <div className="settings-segment">
+                {RECORD_SECONDS_OPTIONS.map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    aria-pressed={settings.recordSeconds === sec}
+                    onClick={() => onChange({ recordSeconds: sec })}
+                    className="settings-segment-button"
+                  >
+                    {sec}초
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <label className="settings-field">
+              <span className="settings-label">보내기 전 확인 시간 (스위치 = 취소)</span>
+              <select
+                value={settings.confirmSeconds}
+                onChange={(e) => onChange({ confirmSeconds: Number(e.target.value) })}
+                className="settings-select settings-select-short"
               >
-                {sec}초
-              </button>
-            ))}
-          </div>
-        </fieldset>
+                {CONFIRM_OPTIONS.map((sec) => <option key={sec} value={sec}>{sec}초</option>)}
+              </select>
+            </label>
+          </section>
 
-        <label className="mb-4 block">
-          <span className="mb-1 block font-semibold">보내기 전 확인 시간 (스위치 = 취소)</span>
-          <select
-            value={settings.confirmSeconds}
-            onChange={(e) => onChange({ confirmSeconds: Number(e.target.value) })}
-            className="rounded-lg border-2 px-3 py-2 text-lg"
-            style={{ borderColor: WARD_COLORS.line }}
-          >
-            {CONFIRM_OPTIONS.map((sec) => <option key={sec} value={sec}>{sec}초</option>)}
-          </select>
-        </label>
+          <section className="settings-card">
+            <h3 className="settings-card-title">병실과 음성</h3>
 
-        <label className="mb-4 block">
-          <span className="mb-1 block font-semibold">병실 번호</span>
-          <input
-            type="text"
-            value={roomDraft}
-            maxLength={10}
-            onChange={(e) => setRoomDraft(e.target.value)}
-            onBlur={commitRoom}
-            onKeyDown={(e) => { if (e.key === 'Enter') commitRoom(); }}
-            className="w-40 rounded-lg border-2 px-3 py-2 text-lg"
-            style={{ borderColor: WARD_COLORS.line }}
+            <label className="settings-field">
+              <span className="settings-label">병실 번호</span>
+              <input
+                type="text"
+                value={roomDraft}
+                maxLength={10}
+                onChange={(e) => setRoomDraft(e.target.value)}
+                onBlur={commitRoom}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitRoom(); }}
+                className="settings-input settings-input-short"
+              />
+            </label>
+
+            <div className="settings-check-group">
+              <label className="settings-check">
+                <input type="checkbox" checked={settings.tts} onChange={(e) => onChange({ tts: e.target.checked })} className="settings-check-input" />
+                <span>음성 읽기 (다인실 사생활을 위해 기본 꺼짐)</span>
+              </label>
+              <p className="settings-help settings-check-help">
+                {voiceLabel(voice)} · 오프라인 한국어 음성만 씁니다
+              </p>
+            </div>
+
+            <label className="settings-check">
+              <input type="checkbox" checked={settings.nightMute} onChange={(e) => onChange({ nightMute: e.target.checked })} className="settings-check-input" />
+              <span>밤 무음 ({NIGHT_START_HOUR}시~{NIGHT_END_HOUR}시 음성 읽기 끔)</span>
+            </label>
+          </section>
+
+          <CommandListSection
+            current={settings.commandList || ''}
+            onSelect={(listId) => onChange({ commandList: listId })}
+            practice={practice}
+            status={practice ? null : listStatus}
+            switchBlocked={listSwitchBlocked}
+            onOpenLists={() => { commitRoom(); onOpenLists?.(); }}
+            listsBlocked={listsBlocked}
           />
-        </label>
 
-        <label className="mb-2 flex items-center gap-2 text-lg">
-          <input type="checkbox" checked={settings.tts} onChange={(e) => onChange({ tts: e.target.checked })} className="h-5 w-5" />
-          음성 읽기 (다인실 사생활을 위해 기본 꺼짐)
-        </label>
-        <p className="mb-3 pl-7 text-sm" style={{ color: WARD_COLORS.inkSoft }}>
-          {voiceLabel(voice)} · 오프라인 한국어 음성만 씁니다
-        </p>
+          <EnrollSection
+            key={activeList || '(default)'}
+            current={enrollProfileFor(settings, activeList)}
+            onSelect={(profile) => onChange(enrollProfilePatch(settings, activeList, profile))}
+            onOpenEnroll={(profile) => { commitRoom(); onOpenEnroll?.(profile); }}
+            blocked={enrollBlocked}
+            listId={activeList}
+            listName={activeList ? `내 목록 ‘${listStatus?.title || activeList}’` : LISTS_TEXT.defaultName}
+            index={index}
+          />
+        </div>
 
-        <label className="mb-4 flex items-center gap-2 text-lg">
-          <input type="checkbox" checked={settings.nightMute} onChange={(e) => onChange({ nightMute: e.target.checked })} className="h-5 w-5" />
-          밤 무음 ({NIGHT_START_HOUR}시~{NIGHT_END_HOUR}시 음성 읽기 끔)
-        </label>
-
-        <CommandListSection
-          current={settings.commandList || ''}
-          onSelect={(listId) => onChange({ commandList: listId })}
-          practice={practice}
-          status={practice ? null : listStatus}
-          switchBlocked={listSwitchBlocked}
-          onOpenLists={() => { commitRoom(); onOpenLists?.(); }}
-          listsBlocked={listsBlocked}
-        />
-
-        <EnrollSection
-          key={activeList || '(default)'}
-          current={enrollProfileFor(settings, activeList)}
-          onSelect={(profile) => onChange(enrollProfilePatch(settings, activeList, profile))}
-          onOpenEnroll={(profile) => { commitRoom(); onOpenEnroll?.(profile); }}
-          blocked={enrollBlocked}
-          listId={activeList}
-          listName={activeList ? `내 목록 ‘${listStatus?.title || activeList}’` : LISTS_TEXT.defaultName}
-          index={index}
-        />
-
-        <button
-          type="button"
-          onClick={close}
-          className="w-full rounded-xl py-3 text-lg font-bold"
-          style={{ background: WARD_COLORS.ink, color: WARD_COLORS.paper }}
-        >
-          닫기
-        </button>
+        <div className="settings-footer">
+          <button
+            type="button"
+            onClick={close}
+            className="settings-btn settings-btn-primary settings-close"
+          >
+            닫기
+          </button>
+        </div>
       </div>
     </div>
   );

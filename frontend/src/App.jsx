@@ -12,6 +12,7 @@ import ResultPage from './pages/ResultPage';
 import UploadPage from './pages/UploadPage';
 import WardPage from './pages/WardPage';
 import WebcamPage from './pages/WebcamPage';
+import WardShell from './ward/WardShell';
 
 // URL 해시로 바로 여는 화면. #capture: 파일럿 촬영, #record: 녹화→분석,
 // #ward: 병실 무음 도우미 환자 화면(#ward?practice=1 연습 모드), #nurse: 간호사실 화면,
@@ -79,16 +80,18 @@ export default function App() {
     else goUpload();
   };
 
+  // 병실 도우미 화면(환자·간호사·등록·내 목록)은 공통 머리띠(WardShell) 안에 그린다.
+  if (view === 'ward' || view === 'nurse' || view === 'enroll' || view === 'lists') {
+    let ward;
+    if (view === 'ward') ward = <WardPage />;
+    else if (view === 'nurse') ward = <NursePage />;
+    else if (view === 'enroll') ward = <EnrollPage />;
+    else ward = <ListsPage />;
+    return <WardShell view={view}>{ward}</WardShell>;
+  }
+
   let screen;
-  if (view === 'ward') {
-    screen = <WardPage />;
-  } else if (view === 'nurse') {
-    screen = <NursePage />;
-  } else if (view === 'enroll') {
-    screen = <EnrollPage />;
-  } else if (view === 'lists') {
-    screen = <ListsPage />;
-  } else if (view === 'capture') {
+  if (view === 'capture') {
     screen = <CapturePage onBack={goUpload} />;
   } else if (view === 'record') {
     screen = <RecordPage onComplete={handleComplete} onBack={goUpload} />;

@@ -25,8 +25,8 @@ import {
 import { LISTS_TEXT, listLoadErrorMessage, listLoadOutcome } from '../ward/wardLists';
 import { enrollProfileFor, enrollProfilePatch, loadSettings, safeLocalStorage, saveSettings } from '../ward/wardSettings';
 import { createBeeper } from '../ward/wardSound';
-import { WARD_COLORS } from '../ward/wardTheme';
 import { analyzeWardRecording } from '../ward/wardUpload';
+import '../ward/enroll-ui.css';
 
 const INDEX = buildCommandIndex(COMMANDS);
 const CAMERA = { width: 1280, height: 720, frameRate: 30 };
@@ -70,14 +70,22 @@ function goWard() {
 }
 
 /**
- * 큰 버튼 공통 모양.
- * @param {'primary'|'secondary'} kind
- * @returns {object}
+/**
+ * 아래 목록에서 문장을 고른 뒤, 바뀐 '이 문장을 말하세요' 칸이 화면 밖이면 그 칸으로 올려 보여 준다.
+ * @param {HTMLElement|null} el
  */
-function buttonStyle(kind) {
-  return kind === 'primary'
-    ? { background: WARD_COLORS.infoBg, color: WARD_COLORS.infoInk, borderColor: WARD_COLORS.infoBg }
-    : { background: WARD_COLORS.paper, color: WARD_COLORS.ink, borderColor: WARD_COLORS.ink };
+function revealTaskPanel(el) {
+  try {
+    globalThis.requestAnimationFrame?.(() => {
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      if (top >= 0 && top <= globalThis.innerHeight * 0.5) return;
+      const reduce = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+    });
+  } catch {
+    /* 스크롤하지 못해도 고른 문장은 바뀌어 있다 */
+  }
 }
 
 /**
@@ -100,27 +108,26 @@ function goLists(practice) {
 function ListGate({ state, listId, practice }) {
   const failed = state.state === 'error';
   return (
-    <div className="min-h-screen" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
-      <header className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.paper }}>
-        <h1 className="text-2xl font-bold">{ENROLL_TEXT.title}</h1>
-        <p className="text-base font-semibold" style={{ color: WARD_COLORS.bannerInk }}>{PROTOTYPE_TEXT}</p>
+    <div className="enroll-ui">
+      <header className="enroll-page-heading" data-no-switch>
+        <div>
+          <p className="enroll-eyebrow">나에게 맞춘 인식 준비</p>
+          <h1>{ENROLL_TEXT.title}</h1>
+          <p className="enroll-page-description">{PROTOTYPE_TEXT}</p>
+        </div>
       </header>
-      <main className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
+      <main className="enroll-start-panel">
         {failed ? (
-          <div role="alert" data-enroll-list-error className="rounded-lg px-4 py-3" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-            <p className="flex items-center gap-2 text-2xl font-bold"><AlertIcon /> 내 목록 ‘{state.title || listId}’: {state.message}</p>
-            <p className="mt-2 text-lg">{ENROLL_TEXT.listLoadFailed}</p>
+          <div role="alert" data-enroll-list-error className="enroll-feedback enroll-feedback-warning">
+            <h3><AlertIcon /> 내 목록 ‘{state.title || listId}’: {state.message}</h3>
+            <p>{ENROLL_TEXT.listLoadFailed}</p>
           </div>
         ) : (
-          <p className="text-2xl font-semibold">{LISTS_TEXT.loading}</p>
+          <div className="enroll-gate-loading" role="status"><span className="enroll-spinner" aria-hidden="true" />{LISTS_TEXT.loading}</div>
         )}
-        <div className="flex flex-wrap gap-3">
-          <button type="button" onClick={goWard} className="rounded-xl border-4 px-6 py-3 text-2xl font-bold" style={buttonStyle('primary')}>
-            {ENROLL_TEXT.backToWard}
-          </button>
-          <button type="button" onClick={() => goLists(practice)} className="rounded-xl border-4 px-6 py-3 text-2xl font-bold" style={buttonStyle('secondary')}>
-            {ENROLL_TEXT.manageLists}
-          </button>
+        <div className="enroll-task-actions enroll-gate-actions">
+          <button type="button" onClick={goWard} className="enroll-btn enroll-btn-primary">{ENROLL_TEXT.backToWard}</button>
+          <button type="button" onClick={() => goLists(practice)} className="enroll-btn enroll-btn-outline">{ENROLL_TEXT.manageLists}</button>
         </div>
       </main>
     </div>
@@ -215,6 +222,10 @@ function EnrollScreen({ index, listId, storage, practice, initialNotice = null, 
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [notice, setNotice] = useState(initialNotice);
   const [inUseProfile, setInUseProfile] = useState(() => enrollProfileFor(loadSettings(storage), listId) || '');
+  const [listFilter, setListFilter] = useState('missing');
+  const [analysisElapsed, setAnalysisElapsed] = useState(0);
+  const analysisStartedRef = useRef(null);
+  const taskPanelRef = useRef(null);
   const mountedRef = useRef(true);
   const loadSeqRef = useRef(0);
   const coolTimerRef = useRef(null);
@@ -252,6 +263,7 @@ function EnrollScreen({ index, listId, storage, practice, initialNotice = null, 
     const s = stateRef.current;
     if (!mountedRef.current || s.phase !== 'recording' || !s.recordingId) return;
     const profile = s.profile;
+    analysisStartedRef.current = Date.now();
     dispatch({ type: 'RECORD_DONE' });
     // 내 목록이면 불러온 판(sha256)을 함께 보낸다: 그사이 다른 탭에서 목록을 고쳤으면 서버가 저장하지 않고 거절한다.
     const outcome = await analyzeWardRecording({
@@ -409,79 +421,86 @@ function EnrollScreen({ index, listId, storage, practice, initialNotice = null, 
   const uncertain = uncertainCommands(index, state.info);
   const inUse = inUseProfile === state.profile;
   const stale = state.info?.status === 'stale';
+  const missingCount = rows.filter((row) => !row.done).length;
+  const visibleRows = rows.filter((row) => listFilter === 'all' || (listFilter === 'review' ? row.warn : !row.done));
+  const progress = total ? Math.min(100, Math.max(0, count / total * 100)) : 0;
+  const priorSuccess = last?.kind === 'stored' && last.matches && last.commandId !== state.currentId;
+  const stageLabel = state.phase === 'recording' ? '녹화 중' : state.phase === 'analyzing' ? '결과 기다리는 중'
+    : state.phase === 'review' ? '다시 확인해 주세요' : state.phase === 'done' ? '저장 완료' : '촬영 준비';
+
+  // 표시용 시간만 갱신한다. 기존 업로드·폴링·저장 상태 전환은 변경하지 않는다.
+  useEffect(() => {
+    if (state.phase !== 'analyzing') {
+      setAnalysisElapsed(0);
+      return undefined;
+    }
+    const started = analysisStartedRef.current ?? Date.now();
+    const tick = () => setAnalysisElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000)));
+    tick();
+    const timer = setInterval(tick, 500);
+    return () => clearInterval(timer);
+  }, [state.phase]);
+
+  // 공통 화면 이동도 기존 등록 페이지의 녹화·저장 중 이동 제한을 따른다.
+  useEffect(() => {
+    const announce = (locked) => window.dispatchEvent(new CustomEvent('ward-ui-navigation-lock', {
+      detail: { locked, reason: '등록 녹화·저장 중입니다' },
+    }));
+    announce(busy);
+    return () => announce(false);
+  }, [busy]);
 
   return (
-    <div className="min-h-screen" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
-      <header data-no-switch className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.paper }} onClick={blurAfterPointerClick}>
-        <h1 className="text-2xl font-bold">{ENROLL_TEXT.title}</h1>
-        <p className="text-base font-semibold" style={{ color: WARD_COLORS.bannerInk }}>{PROTOTYPE_TEXT}</p>
-        <div className="ml-auto flex flex-wrap gap-2">
+    <div className="enroll-ui">
+      <header className="enroll-page-heading" data-no-switch onClick={blurAfterPointerClick}>
+        <div>
+          <p className="enroll-eyebrow">나에게 맞춘 인식 준비</p>
+          <h1>{ENROLL_TEXT.title}</h1>
+          <p className="enroll-page-description">{PROTOTYPE_TEXT}</p>
+        </div>
+        <div className="enroll-heading-actions">
           {state.phase !== 'choose' && !busy && (
-            <button
-              type="button"
-              onClick={() => { setNotice(null); dispatch({ type: 'RESET' }); }}
-              className="rounded-lg border-2 px-3 py-1 font-semibold"
-              style={{ borderColor: WARD_COLORS.paper, color: WARD_COLORS.paper }}
-            >
+            <button type="button" className="enroll-btn enroll-btn-quiet" onClick={() => { setNotice(null); dispatch({ type: 'RESET' }); }}>
               {ENROLL_TEXT.otherProfile}
             </button>
           )}
-          <button
-            type="button"
-            onClick={goWard}
-            disabled={busy}
-            className="rounded-lg px-3 py-1 font-semibold"
-            style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}
-          >
+          <button type="button" className="enroll-btn enroll-btn-outline" onClick={goWard} disabled={busy}>
             {ENROLL_TEXT.backToWard}
           </button>
         </div>
       </header>
 
-      {notice && <p role="status" className="px-4 py-2 text-lg font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>{notice}</p>}
+      {notice && <p role="status" className="enroll-feedback enroll-feedback-warning">{notice}</p>}
 
       {state.phase === 'choose' && (
-        <main className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
-          <p className="text-xl">{ENROLL_TEXT.intro}</p>
-          <p data-enroll-list={listId || 'default'} className="text-lg font-semibold">
+        <main className="enroll-start-panel">
+          <div className="enroll-start-icon" aria-hidden="true">01</div>
+          <h2>등록 이름부터 정해 주세요</h2>
+          <p>{ENROLL_TEXT.intro}</p>
+          <p data-enroll-list={listId || 'default'} className="enroll-list-line">
             {ENROLL_TEXT.listLine(listName, total)}{index.customList ? ` · ${LISTS_TEXT.untested}` : ''}
           </p>
-          <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{ENROLL_TEXT.privacy}</p>
-          <form
-            className="flex flex-wrap items-end gap-3"
-            onSubmit={(e) => { e.preventDefault(); choose(profileDraft.trim()); }}
-          >
-            <label className="flex flex-col gap-1">
-              <span className="text-lg font-semibold">{ENROLL_TEXT.profileLabel}</span>
-              <input
-                type="text"
-                value={profileDraft}
-                maxLength={32}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setProfileDraft(e.target.value)}
-                className="w-64 rounded-lg border-2 px-3 py-2 text-2xl"
-                style={{ borderColor: WARD_COLORS.line }}
-              />
+          <form className="enroll-name-form" onSubmit={(e) => { e.preventDefault(); choose(profileDraft.trim()); }}>
+            <label>
+              <span>{ENROLL_TEXT.profileLabel}</span>
+              <input type="text" value={profileDraft} maxLength={32} autoComplete="off" spellCheck={false}
+                placeholder="예: bed305" aria-describedby="enroll-name-help"
+                onChange={(e) => setProfileDraft(e.target.value)} />
             </label>
-            <button type="submit" className="rounded-xl border-4 px-6 py-2 text-2xl font-bold" style={buttonStyle('primary')}>
-              {ENROLL_TEXT.start}
-            </button>
+            <button type="submit" className="enroll-btn enroll-btn-primary">{ENROLL_TEXT.start}</button>
           </form>
-          {state.error && <p role="alert" className="rounded-md px-3 py-2 text-lg font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>{state.error}</p>}
+          <p id="enroll-name-help" className="enroll-help">{ENROLL_TEXT.privacy}</p>
+          {state.error && <p role="alert" className="enroll-feedback enroll-feedback-warning">{state.error}</p>}
           {choices.length > 0 && (
-            <section aria-label={ENROLL_TEXT.existing}>
-              <h2 className="mb-2 text-lg font-semibold">{ENROLL_TEXT.existing}</h2>
-              <div className="flex flex-wrap gap-2">
+            <section className="enroll-existing" aria-label={ENROLL_TEXT.existing}>
+              <h3>{ENROLL_TEXT.existing}</h3>
+              <div className="enroll-profile-choices">
                 {choices.map((c) => (
-                  <button
-                    key={c.profile}
-                    type="button"
-                    onClick={() => choose(c.profile)}
-                    className="rounded-lg border-2 px-4 py-2 text-lg font-semibold"
-                    style={buttonStyle('secondary')}
-                  >
-                    {c.profile}{c.count !== null ? ` (${c.count}/${total})` : ''}{c.status === 'stale' ? ' · 다시 등록 필요' : ''}
+                  <button key={c.profile} type="button" className="enroll-existing-choice" onClick={() => choose(c.profile)}>
+                    <strong>{c.profile}</strong>
+                    <span>{c.count !== null ? `저장 ${c.count}/${total}` : '등록 상태 확인'}
+                      {c.status === 'stale' ? ' · 다시 등록 필요' : ''}</span>
+                    <span aria-hidden="true">→</span>
                   </button>
                 ))}
               </div>
@@ -490,182 +509,175 @@ function EnrollScreen({ index, listId, storage, practice, initialNotice = null, 
         </main>
       )}
 
-      {state.phase === 'loading' && <p className="p-6 text-2xl font-semibold">{ENROLL_TEXT.loading}</p>}
+      {state.phase === 'loading' && (
+        <div className="enroll-loading-panel" role="status"><span className="enroll-spinner" aria-hidden="true" />{ENROLL_TEXT.loading}</div>
+      )}
 
       {!['choose', 'loading'].includes(state.phase) && (
-        <main className="grid gap-4 p-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <section aria-label="카메라" className="flex flex-col gap-2">
-            <div className="relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: WARD_COLORS.ink }}>
-              <video ref={videoRef} className="h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline muted />
-              {camStatus !== 'ready' && camStatus !== 'recording' && (
-                <div className="absolute inset-0 flex items-center justify-center p-3 text-center text-base" style={{ color: WARD_COLORS.paper }}>
-                  {cameraText(rec)}
-                </div>
-              )}
-              {state.phase === 'recording' && (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ border: `10px solid ${WARD_COLORS.infoBg}` }} />
-              )}
+        <>
+          <section className="enroll-progress-panel" aria-label="등록 진행">
+            <div className="enroll-progress-heading">
+              <div className="enroll-profile-label">
+                <span className="enroll-label">등록 이름</span><strong>{state.profile}</strong>
+                <span className="enroll-list-name" data-enroll-list={listId || 'default'}>
+                  {listName}{index.customList ? ` · ${LISTS_TEXT.untested}` : ''}
+                </span>
+              </div>
+              <div className="enroll-counts">
+                <span className="enroll-count-main">저장 <strong>{count}<small>/{total}</small></strong></span>
+                <span className={uncertain.length ? 'enroll-chip enroll-chip-warning' : 'enroll-chip'}>확인 필요 {uncertain.length}</span>
+                <span className="enroll-chip">미등록 {missingCount}</span>
+              </div>
             </div>
-            {camStatus === 'error' && globalThis.isSecureContext && (
-              <div data-no-switch onClick={blurAfterPointerClick}>
-                <button type="button" onClick={() => open()} className="rounded-lg border-2 px-4 py-2 text-lg font-semibold" style={buttonStyle('secondary')}>
-                  카메라 다시 열기
-                </button>
-              </div>
-            )}
-            <p className="text-2xl font-bold">{state.profile} · {ENROLL_TEXT.progress(count, total)}</p>
-            <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{listName}{index.customList ? ` · ${LISTS_TEXT.untested}` : ''}</p>
-            {line && line.tone === 'warn' && state.info?.status === 'stale' && (
-              <div role="alert" className="rounded-lg px-3 py-2" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-                <p className="flex items-center gap-2 text-lg font-bold"><AlertIcon /> {ENROLL_TEXT.stale}</p>
-                <button
-                  type="button"
-                  onClick={deleteAndRestart}
-                  disabled={deleteBusy || busy}
-                  className="mt-2 rounded-lg border-2 px-3 py-1 text-lg font-semibold"
-                  style={{ borderColor: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyBg, background: WARD_COLORS.paper }}
-                >
-                  {ENROLL_TEXT.deleteAndRestart}
-                </button>
-              </div>
-            )}
+            <div className="enroll-progress-track" role="progressbar" aria-label="저장 진행" aria-valuemin={0} aria-valuemax={total} aria-valuenow={count}>
+              <span style={{ width: `${progress}%` }} />
+            </div>
+            <p className="enroll-help">확인 필요 항목도 저장 개수에 포함됩니다. 원하는 항목은 아래 목록에서 다시 찍을 수 있어요.</p>
           </section>
 
-          <section aria-live="polite" className="flex flex-col gap-3 rounded-2xl border-4 p-5" style={{ borderColor: state.phase === 'recording' ? WARD_COLORS.infoBg : WARD_COLORS.line }}>
-            {state.phase === 'done' ? (
-              <>
-                <p className="flex items-center gap-3 text-4xl font-black"><CheckIcon /> {ENROLL_TEXT.doneTitle} ({count}/{total})</p>
-                {uncertain.length > 0 && (
-                  <div role="alert" data-uncertain-count={uncertain.length} className="flex flex-col gap-2 rounded-lg px-3 py-2" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-                    <p className="flex items-center gap-2 text-2xl font-bold"><AlertIcon /> {ENROLL_TEXT.uncertainTitle(uncertain.length)}</p>
-                    <p className="text-lg">{ENROLL_TEXT.uncertainSub}</p>
-                    <ul className="flex flex-col gap-2" data-no-switch onClick={blurAfterPointerClick}>
-                      {uncertain.map(({ command: c, heardAs }) => (
-                        <li key={c.id} className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-                          <span>{ENROLL_TEXT.uncertainItem(c, heardAs)}</span>
-                          <button
-                            type="button"
-                            data-retake-id={c.id}
-                            onClick={() => dispatch({ type: 'SELECT', commandId: c.id })}
-                            className="rounded-lg border-2 px-3 py-1 text-lg font-bold"
-                            style={buttonStyle('secondary')}
-                          >
-                            {ENROLL_TEXT.retake}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+          <main className="enroll-workspace">
+            <section aria-label="카메라" className="enroll-camera-panel">
+              <div className="enroll-camera-heading"><h2>카메라 미리보기</h2><span className="enroll-camera-state">{cameraReady ? '준비됨' : camStatus === 'recording' ? '녹화 중' : camStatus === 'error' ? '카메라를 쓸 수 없음' : '준비 확인'}</span></div>
+              <div className={`enroll-camera-preview${state.phase === 'recording' ? ' is-recording' : ''}`}>
+                <video ref={videoRef} playsInline muted />
+                {camStatus !== 'ready' && camStatus !== 'recording' && (
+                  <div className="enroll-camera-placeholder">{cameraText(rec)}</div>
                 )}
-                <p className="text-2xl font-semibold" data-enroll-in-use={inUse ? 'true' : 'false'}>
-                  {inUse ? ENROLL_TEXT.doneSub(state.profile) : ENROLL_TEXT.doneNotInUse(state.profile)}
-                </p>
-                <div data-no-switch className="flex flex-wrap gap-3" onClick={blurAfterPointerClick}>
-                  {!inUse && (
-                    <button
-                      type="button"
-                      onClick={() => applyProfile(state.profile)}
-                      className="rounded-xl border-4 px-6 py-3 text-2xl font-bold"
-                      style={uncertain.length > 0 ? buttonStyle('secondary') : buttonStyle('primary')}
-                    >
-                      {uncertain.length > 0 ? ENROLL_TEXT.useAnyway : ENROLL_TEXT.useThis}
-                    </button>
-                  )}
-                  <button type="button" onClick={goWard} className="rounded-xl border-4 px-6 py-3 text-2xl font-bold" style={inUse ? buttonStyle('primary') : buttonStyle('secondary')}>
-                    {ENROLL_TEXT.backToWard}
+              </div>
+              <p className="enroll-help">얼굴과 입이 화면 안에 보이도록 맞춰 주세요.</p>
+              {camStatus === 'error' && globalThis.isSecureContext && (
+                <div data-no-switch onClick={blurAfterPointerClick}>
+                  <button type="button" onClick={() => open()} className="enroll-btn enroll-btn-outline">카메라 다시 열기</button>
+                </div>
+              )}
+              {line && line.tone === 'warn' && stale && (
+                <div role="alert" className="enroll-feedback enroll-feedback-warning">
+                  <p><AlertIcon /> {ENROLL_TEXT.stale}</p>
+                  <button type="button" className="enroll-btn enroll-btn-danger" onClick={deleteAndRestart} disabled={deleteBusy || busy}>
+                    {deleteBusy ? '지우는 중…' : ENROLL_TEXT.deleteAndRestart}
                   </button>
                 </div>
-                <p className="text-lg" style={{ color: WARD_COLORS.inkSoft }}>{ENROLL_TEXT.pickAgain}</p>
-              </>
-            ) : command && (
-              <>
-                <p className="text-xl font-semibold" style={{ color: WARD_COLORS.inkSoft }}>
-                  {command.id}{command.emergency ? ' · [긴급]' : ''} · {ENROLL_TEXT.sayThis}
-                </p>
-                <p className="font-black" style={{ fontSize: 'max(7vh, 2.25rem)', lineHeight: 1.2, wordBreak: 'keep-all' }}>
-                  “{command.text}”
-                </p>
-                <p className="text-2xl font-semibold">{ENROLL_TEXT.howTo}</p>
-                <p className="text-lg" style={{ color: WARD_COLORS.inkSoft }}>{ENROLL_TEXT.shownAs(command.display)}</p>
+              )}
+            </section>
 
-                {last && (
-                  <div
-                    role={last.kind === 'stored' && last.matches ? 'status' : 'alert'}
-                    data-store-result={last.kind}
-                    className="flex items-start gap-2 rounded-lg px-3 py-2 text-xl font-semibold"
-                    style={last.kind === 'stored' && last.matches
-                      ? { background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }
-                      : { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}
-                  >
-                    {last.kind === 'stored' && last.matches ? <CheckIcon /> : <AlertIcon />}
-                    <span>{last.message}</span>
+            <section ref={taskPanelRef} aria-live="polite" className={`enroll-task-panel phase-${state.phase}`}>
+              <div className="enroll-task-topline"><span className="enroll-stage-label">{stageLabel}</span>{command && state.phase !== 'done' && <span className="enroll-current-id">현재 {command.id} / {total}개</span>}</div>
+              {state.phase === 'done' ? (
+                <>
+                  <div className="enroll-completion-title"><CheckIcon /><h2>{ENROLL_TEXT.doneTitle} · {total}개 문장 저장</h2></div>
+                  {uncertain.length > 0 && (
+                    <div role="alert" data-uncertain-count={uncertain.length} className="enroll-feedback enroll-feedback-warning">
+                      <h3><AlertIcon /> {ENROLL_TEXT.uncertainTitle(uncertain.length)}</h3>
+                      <p>{ENROLL_TEXT.uncertainSub}</p>
+                      <ul className="enroll-uncertain-list" data-no-switch onClick={blurAfterPointerClick}>
+                        {uncertain.map(({ command: c, heardAs }) => (
+                          <li key={c.id}>
+                            <span>{ENROLL_TEXT.uncertainItem(c, heardAs)}</span>
+                            <button type="button" data-retake-id={c.id} onClick={() => dispatch({ type: 'SELECT', commandId: c.id })} className="enroll-btn enroll-btn-outline">
+                              {ENROLL_TEXT.retake}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className={`enroll-use-status${inUse ? ' is-active' : ''}`} data-enroll-in-use={inUse ? 'true' : 'false'}>
+                    {inUse ? ENROLL_TEXT.doneSub(state.profile) : ENROLL_TEXT.doneNotInUse(state.profile)}
+                  </p>
+                  <div className="enroll-task-actions" data-no-switch onClick={blurAfterPointerClick}>
+                    {!inUse && (
+                      <button type="button" onClick={() => applyProfile(state.profile)} className={`enroll-btn ${uncertain.length ? 'enroll-btn-outline' : 'enroll-btn-primary'}`}>
+                        {uncertain.length > 0 ? ENROLL_TEXT.useAnyway : ENROLL_TEXT.useThis}
+                      </button>
+                    )}
+                    <button type="button" onClick={goWard} className={`enroll-btn ${inUse ? 'enroll-btn-primary' : 'enroll-btn-outline'}`}>{ENROLL_TEXT.backToWard}</button>
                   </div>
-                )}
+                  <p className="enroll-help">{ENROLL_TEXT.pickAgain}</p>
+                </>
+              ) : command && (
+                <>
+                  <p className="enroll-prompt-label">{ENROLL_TEXT.sayThis}{command.emergency && <span className="enroll-emergency-label">긴급 문장</span>}</p>
+                  <h2 className="enroll-prompt">“{command.text}”</h2>
+                  <p className="enroll-speaking-tip">{ENROLL_TEXT.howTo}</p>
+                  <p className="enroll-display-note">{ENROLL_TEXT.shownAs(command.display)}</p>
+                  {last && (
+                    <div role={last.kind === 'stored' && last.matches ? 'status' : 'alert'} data-store-result={last.kind}
+                      className={`enroll-feedback ${last.kind === 'stored' && last.matches ? 'enroll-feedback-success' : 'enroll-feedback-warning'}`}>
+                      {last.kind === 'stored' && last.matches ? <CheckIcon /> : <AlertIcon />}
+                      <span>{priorSuccess ? `${last.commandId} 저장 완료 → 이제 ${command.id}를 찍으세요` : last.message}</span>
+                    </div>
+                  )}
+                  <div className="enroll-task-actions" data-no-switch onClick={blurAfterPointerClick}>
+                    {state.phase === 'recording' && (
+                      <div className="enroll-recording-status" role="status">
+                        <p><span className="enroll-recording-dot" aria-hidden="true" />녹화 중 <strong>{remaining}초</strong> 남음</p>
+                        <div className="enroll-recording-track" aria-hidden="true"><span style={{ width: `${Math.max(0, remaining / ENROLL_RECORD_SECONDS * 100)}%` }} /></div>
+                        <span className="enroll-help">시간이 끝나면 자동으로 저장을 시작합니다.</span>
+                      </div>
+                    )}
+                    {state.phase === 'analyzing' && (
+                      <div className="enroll-analysis-status" role="status">
+                        <span className="enroll-spinner" aria-hidden="true" />
+                        <div><p>등록 결과를 기다리는 중 <strong>{analysisElapsed}초</strong></p>
+                          <span className="enroll-help">{analysisElapsed >= 15 ? '평소보다 오래 걸리고 있어요. 서버 처리 결과를 기다리고 있습니다.' : '녹화한 영상을 보내고 입 모양을 확인하고 있어요.'}</span></div>
+                      </div>
+                    )}
+                    {(state.phase === 'ready' || state.phase === 'review') && (
+                      <button type="button" onClick={startRecording} disabled={!canStart} className="enroll-btn enroll-btn-primary enroll-record-button">
+                        {state.phase === 'review' || (last && last.kind !== 'stored' && last.commandId === command.id) ? ENROLL_TEXT.retake : '녹화 시작'}
+                        <span className="enroll-button-shortcut">스페이스바 · {ENROLL_RECORD_SECONDS}초</span>
+                      </button>
+                    )}
+                    {state.phase === 'review' && (
+                      <button type="button" onClick={() => dispatch({ type: 'NEXT' })} className="enroll-btn enroll-btn-outline">확인 필요로 남기고 다음</button>
+                    )}
+                  </div>
+                  {coolingDown && !busy && <p className="enroll-help">잠시 뒤 다음 녹화를 시작할 수 있어요.</p>}
+                  {stale && !busy && <p className="enroll-help">{ENROLL_TEXT.staleNoRecord}</p>}
+                  {!stale && !cameraReady && !busy && <p className="enroll-help">{ENROLL_TEXT.cameraFirst}</p>}
+                  {busy && <p className="enroll-help">녹화·저장 중에는 등록 이름과 촬영 항목을 바꿀 수 없어요.</p>}
+                </>
+              )}
+            </section>
 
-                <div data-no-switch className="flex flex-wrap gap-3" onClick={blurAfterPointerClick}>
-                  {state.phase === 'recording' && (
-                    <p className="rounded-xl px-6 py-3 text-2xl font-bold" style={buttonStyle('primary')}>{ENROLL_TEXT.recording(remaining)}</p>
-                  )}
-                  {state.phase === 'analyzing' && <p className="py-3 text-2xl font-bold">{ENROLL_TEXT.analyzing}</p>}
-                  {(state.phase === 'ready' || state.phase === 'review') && (
-                    <button
-                      type="button"
-                      onClick={startRecording}
-                      disabled={!canStart}
-                      className="rounded-xl border-4 px-6 py-3 text-2xl font-bold disabled:opacity-60"
-                      style={buttonStyle('primary')}
-                    >
-                      {state.phase === 'review' || (last && last.kind !== 'stored' && last.commandId === command.id)
-                        ? `${ENROLL_TEXT.retake} (스페이스바)` : ENROLL_TEXT.record(ENROLL_RECORD_SECONDS)}
+            <section aria-label="명령 목록" className="enroll-command-panel" data-no-switch onClick={blurAfterPointerClick}>
+              <div className="enroll-list-heading">
+                <div><h2>촬영할 문장</h2><p className="enroll-help">현재 문장은 위에 표시됩니다. 다른 문장을 선택하면 다시 찍을 수 있어요.</p></div>
+                <div className="enroll-filters" role="group" aria-label="명령 목록 필터">
+                  {[['missing', '미등록', missingCount], ['review', '확인 필요', uncertain.length], ['all', '전체', total]].map(([value, label, n]) => (
+                    <button key={value} type="button" aria-pressed={listFilter === value} onClick={() => setListFilter(value)}>
+                      {label} <span>{n}</span>
                     </button>
-                  )}
-                  {state.phase === 'review' && (
-                    <button
-                      type="button"
-                      onClick={() => dispatch({ type: 'NEXT' })}
-                      className="rounded-xl border-4 px-6 py-3 text-2xl font-bold"
-                      style={buttonStyle('secondary')}
-                    >
-                      {ENROLL_TEXT.next}
-                    </button>
-                  )}
+                  ))}
                 </div>
-                {stale && !busy && <p className="text-lg font-semibold">{ENROLL_TEXT.staleNoRecord}</p>}
-                {!stale && !cameraReady && !busy && <p className="text-lg" style={{ color: WARD_COLORS.inkSoft }}>{ENROLL_TEXT.cameraFirst}</p>}
-              </>
-            )}
-          </section>
-
-          <section aria-label="명령 목록" className="lg:col-span-2" data-no-switch onClick={blurAfterPointerClick}>
-            <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              {rows.map((row) => {
-                const mark = row.warn ? '확인 필요' : (row.done ? '찍음' : '아직');
-                return (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      data-command-id={row.id}
-                      data-done={row.done ? 'true' : 'false'}
-                      aria-current={row.current ? 'true' : undefined}
-                      onClick={() => dispatch({ type: 'SELECT', commandId: row.id })}
-                      disabled={busy}
-                      className="flex w-full items-center gap-2 rounded-xl border-4 px-3 py-2 text-left text-lg font-semibold"
-                      style={{
-                        background: row.current ? WARD_COLORS.infoBg : WARD_COLORS.paper,
-                        color: row.current ? WARD_COLORS.infoInk : WARD_COLORS.ink,
-                        borderColor: row.current ? WARD_COLORS.infoBg : (row.done ? WARD_COLORS.ink : WARD_COLORS.line),
-                        borderStyle: row.done ? 'solid' : 'dashed',
-                      }}
-                    >
-                      <span className="w-20 shrink-0 font-black">{row.done && !row.warn ? '✓ ' : ''}{mark}</span>
-                      <span>{row.id} {row.display}{row.emergency ? ' [긴급]' : ''}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        </main>
+              </div>
+              {visibleRows.length === 0 ? (
+                <div className="enroll-empty-list">
+                  <CheckIcon /><p>{listFilter === 'review' ? '확인 필요한 문장이 없어요.' : '미등록 문장이 없어요.'}</p>
+                  <button type="button" className="enroll-btn enroll-btn-quiet" onClick={() => setListFilter('all')}>전체 문장 보기</button>
+                </div>
+              ) : (
+                <ol className="enroll-command-grid">
+                  {visibleRows.map((row) => (
+                    <li key={row.id}>
+                      <button type="button" data-command-id={row.id} data-done={row.done ? 'true' : 'false'}
+                        aria-current={row.current ? 'true' : undefined}
+                        onClick={() => { dispatch({ type: 'SELECT', commandId: row.id }); revealTaskPanel(taskPanelRef.current); }} disabled={busy}
+                        className={`enroll-command ${row.current ? 'is-current' : ''}`}>
+                        <div className="enroll-command-meta"><span>{row.id}</span><span className={`enroll-command-mark ${row.warn ? 'is-warning' : row.done ? 'is-saved' : ''}`}>
+                          {row.warn ? '확인 필요' : row.done ? '✓ 저장됨' : '미등록'}
+                        </span></div>
+                        <span className="enroll-command-title">{row.display}</span>
+                        {row.emergency && <span className="enroll-command-emergency"><AlertIcon />긴급</span>}
+                        {row.current && <span className="enroll-current-note">현재 촬영할 문장</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          </main>
+        </>
       )}
     </div>
   );

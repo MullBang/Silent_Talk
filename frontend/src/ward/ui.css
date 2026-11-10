@@ -1,0 +1,36 @@
+/* ui.css — 병실 도우미 화면 공통 모양 (WardShell 안에서만 적용; 업로드·녹화 화면에는 영향 없음). */
+.ward-app {
+  --ui-ink: #172b45; --ui-muted: #52647a; --ui-border: #d7dfeb; --ui-blue: #1e40af; --ui-bg: #f4f7fb;
+  min-height: 100vh; background: #f4f7fb; color: #172b45;
+  font-family: 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font-synthesis: none; text-rendering: optimizeLegibility;
+}
+/* 기본값만 정하고 화면별 규칙이 이기도록 :where()로 우선순위를 0으로 둔다 (불러오는 순서와 상관없이). */
+:where(.ward-app button, .ward-app input, .ward-app select) { font: inherit; }
+:where(.ward-app button, .ward-app a, .ward-app input, .ward-app select, .ward-app summary) { -webkit-tap-highlight-color: transparent; }
+.ward-app button:focus-visible, .ward-app a:focus-visible, .ward-app input:focus-visible,
+.ward-app select:focus-visible, .ward-app summary:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
+:where(.ward-app button) { transition: background-color .15s, border-color .15s, box-shadow .15s; }
+:where(.ward-app button:not(:disabled)) { cursor: pointer; }
+:where(.ward-app button:disabled) { cursor: not-allowed; }
+.app-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 28px; background: white; border-bottom: 1px solid #d7dfeb; color: #142d4e; }
+.app-brand { display: flex; align-items: center; gap: 10px; }
+.app-brand > div { display: flex; flex-direction: column; gap: 1px; }
+.app-brand strong { font-size: 20px; letter-spacing: -.04em; }
+.app-brand > div > span { font-size: 12px; color: #52647a; }
+.app-bar nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-bar nav button { border: 1px solid #d7dfeb; background: white; border-radius: 9px; min-height: 38px; padding: 7px 12px; font-weight: 600; font-size: 13px; }
+.app-bar nav button:hover:not(:disabled) { background: #edf3ff; border-color: #93a9da; }
+.app-bar nav button:disabled { opacity: .45; }
+.app-current { font-size: 13px; font-weight: 700; color: #1e40af; margin-right: 7px; }
+@media (max-width: 767px) {
+  .app-bar { padding: 12px 16px; gap: 12px; flex-wrap: wrap; }
+  .app-brand strong { font-size: 18px; }
+  .app-brand > div > span { display: none; }
+  .app-bar nav { gap: 6px; }
+  .app-bar nav button { font-size: 12px; padding: 6px 9px; }
+  .app-current { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ward-app *, .ward-app *::before, .ward-app *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

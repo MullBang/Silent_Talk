@@ -27,7 +27,8 @@ import {
   LISTS_TEXT, listBannerText, listLoadErrorMessage, listLoadOutcome, resultsFromOtherListVersion,
 } from '../ward/wardLists';
 import {
-  PHASE_LABELS, WARD_TEXT, createWardState, enrollOpenBlockReason, listSwitchBlockReason, listsOpenBlockReason, stepWard, wardView,
+  PHASE_LABELS, WARD_TEXT, createWardState, enrollOpenBlockReason, listSwitchBlockReason, listsOpenBlockReason, scanDeadline,
+  scanItemKey, scanToken, stepWard, wardView,
 } from '../ward/wardMachine';
 import { practiceResults } from '../ward/wardPractice';
 import {
@@ -38,6 +39,7 @@ import { createBeeper } from '../ward/wardSound';
 import { NO_VOICE_TEXT, pickKoreanLocalVoice, speakText } from '../ward/wardSpeech';
 import { TONE_STYLES, WARD_COLORS, WARD_KEYFRAMES } from '../ward/wardTheme';
 import { analyzeWardRecording } from '../ward/wardUpload';
+import '../ward/patient-ui.css';
 
 const INDEX = buildCommandIndex(COMMANDS);
 const CAMERA = { width: 1280, height: 720, frameRate: 30 };
@@ -108,6 +110,7 @@ export default function WardPage() {
   if (!beeperRef.current) beeperRef.current = createBeeper();
   const channelRef = useRef(null);
   const mountedRef = useRef(true);
+  const scanListRef = useRef(null); // 스위치 모드에서 강조된 항목을 화면 안으로 스크롤할 때 쓴다
   const activeRunRef = useRef(0);
   // 녹화기가 지금 찍고 있는(결과를 아직 넘기지 않은) 녹화의 실행 번호. 녹화를 실제로 시작할 때 정하고 결과에서 지운다.
   // 결과가 올 때의 activeRunRef가 아니라 이 값으로 판단해야, 멈춘 옛 녹화가 새 실행의 결과로 올라가지 않는다.
@@ -282,7 +285,7 @@ export default function WardPage() {
       dispatch({ type: 'PRESS', repeat: e.repeat === true });
     };
     const onPointer = (e) => {
-      if (showSettingsRef.current || !pointerIsSwitch(e)) return;
+      if (showSettingsRef.current || machineRef.current.settings.inputMode === 'direct' || !pointerIsSwitch(e)) return;
       unlockAudio();
       dispatch({ type: 'PRESS' });
     };
@@ -491,32 +494,61 @@ export default function WardPage() {
   const banner = listReady ? listBannerText(machine.index.customList) : null;
   const pickedList = machine.settings.commandList;
 
+  const direct = settings.inputMode === 'direct';
+  const busy = machine.phase === 'recording' || machine.phase === 'analyzing';
+  // 남은 시간 막대: 녹화·보내기 전 확인, 그리고 직접 선택 모드의 스캐닝(강조가 없으니 목록이 닫히는 시각을 보여 준다).
+  const scanTimed = direct && machine.phase === 'scan' ? scanDeadline(machine.scan) : null;
+  const timed = machine.phase === 'recording' ? machine.recording : machine.phase === 'confirm' ? machine.confirm : scanTimed;
+  const secondsLeft = timed ? Math.max(0, Math.min(Math.ceil((timed.endsAt - timed.startedAt) / 1000), Math.ceil((timed.endsAt - now) / 1000))) : null;
+  const timeFraction = timed ? Math.max(0, Math.min(1, (timed.endsAt - now) / (timed.endsAt - timed.startedAt))) : 0;
+  const analysisSeconds = machine.analysis ? Math.max(0, Math.floor((now - machine.analysis.startedAt) / 1000)) : 0;
+  const selectionToken = scanToken(machine);
+  // 첫 화면 문구는 입 읽기를 쓸 수 있을 때만 바꾼다 (내 목록을 불러오는 중·실패 안내를 덮지 않는다).
+  const welcome = machine.phase === 'idle' && machine.screen?.kind === 'welcome' && !machine.lipBlock;
+  const displayedHeadline = welcome ? '어떤 도움이 필요하세요?' : view.headline;
+  const displayedSub = machine.phase === 'scan'
+    ? (direct ? '원하는 항목을 직접 누르세요' : '파란 항목이 원하는 요청일 때 스위치를 누르세요')
+    : welcome ? `${settings.recordSeconds}초 동안 입 모양을 촬영합니다. 준비되면 시작해 주세요.`
+      : machine.phase === 'idle' && machine.screen?.kind === 'sent' && !machine.cards[machine.screen.cardId]?.acked ? '요청 전송 · 간호사 확인 대기' : view.sub;
+  const press = (intent) => { unlockAudio(); dispatch({ type: 'PRESS', intent }); };
+  const scanHighlight = machine.phase === 'scan' && !direct ? `${scanToken(machine)}:${machine.scan?.index}` : null;
+
+  // 스위치 모드에서 강조가 화면 아래로 내려가면 (작은 화면·긴급 띠가 있을 때) 그 항목이 보이게 스크롤한다.
+  useEffect(() => {
+    if (!scanHighlight) return;
+    try {
+      const li = scanListRef.current?.querySelector('li[aria-current="true"]');
+      li?.scrollIntoView?.({ block: 'nearest' });
+    } catch {
+      /* 스크롤하지 못해도 강조는 바뀌어 있다 */
+    }
+  }, [scanHighlight]);
+
   return (
-    <div className="min-h-screen select-none" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
+    <div className="patient-page select-none">
       <style>{WARD_KEYFRAMES}</style>
       {/* 녹화 중 테두리 깜빡임은 녹화 파랑(긴급 빨강은 긴급에만 쓴다) */}
       {view.flash && (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed inset-0 z-40"
-          style={{ border: `18px solid ${WARD_COLORS.infoBg}`, animation: 'ward-flash 0.8s infinite' }}
+          style={{ border: `6px solid ${WARD_COLORS.infoBg}`, animation: 'ward-flash 0.8s infinite' }}
         />
       )}
 
       {/* 늘 보이는 안전 안내 */}
-      <header className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.bannerInk }}>
-        <p className="flex items-center gap-2 text-2xl font-bold sm:text-3xl">
+      <header className="patient-safety">
+        <p className="flex items-center gap-2 font-semibold">
           <AlertIcon title="안내" /> {SAFETY_TEXT}
         </p>
-        <p className="text-base font-semibold" style={{ color: WARD_COLORS.paper }}>{PROTOTYPE_TEXT}</p>
+        <span className="patient-prototype">{PROTOTYPE_TEXT}</span>
         <div data-no-switch className="ml-auto flex items-center gap-2" onClick={blurAfterPointerClick}>
-          <span className="text-lg font-bold" style={{ color: WARD_COLORS.paper }}>{settings.room}호</span>
+          <span className="patient-room-badge">{settings.room}호</span>
           {!soundReady && (
             <button
               type="button"
               onClick={unlockAudio}
-              className="rounded-lg border-2 px-3 py-1 font-semibold"
-              style={{ borderColor: WARD_COLORS.bannerInk, color: WARD_COLORS.bannerInk }}
+              className="patient-small-button"
             >
               시작음 켜기
             </button>
@@ -524,8 +556,7 @@ export default function WardPage() {
           <button
             type="button"
             onClick={() => setShowSettings(true)}
-            className="rounded-lg px-3 py-1 font-semibold"
-            style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}
+            className="patient-small-button"
           >
             설정
           </button>
@@ -533,123 +564,130 @@ export default function WardPage() {
       </header>
 
       {view.alarm && (
-        <div role="alert" className="flex items-center gap-3 px-4 py-3 text-2xl font-bold" style={{ background: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyInk }}>
+        <div role="alert" className="patient-alert" style={{ background: WARD_COLORS.emergencyBg, color: WARD_COLORS.emergencyInk }}>
           <AlertIcon /> [긴급] {view.alarm.kind === 'emergency_possible' ? WARD_TEXT.emergencyPossibleCard : view.alarm.text} — 간호사실에 알렸어요 · 간호사 확인을 기다리는 중
         </div>
       )}
       {view.acked && (
-        <div role="status" className="flex items-center gap-3 px-4 py-3 text-3xl font-bold" style={{ background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }}>
+        <div role="status" className="patient-alert" style={{ background: WARD_COLORS.okBg, color: WARD_COLORS.okInk }}>
           <CheckIcon /> {WARD_TEXT.acked}
         </div>
       )}
       {!channelOk && (
-        <p role="alert" className="px-4 py-2 font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
-          이 브라우저는 간호사 화면과 연결할 수 없습니다 (BroadcastChannel 없음)
+        <p role="alert" className="patient-band patient-band-warn">
+          <AlertIcon /> 이 브라우저는 간호사 화면과 연결할 수 없습니다 (BroadcastChannel 없음). 다른 최신 브라우저로 열어 주세요.
         </p>
       )}
       {banner && (
-        <p data-list-banner={machine.index.customList?.id} className="px-4 py-2 text-xl font-bold" style={{ background: WARD_COLORS.possibleBg, color: WARD_COLORS.possibleInk }}>
+        <p data-list-banner={machine.index.customList?.id} className="patient-band patient-band-list">
           {banner}
         </p>
       )}
       {activeList && listStatus?.state === 'error' && (
-        <p role="alert" data-list-error className="flex flex-wrap items-center gap-2 px-4 py-2 text-xl font-bold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+        <p role="alert" data-list-error className="patient-band patient-band-warn">
           <AlertIcon /> {LISTS_TEXT.cannotUse(listStatus.title, listStatus.message)} · 입 읽기 녹화를 쓸 수 없어요 (스위치 3번 = 긴급 호출은 됩니다)
         </p>
       )}
       {practice && pickedList && (
-        <p data-practice-list-note className="px-4 py-2 text-base font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+        <p data-practice-list-note className="patient-band patient-band-info">
           {LISTS_TEXT.practiceDefaultOnly} (설정에서 고른 내 목록은 연습 모드 밖 병실 화면에서 써요)
         </p>
       )}
 
-      <main className="grid gap-4 p-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      <main className="patient-main">
         {/* 카메라 미리보기 */}
-        <section aria-label="카메라" className="flex flex-col gap-2">
-          <div className="relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: WARD_COLORS.ink }}>
+        <section aria-label="카메라" className="patient-camera-panel">
+          <div className="patient-section-title"><span>카메라 미리보기</span><span className={`patient-dot ${camStatus === 'ready' || camStatus === 'recording' ? 'is-ready' : ''}`} /> </div>
+          <div className="patient-preview" style={{ background: WARD_COLORS.ink }}>
             <video ref={videoRef} className="h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline muted />
             {camStatus !== 'ready' && camStatus !== 'recording' && (
-              <div className="absolute inset-0 flex items-center justify-center p-3 text-center text-base" style={{ color: WARD_COLORS.paper }}>
+              <div className="patient-preview-msg" style={{ color: WARD_COLORS.paper }}>
                 {cameraText(rec)}
               </div>
             )}
           </div>
           {camStatus === 'error' && globalThis.isSecureContext && (
             <div data-no-switch onClick={blurAfterPointerClick}>
-              <button
-                type="button"
-                onClick={() => open()}
-                className="rounded-lg border-2 px-4 py-2 text-lg font-semibold"
-                style={{ borderColor: WARD_COLORS.line, color: WARD_COLORS.ink, background: WARD_COLORS.paper }}
-              >
+              <button type="button" onClick={() => open()} className="patient-small-button">
                 카메라 다시 열기
               </button>
             </div>
           )}
-          <p className="text-2xl font-bold" aria-live="polite" style={view.status ? { color: WARD_COLORS.infoBg } : undefined}>
-            {view.status || `상태: ${PHASE_LABELS[view.phase] || ''}`}
-          </p>
-          <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>
+          <p className="patient-camera-hint">얼굴과 입이 화면 가운데에 보이도록 맞춰 주세요.</p>
+          <p className="patient-camera-detail" style={{ color: WARD_COLORS.inkSoft }}>
             녹화 {settings.recordSeconds}초 · 확인 {settings.confirmSeconds}초
             {settings.tts ? ` · 음성 읽기 켬${voice ? '' : ` (${NO_VOICE_TEXT})`}${nightMuted ? ' · 밤 무음 중' : ''}` : ' · 음성 읽기 끔'}
           </p>
           {enrollLine && (
-            <p
-              data-enroll-status={enrollLine.tone}
-              className="rounded-md px-2 py-1 text-base font-semibold"
-              style={enrollLine.tone === 'warn'
-                ? { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }
-                : { color: enrollLine.tone === 'ok' ? WARD_COLORS.ink : WARD_COLORS.inkSoft }}
-            >
+            <p data-enroll-status={enrollLine.tone} className={`patient-enroll-line is-${enrollLine.tone}`}>
               {enrollLine.text}
             </p>
           )}
         </section>
 
-        {/* 결과 (화면 높이 1/10 이상 글씨) */}
+        {/* 결과와 조작. 같은 video DOM은 화면 폭이 변해도 유지한다. */}
         <section
           aria-live="assertive"
-          className="flex min-h-[40vh] flex-col justify-center gap-3 rounded-2xl border-4 p-5"
-          style={{ ...tone, borderColor: emergencyTone ? WARD_COLORS.emergencyBg : WARD_COLORS.line }}
+          className={`patient-result tone-${view.tone} ${machine.phase === 'scan' ? 'is-scanning' : ''}`}
+          style={emergencyTone || machine.phase === 'recording' || view.tone === 'warning' ? { ...tone, borderColor: emergencyTone ? WARD_COLORS.emergencyBg : undefined } : undefined}
         >
+          <div className="patient-result-top">
+            <span className="patient-phase" data-phase={machine.phase}>{PHASE_LABELS[machine.phase]}</span>
+            <div className="patient-input-choice" role="group" aria-label="입력 방식" data-no-switch onClick={blurAfterPointerClick}>
+              <button type="button" disabled={busy} aria-pressed={!direct} onClick={() => changeSettings({ inputMode: 'switch' })}>스위치</button>
+              <button type="button" disabled={busy} aria-pressed={direct} onClick={() => changeSettings({ inputMode: 'direct' })}>직접 선택</button>
+            </div>
+          </div>
           {view.label && (
-            <p className="flex items-center gap-2 text-4xl font-black">
+            <p className="patient-result-label">
               <AlertIcon /> {view.label}
             </p>
           )}
-          {view.reason && <p className="text-2xl font-semibold">{view.reason}</p>}
-          <p className="font-black" style={{ fontSize: 'max(10vh, 2.25rem)', lineHeight: 1.15, wordBreak: 'keep-all' }}>
-            {view.headline}
+          {view.reason && <p className="patient-reason">{view.reason}</p>}
+          <p className="patient-headline">
+            {displayedHeadline}
           </p>
           {view.candidates && view.candidates.length > 0 && (
-            <p className="text-3xl font-semibold">추정: {view.candidates.map((c) => c.text).join(' / ')}</p>
+            <p className="patient-subline">추정: {view.candidates.map((c) => c.text).join(' / ')}</p>
           )}
-          {view.sub && <p className="text-3xl font-semibold">{view.sub}</p>}
+          {displayedSub && <p className="patient-subline">{displayedSub}</p>}
+          {timed && <div className="patient-timing" aria-live="off">
+            <div><strong>{secondsLeft}초</strong><span>{machine.phase === 'recording' ? '뒤 녹화 종료' : machine.phase === 'scan' ? '안에 골라 주세요' : '뒤 자동 전송'}</span></div>
+            <div className="patient-time-track" role="progressbar" aria-label={machine.phase === 'recording' ? '남은 녹화 시간' : machine.phase === 'scan' ? '고를 수 있는 남은 시간' : '전송까지 남은 시간'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(timeFraction * 100)}><span style={{ width: `${timeFraction * 100}%` }} /></div>
+          </div>}
+          {machine.phase === 'analyzing' && <div className="patient-analysis" aria-live="off"><span className="patient-spinner" /><span>{analysisSeconds}초 경과 · 결과를 기다리고 있어요</span></div>}
           {view.items && (
-            <ol className="mt-2 grid gap-2">
+            <ol ref={scanListRef} className="patient-scan-list" data-no-switch={direct ? '' : undefined} onClick={direct ? blurAfterPointerClick : undefined}>
               {view.items.map((it, i) => (
                 <li
-                  key={`${it.label}-${i}`}
-                  aria-current={it.highlighted ? 'true' : undefined}
-                  className="flex items-center gap-3 rounded-xl border-4 px-4 py-2 font-bold"
-                  style={{
-                    fontSize: 'max(5vh, 1.5rem)',
-                    background: it.highlighted ? WARD_COLORS.infoBg : WARD_COLORS.paper,
-                    color: it.highlighted ? WARD_COLORS.infoInk : WARD_COLORS.ink,
-                    borderColor: it.highlighted ? WARD_COLORS.infoBg : WARD_COLORS.line,
-                  }}
+                  key={scanItemKey(machine.scan.items[i])}
+                  aria-current={!direct && it.highlighted ? 'true' : undefined}
+                  className={!direct && it.highlighted ? 'is-highlighted' : ''}
                 >
-                  <span aria-hidden="true" style={{ width: '1.2em' }}>{it.highlighted ? '▶' : ''}</span>
-                  {it.emergency && <><AlertIcon /> [긴급]</>}
-                  {it.label}
+                  {direct ? <button type="button" onClick={() => { unlockAudio(); dispatch({ type: 'SELECT_ITEM', scanToken: selectionToken, itemKey: scanItemKey(machine.scan.items[i]) }); }}>
+                    <span className="patient-choice-number" aria-hidden="true">{i + 1}</span><span>{it.emergency && machine.scan.items[i]?.key !== 'category' && <span className="patient-emergency-tag">긴급 </span>}{it.label}</span><span aria-hidden="true" className="patient-choice-arrow">→</span>
+                  </button> : <div className="patient-switch-option"><span className="patient-choice-number" aria-hidden="true">{it.highlighted ? '▶' : i + 1}</span><span>{it.emergency && machine.scan.items[i]?.key !== 'category' && '[긴급] '}{it.label}</span></div>}
                 </li>
               ))}
             </ol>
           )}
+          <div className="patient-actions">
+            {/* 화면 버튼은 단계(intent)를 붙여 보낸다: 그사이 단계가 바뀌었으면 상태도가 무시한다(예: 카운트다운이 막 끝난 뒤의 전송 취소). */}
+            <span className="patient-action-buttons" data-no-switch onClick={blurAfterPointerClick}>
+              {machine.phase === 'idle' && <button type="button" className="patient-primary" onClick={() => press('start')} disabled={camStatus !== 'ready' || !!machine.lipBlock}>{welcome ? '녹화 시작' : '새 요청 시작'} <span aria-hidden="true">→</span></button>}
+              {machine.phase === 'confirm' && <button type="button" className="patient-secondary" onClick={() => press('cancel')}>전송 취소</button>}
+              {machine.phase === 'scan' && !direct && <button type="button" className="patient-primary" onClick={() => press('select')}>강조된 항목 선택</button>}
+            </span>
+            <span className="patient-key-hint">
+              {direct ? '항목은 화면에서 직접 누르세요 · 키(스위치)는 항목을 고르지 않아요' : '아무 키 또는 화면 누름 = 스위치'}
+              <br /><strong>3초 안에 {direct ? '키(스위치)' : '스위치'} 3번 = 긴급 호출</strong>
+            </span>
+          </div>
+          {machine.phase === 'idle' && camStatus !== 'ready' && !machine.lipBlock && <p className="patient-camera-hint">카메라가 준비되면 녹화할 수 있어요.{practice ? ' 아래 시연 도구로 카메라 없이 화면 흐름을 확인할 수 있어요.' : ''}</p>}
         </section>
       </main>
 
-      <div className="flex flex-col gap-4 px-4 pb-6">
+      <div className="patient-secondary-content">
         <RoomPanel room={machine.room} />
         {practice && (
           <PracticePanel
@@ -677,6 +715,7 @@ export default function WardPage() {
           listSwitchBlocked={listSwitchBlockReason(machine)}
           onOpenLists={openLists}
           listsBlocked={listsOpenBlockReason(machine)}
+          inputModeBlocked={busy}
         />
       )}
     </div>

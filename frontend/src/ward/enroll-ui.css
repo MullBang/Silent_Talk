@@ -1,0 +1,183 @@
+.enroll-ui {
+  color: #172b45;
+  background: #f4f7fb;
+  min-height: calc(100vh - 70px);
+  padding: 24px clamp(16px, 3vw, 40px) 40px;
+}
+.enroll-ui button, .enroll-ui input { font: inherit; }
+.enroll-ui button { cursor: pointer; }
+.enroll-ui button:disabled { opacity: .5; cursor: not-allowed; }
+.enroll-ui button:focus-visible, .enroll-ui input:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+.enroll-page-heading, .enroll-progress-panel, .enroll-workspace {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+}
+.enroll-page-heading { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 20px; }
+.enroll-page-heading h1 { font-size: clamp(25px, 3vw, 34px); font-weight: 800; letter-spacing: -.04em; margin: 3px 0; }
+.enroll-eyebrow { color: #315783; font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+.enroll-page-description, .enroll-help { color: #53657b; font-size: 14px; line-height: 1.6; }
+.enroll-heading-actions, .enroll-task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.enroll-btn { min-height: 44px; padding: 10px 17px; border-radius: 10px; font-weight: 700 !important; border: 1px solid transparent; line-height: 1.4; transition: background .15s, box-shadow .15s; }
+.enroll-btn-primary { color: white; background: #1e40af; border-color: #1e40af; box-shadow: 0 3px 7px #1e40af1f; }
+.enroll-btn-primary:hover:not(:disabled) { background: #172f86; }
+.enroll-btn-outline { color: #243b58; background: white; border-color: #bdcadb; }
+.enroll-btn-outline:hover:not(:disabled), .enroll-btn-quiet:hover:not(:disabled) { background: #eaf0f8; }
+.enroll-btn-quiet { color: #294d82; background: transparent; }
+.enroll-btn-danger { color: #991b1b; background: white; border-color: #b91c1c; margin-top: 12px; }
+.enroll-progress-panel { border: 1px solid #d7dfeb; border-radius: 16px; background: #fff; padding: 18px 22px 14px; margin-bottom: 20px; box-shadow: 0 3px 14px #173e6d05; }
+.enroll-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.enroll-profile-label { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.enroll-profile-label strong { font-size: 19px; overflow-wrap: anywhere; }
+.enroll-label { color: #5b6c80; font-size: 13px; flex-shrink: 0; }
+.enroll-counts { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.enroll-count-main { font-weight: 600; font-size: 15px; white-space: nowrap; }
+.enroll-count-main strong { font-size: 24px; color: #1e40af; margin-left: 5px; }
+.enroll-count-main small { color: #65758a; font-size: 16px; font-weight: 500; }
+.enroll-chip { border-radius: 30px; background: #eef2f7; color: #425770; font-size: 13px; padding: 5px 10px; white-space: nowrap; font-weight: 600; }
+.enroll-chip-warning { background: #fef3c7; color: #78350f; }
+.enroll-progress-track { height: 7px; background: #e9eef6; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+.enroll-progress-track > span { display: block; height: 100%; border-radius: inherit; background: #1e40af; transition: width .25s ease; }
+.enroll-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.enroll-task-panel, .enroll-camera-panel, .enroll-command-panel { background: white; border: 1px solid #d7dfeb; border-radius: 16px; box-shadow: 0 3px 14px #173e6d05; min-width: 0; }
+.enroll-camera-panel { grid-column: 2; grid-row: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.enroll-camera-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.enroll-camera-heading h2 { font-weight: 700; font-size: 14px; }
+.enroll-camera-state { font-size: 12px; color: #51647b; white-space: nowrap; }
+.enroll-camera-preview { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #15253b; border-radius: 10px; }
+.enroll-camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.enroll-camera-preview.is-recording { outline: 4px solid #1e40af; outline-offset: 2px; }
+.enroll-camera-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; padding: 14px; text-align: center; font-size: 13px; line-height: 1.6; }
+.enroll-task-panel { grid-column: 1; grid-row: 1; padding: 24px 28px; min-height: 350px; display: flex; flex-direction: column; gap: 15px; }
+.enroll-task-panel.phase-recording { border-color: #1e40af; box-shadow: 0 0 0 2px #1e40af14; }
+.enroll-task-topline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.enroll-stage-label { background: #edf3fe; color: #1e40af; border-radius: 30px; font-size: 13px; font-weight: 700; padding: 5px 11px; }
+.enroll-current-id { font-size: 13px; font-weight: 600; color: #53657b; }
+.enroll-prompt-label { color: #53657b; font-size: 15px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.enroll-emergency-label { color: #991b1b; font-size: 12px; border: 1px solid #f3c7c7; border-radius: 5px; padding: 2px 6px; }
+.enroll-prompt { font-size: clamp(30px, 3.3vw, 46px); line-height: 1.3; font-weight: 800; letter-spacing: -.045em; word-break: keep-all; overflow-wrap: break-word; }
+.enroll-speaking-tip { font-size: 18px; font-weight: 600; }
+.enroll-display-note { color: #53657b; font-size: 14px; line-height: 1.7; border-left: 3px solid #d7e2f1; padding-left: 12px; }
+.enroll-task-actions { margin-top: 2px; }
+.enroll-record-button { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 16px; font-size: 20px !important; min-height: 54px; padding-inline: 22px; }
+.enroll-button-shortcut { font-size: 13px; font-weight: 500; color: #dbeafe; }
+.enroll-feedback { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 9px; padding: 12px 14px; border-radius: 10px; font-size: 15px; line-height: 1.65; }
+.enroll-ui > .enroll-feedback { max-width: 1440px; margin: 0 auto 18px; }
+.enroll-feedback svg, .enroll-feedback > svg { width: 19px; height: 19px; flex-shrink: 0; margin-top: 3px; }
+.enroll-feedback p svg, .enroll-feedback h3 svg { display: inline-block; vertical-align: middle; margin-top: 0; }
+.enroll-feedback-success { background: #ecfdf3; color: #14532d; border: 1px solid #bbebcd; }
+.enroll-feedback-warning { background: #fffbeb; color: #78350f; border: 1px solid #f4dfaa; }
+.enroll-feedback h3 { font-weight: 700; width: 100%; }
+.enroll-recording-status { width: 100%; background: #edf3fe; border-radius: 12px; padding: 14px 16px; color: #1e3a8a; }
+.enroll-recording-status p { display: flex; align-items: center; gap: 9px; font-weight: 700; }
+.enroll-recording-status strong { font-size: 26px; }
+.enroll-recording-dot { width: 9px; height: 9px; border-radius: 50%; background: #1e40af; }
+.enroll-recording-track { height: 5px; background: #cfddfa; border-radius: 5px; overflow: hidden; margin: 10px 0; }
+.enroll-recording-track span { display: block; height: 100%; background: #1e40af; transition: width .3s linear; }
+.enroll-analysis-status { display: flex; align-items: center; gap: 14px; padding: 15px 0; width: 100%; }
+.enroll-analysis-status p { font-weight: 700; font-size: 18px; margin-bottom: 3px; }
+.enroll-analysis-status strong { margin-left: 8px; color: #1e40af; white-space: nowrap; }
+.enroll-spinner { width: 24px; height: 24px; flex-shrink: 0; border: 3px solid #dce5f3; border-top-color: #1e40af; border-radius: 50%; animation: enroll-spin .9s linear infinite; }
+@keyframes enroll-spin { to { transform: rotate(360deg); } }
+.enroll-completion-title { display: flex; gap: 12px; align-items: flex-start; }
+.enroll-completion-title > svg { flex-shrink: 0; width: 32px; height: 32px; color: #14532d; }
+.enroll-completion-title h2 { font-size: clamp(26px, 3vw, 36px); font-weight: 800; line-height: 1.35; word-break: keep-all; }
+.enroll-use-status { font-size: 18px; color: #53657b; font-weight: 600; }
+.enroll-use-status.is-active { color: #14532d; }
+.enroll-uncertain-list { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.enroll-uncertain-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid #f2dfb4; padding-top: 10px; }
+.enroll-command-panel { grid-column: 1 / -1; padding: 22px; }
+.enroll-list-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 18px; }
+.enroll-list-heading h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.enroll-filters { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: #eef2f7; flex-shrink: 0; }
+.enroll-filters button { border: 0; padding: 8px 11px; border-radius: 7px; min-height: 40px; font-weight: 700; font-size: 14px; color: #52647b; white-space: nowrap; }
+.enroll-filters button[aria-pressed="true"] { background: white; color: #1e40af; box-shadow: 0 1px 4px #172b4518; }
+.enroll-filters button span { font-size: 12px; margin-left: 3px; }
+.enroll-command-grid { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; }
+.enroll-command-grid li { min-width: 0; }
+.enroll-command { width: 100%; min-height: 116px; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 14px; text-align: left; border: 1px solid #d7dfeb; border-radius: 12px; background: #fff; color: #172b45; }
+.enroll-command:hover:not(:disabled) { border-color: #7d9ecc; background: #f7faff; }
+.enroll-command.is-current { border: 2px solid #1e40af; padding: 13px; background: #f0f5ff; box-shadow: 0 0 0 2px #1e40af08; }
+.enroll-command-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; color: #576a82; font-size: 12px; font-weight: 700; }
+.enroll-command-mark { font-size: 11px; border-radius: 4px; padding: 3px 6px; background: #eef2f7; color: #53657b; white-space: nowrap; }
+.enroll-command-mark.is-saved { background: #ecfdf3; color: #14532d; }
+.enroll-command-mark.is-warning { background: #fef3c7; color: #78350f; }
+.enroll-command-title { font-size: 17px; font-weight: 700; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
+.enroll-command-emergency { display: inline-flex; align-items: center; gap: 4px; color: #991b1b; font-size: 12px; }
+.enroll-command-emergency svg { width: 13px; height: 13px; }
+.enroll-current-note { color: #1e40af; font-size: 12px; font-weight: 700; margin-top: auto; }
+.enroll-empty-list { min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; color: #53657b; padding: 20px; background: #f8fafc; border-radius: 10px; }
+.enroll-empty-list > svg { width: 24px; height: 24px; color: #14532d; }
+.enroll-start-panel { max-width: 760px; margin: 40px auto; background: white; border: 1px solid #d7dfeb; border-radius: 20px; padding: clamp(24px, 4vw, 44px); box-shadow: 0 8px 24px #173e6d08; }
+.enroll-start-icon { color: #1e40af; background: #edf3fe; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 13px; font-size: 18px; font-weight: 800; margin-bottom: 18px; }
+.enroll-start-panel h2 { font-weight: 800; font-size: clamp(24px, 3vw, 30px); margin-bottom: 12px; word-break: keep-all; }
+.enroll-start-panel > p { line-height: 1.8; color: #53657b; }
+.enroll-name-form { display: flex; align-items: flex-end; gap: 12px; margin: 26px 0 10px; }
+.enroll-name-form label { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+.enroll-name-form label > span { font-size: 14px; font-weight: 700; }
+.enroll-name-form input { width: 100%; min-height: 48px; border: 1px solid #bdcadb; border-radius: 10px; padding: 10px 14px; font-size: 18px; color: #172b45; }
+.enroll-name-form .enroll-btn { min-height: 48px; }
+.enroll-existing { border-top: 1px solid #e3e9f1; padding-top: 24px; margin-top: 28px; }
+.enroll-existing h3 { font-weight: 700; font-size: 16px; margin-bottom: 12px; }
+.enroll-profile-choices { display: grid; gap: 8px; }
+.enroll-existing-choice { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; border: 1px solid #d7dfeb; background: white; text-align: left; padding: 14px; border-radius: 10px; }
+.enroll-existing-choice strong { overflow-wrap: anywhere; }
+.enroll-existing-choice > span { color: #53657b; font-size: 13px; }
+.enroll-existing-choice > span:last-child { margin-left: auto; }
+.enroll-existing-choice:hover { background: #f4f7fb; }
+.enroll-loading-panel { max-width: 760px; margin: 50px auto; display: flex; align-items: center; justify-content: center; gap: 15px; background: white; border: 1px solid #d7dfeb; border-radius: 16px; padding: 40px 20px; }
+@media (max-width: 1100px) {
+  .enroll-command-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .enroll-list-heading { flex-wrap: wrap; }
+}
+@media (max-width: 1023px) {
+  .enroll-workspace { grid-template-columns: minmax(0, 1fr); }
+  .enroll-task-panel { grid-column: 1; grid-row: 1; min-height: 0; }
+  .enroll-camera-panel { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 10px 18px; align-items: start; }
+  .enroll-camera-preview { grid-column: 1; grid-row: 1 / 4; }
+  .enroll-camera-panel > :not(.enroll-camera-preview) { grid-column: 2; }
+  .enroll-camera-panel > .enroll-feedback { grid-column: 1 / -1; }
+  .enroll-command-panel { grid-row: 3; }
+}
+@media (max-width: 700px) {
+  .enroll-ui { padding: 18px 14px 30px; }
+  .enroll-page-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .enroll-heading-actions { width: 100%; }
+  .enroll-progress-panel { padding: 15px; }
+  .enroll-progress-heading { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .enroll-task-panel { padding: 20px; }
+  .enroll-command-panel { padding: 16px; }
+  .enroll-command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .enroll-command { padding: 11px; }
+  .enroll-command.is-current { padding: 10px; }
+  .enroll-command-title { font-size: 16px; }
+  .enroll-task-actions > button { width: 100%; }
+  .enroll-record-button { justify-content: space-between; }
+  .enroll-name-form { align-items: stretch; flex-direction: column; }
+  .enroll-start-panel { margin-top: 20px; }
+}
+@media (max-width: 460px) {
+  .enroll-camera-panel { grid-template-columns: 125px minmax(0, 1fr); gap: 8px 12px; padding: 13px; }
+  .enroll-camera-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .enroll-camera-panel .enroll-help { font-size: 12px; }
+  .enroll-camera-panel .enroll-btn { font-size: 13px; padding: 8px 10px; }
+  .enroll-filters { width: 100%; }
+  .enroll-filters button { flex: 1; padding-inline: 6px; font-size: 13px; }
+  .enroll-prompt { font-size: 30px; }
+  .enroll-speaking-tip { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .enroll-ui *, .enroll-ui *::before, .enroll-ui *::after { transition: none !important; }
+  .enroll-spinner { animation: none; }
+}
+/* 등록할 목록 안내 (기본 목록 / 내 목록 ‘이름’ · 성능을 측정하지 않은 목록). */
+.enroll-list-line { margin-top: 12px; font-size: 15px; font-weight: 700; color: #1e3a8a; background: #eef4ff; border-radius: 9px; padding: 9px 12px; line-height: 1.6; word-break: keep-all; }
+.enroll-list-name { font-size: 13px; color: #53657b; font-weight: 600; overflow-wrap: anywhere; }
+.enroll-gate-loading { display: flex; align-items: center; gap: 14px; font-size: 18px; font-weight: 700; padding: 6px 0; }
+.enroll-gate-actions { margin-top: 22px; }
+@media (max-width: 700px) {
+  .enroll-profile-label { flex-wrap: wrap; row-gap: 4px; }
+}

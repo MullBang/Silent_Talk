@@ -1,0 +1,91 @@
+.patient-page { color:#172b45; padding:0 0 28px; }
+.patient-safety { display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 24px;background:#fff8e8;color:#704c0c;border-bottom:1px solid #f0dfb7;font-size:14px; }
+.patient-safety svg { width:19px;height:19px;flex-shrink:0; }
+.patient-prototype {font-size:12px;color:#675839;}
+.patient-room-badge {background:#fff;border:1px solid #e7d9b8;border-radius:8px;padding:5px 10px;font-weight:800;color:#172b45;}
+.patient-small-button {padding:6px 12px;border:1px solid #d7dfeb;background:#fff;border-radius:8px;font-size:14px;font-weight:700;color:#172b45;min-height:36px;}
+.patient-alert {display:flex;align-items:center;gap:10px;padding:12px 24px;font-weight:750;font-size:18px;}
+.patient-alert svg {width:24px;height:24px;flex-shrink:0;}
+.patient-main {max-width:1440px;margin:auto;display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;padding:24px;align-items:start;}
+.patient-camera-panel {display:flex;flex-direction:column;gap:13px;padding:18px;background:white;border:1px solid #d7dfeb;border-radius:18px;box-shadow:0 5px 18px #16345105;}
+.patient-section-title {display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;font-weight:750;}
+.patient-dot {width:8px;height:8px;border-radius:50%;background:#9ca3af;}.patient-dot.is-ready{background:#168461;box-shadow:0 0 0 4px #e6f5ef;}
+.patient-preview {position:relative;aspect-ratio:16/10;width:100%;overflow:hidden;border-radius:12px;}
+.patient-camera-hint {font-size:13px;line-height:1.7;color:#5a6b81;}.patient-camera-detail{font-size:12px;line-height:1.8;}
+.patient-result {border:1px solid #d7dfeb;border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:16px;background:#fff;min-height:350px;box-shadow:0 7px 24px #16345106;min-width:0;}
+.patient-result-top {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.patient-phase {font-size:12px;font-weight:800;letter-spacing:.02em;border:1px solid currentColor;border-radius:30px;padding:4px 10px;opacity:.85;}
+.patient-input-choice {display:inline-flex;gap:3px;background:#eef2f7;border:1px solid #dce4ee;padding:3px;border-radius:10px;}
+.patient-input-choice button {padding:6px 12px;border-radius:7px;font-size:13px;color:#42536c;font-weight:700;min-height:32px;}
+.patient-input-choice button[aria-pressed=true] {background:white;color:#1e40af;box-shadow:0 1px 5px #172b4517;}
+.patient-input-choice button:disabled{opacity:.55;cursor:not-allowed;}
+.patient-headline {font-size:clamp(32px,4vw,56px);font-weight:850;line-height:1.3;letter-spacing:-.04em;word-break:keep-all;overflow-wrap:anywhere;margin-top:2px;}
+.patient-result.is-scanning .patient-headline{font-size:clamp(28px,3vw,40px);}
+.patient-result-label {display:flex;align-items:center;gap:8px;font-weight:800;font-size:22px;}
+.patient-subline {font-size:clamp(17px,1.7vw,22px);line-height:1.55;word-break:keep-all;opacity:.9;}
+.patient-reason {font-size:14px;line-height:1.6;opacity:.9;}
+.patient-actions {display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-top:auto;padding-top:9px;}
+.patient-primary,.patient-secondary{min-height:50px;border-radius:12px;padding:12px 22px;display:inline-flex;align-items:center;justify-content:center;gap:24px;font-weight:800;font-size:19px;line-height:1.4;}
+.patient-primary {background:#1e40af;color:white;border:1px solid #1e40af;box-shadow:0 4px 10px #1e40af14;}.patient-secondary{background:white;color:#243b60;border:1px solid #bac8dc;}
+.patient-primary:hover:not(:disabled){background:#18368f;}.patient-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;}
+.patient-key-hint{font-size:12px;line-height:1.7;opacity:.8;}
+.patient-timing>div:first-child {display:flex;align-items:baseline;gap:10px;margin-bottom:10px;}.patient-timing strong{font-size:32px;font-variant-numeric:tabular-nums;}.patient-timing span{font-size:15px;}
+.patient-time-track{height:7px;border-radius:8px;background:#8293b34d;overflow:hidden;}.patient-time-track>span{display:block;background:currentColor;height:100%;border-radius:8px;transition:width .15s linear;}
+.patient-analysis{display:flex;align-items:center;gap:12px;font-size:16px;color:#536985;margin:8px 0 12px;}
+.patient-spinner{width:22px;height:22px;border:3px solid #dce5f2;border-top-color:#1e40af;border-radius:50%;animation:patient-spin 1s linear infinite;}
+@keyframes patient-spin{to{transform:rotate(360deg)}}
+.patient-scan-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:3px 0;list-style:none;padding:0;}
+.patient-scan-list li{border:1px solid #d7dfeb;border-radius:12px;background:#fff;color:#172b45;min-width:0;overflow:hidden;}
+.patient-scan-list li.is-highlighted{border-color:#1e40af;background:#1e40af;color:white;box-shadow:0 3px 10px #1e40af1c;}
+.patient-scan-list button,.patient-switch-option {width:100%;display:flex;align-items:center;text-align:left;gap:12px;padding:14px;min-height:68px;font-size:clamp(17px,1.7vw,22px);font-weight:700;word-break:keep-all;line-height:1.4;}
+.patient-scan-list button:hover{background:#eef4ff;}.patient-choice-number{font-size:12px;flex-shrink:0;opacity:.6;width:18px;}.patient-choice-arrow{margin-left:auto;opacity:.6;}.patient-emergency-tag{color:#991b1b;font-size:.75em;}
+.patient-secondary-content{max-width:1440px;margin:auto;display:flex;flex-direction:column;gap:18px;padding:0 24px;}
+.patient-room-panel{padding:18px 20px;border:1px solid #d7dfeb;border-radius:16px;background:white;}
+.patient-panel-heading{display:flex;align-items:baseline;gap:12px;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;}
+.patient-panel-heading h2{font-size:16px;font-weight:800;}.patient-panel-heading p{font-size:12px;color:#63748b;}
+.patient-room-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}
+.patient-room-item{display:flex;align-items:center;gap:12px;padding:12px;background:#f5f8fc;border:1px solid #e5ebf3;border-radius:12px;animation:patient-room-in .7s ease-out;}
+.patient-room-icon{width:30px;height:30px;flex-shrink:0;color:#38587c;}.patient-room-label{font-size:12px;color:#5a6b81;}.patient-room-value{font-size:15px;font-weight:750;line-height:1.5;margin-top:3px;}.patient-room-item.is-on{background:#eef5ff;border-color:#c5d8f4;}
+@keyframes patient-room-in{from{background:#dcecff}to{}}
+.patient-practice{background:#fff;border:1px solid #d7dfeb;border-radius:16px;overflow:hidden;}
+.patient-practice summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;padding:15px 20px;font-size:15px;font-weight:800;}.patient-practice summary::-webkit-details-marker{display:none;}
+.patient-practice summary span:last-child{font-size:12px;font-weight:500;color:#64748b;}
+.patient-practice-body{border-top:1px solid #e4ebf3;padding:16px 20px;}.patient-practice-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:14px;font-size:13px;color:#536985;}
+.patient-practice-controls label{display:flex;align-items:center;gap:10px;}.patient-practice select{padding:8px 10px;border:1px solid #d7dfeb;border-radius:8px;background:white;color:#172b45;max-width:100%;}
+.patient-scenarios{display:flex;flex-wrap:wrap;gap:8px;}.patient-scenarios button{border:1px solid #d7dfeb;padding:8px 12px;border-radius:8px;font-weight:650;font-size:13px;color:#38516f;background:#f7f9fc;}.patient-scenarios button:hover{border-color:#96afd0;background:#edf3fc;}
+.patient-page button:focus-visible,.patient-page summary:focus-visible{outline:3px solid #3b82f6;outline-offset:3px;}
+@media(max-width:1023px){.patient-main{grid-template-columns:1fr;padding:18px;gap:16px;}.patient-result{order:0;min-height:0;padding:24px;}.patient-camera-panel{order:1;display:grid;grid-template-columns:180px minmax(0,1fr);column-gap:18px;align-items:start;padding:15px;}.patient-section-title{grid-column:1/-1;}.patient-preview{grid-column:1;grid-row:2/6;aspect-ratio:16/9;}.patient-camera-panel>p,.patient-camera-panel>div[data-no-switch]{grid-column:2;}.patient-secondary-content{padding:0 18px;}.patient-safety{padding:10px 18px;}.patient-room-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.patient-headline{font-size:clamp(30px,5vw,44px);}.patient-prototype{display:none;}}
+@media(max-width:600px){.patient-safety{font-size:12px;gap:8px;}.patient-alert{font-size:15px;padding:10px 16px;}.patient-main{padding:12px;}.patient-result{padding:18px;gap:14px;border-radius:16px;}.patient-headline{font-size:30px;}.patient-result.is-scanning .patient-headline{font-size:27px;}.patient-scan-list{grid-template-columns:1fr;gap:7px;}.patient-scan-list button,.patient-switch-option{min-height:52px;font-size:18px;padding:10px 12px;}.patient-primary,.patient-secondary{font-size:17px;min-height:48px;}.patient-camera-panel{grid-template-columns:120px minmax(0,1fr);gap:10px;}.patient-camera-hint{font-size:12px;}.patient-secondary-content{padding:0 12px;}.patient-room-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}.patient-room-item{padding:10px;}.patient-room-value{font-size:13px;}.patient-room-panel{padding:15px;}.patient-practice summary span:last-child{max-width:170px;text-align:right;}.patient-practice-controls label{align-items:start;flex-direction:column;width:100%;}.patient-practice-controls select{width:100%;}.patient-key-hint{font-size:11px;}.patient-actions{gap:10px;}}
+@media(prefers-reduced-motion:reduce){.patient-spinner,.patient-room-item{animation:none;}.patient-time-track>span{transition:none;}.patient-page .fixed{animation:none!important;}}
+/* 내 목록·연결 안내 띠 (늘 보이는 안전 안내 아래). 색만으로 구분하지 않고 글자로 알린다. */
+.patient-band{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:11px 24px;font-size:16px;font-weight:750;line-height:1.5;border-bottom:1px solid transparent;word-break:keep-all;}
+.patient-band svg{width:20px;height:20px;flex-shrink:0;}
+.patient-band-list{background:#fde68a;color:#111827;border-color:#f2cf5b;}
+.patient-band-warn{background:#fef3c7;color:#78350f;border-color:#f4dfaa;}
+.patient-band-info{background:#eef4ff;color:#1e3a8a;border-color:#d3e0f7;font-size:14px;font-weight:650;}
+.patient-enroll-line{font-size:13px;line-height:1.6;font-weight:650;color:#52647a;border-radius:8px;}
+.patient-enroll-line.is-ok{color:#14532d;}
+.patient-enroll-line.is-warn{background:#fef3c7;color:#78350f;padding:6px 9px;}
+@media(max-width:1023px){.patient-band{padding:10px 18px;}}
+@media(max-width:600px){.patient-band{padding:9px 16px;font-size:14px;}}
+
+/* 기획서 가독성 규칙: 결과 글씨는 화면 높이의 1/10 이상, 고를 항목은 1/20 이상 (아래 규칙이 위의 크기보다 우선). */
+.patient-headline{font-size:max(10vh,2.25rem);line-height:1.2;}
+.patient-result.is-scanning .patient-headline{font-size:max(6vh,1.75rem);}
+.patient-scan-list button,.patient-switch-option{font-size:max(5vh,1.5rem);}
+.patient-subline{font-size:max(3vh,1.25rem);opacity:1;}
+.patient-reason{font-size:17px;opacity:1;}
+.patient-key-hint{font-size:15px;line-height:1.6;opacity:1;}
+.patient-key-hint strong{font-weight:800;}
+.patient-action-buttons{display:inline-flex;flex-wrap:wrap;gap:12px;}
+/* 빨강·노랑 카드 위의 안내 글씨는 카드 글자색을 따라 읽히게 한다. 꺼진 버튼은 흐린 파랑 대신 테두리만. */
+.patient-result.tone-emergency .patient-camera-hint,.patient-result.tone-possible .patient-camera-hint,.patient-result.tone-warning .patient-camera-hint{color:inherit;}
+.patient-result.tone-emergency .patient-primary:disabled,.patient-result.tone-possible .patient-primary:disabled,.patient-result.tone-warning .patient-primary:disabled{background:transparent;color:inherit;border-color:currentColor;opacity:.7;}
+@media(max-width:600px){.patient-headline{font-size:max(7vh,2rem);}.patient-scan-list button,.patient-switch-option{font-size:max(3.2vh,1.25rem);}.patient-subline{font-size:18px;}.patient-preview-msg{font-size:11px;line-height:1.35;padding:4px;}.patient-key-hint{font-size:14px;}}
+/* 카메라 안내 글씨 (미리보기 칸 안 가운데). */
+.patient-preview-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:16px;line-height:1.5;}
+/* 띄어쓰기 없는 긴 내 목록 문장도 칸 안에서 줄을 바꾼다. */
+.patient-scan-list button>span,.patient-switch-option>span{min-width:0;overflow-wrap:anywhere;}
+/* 좁은 화면에서도 '시연용 연구 시제품 · 실제 환자 미검증'을 숨기지 않는다. */
+@media(max-width:1023px){.patient-prototype{display:inline;font-size:11px;}}
+@media(max-width:600px){.patient-preview-msg{font-size:11px;line-height:1.35;padding:4px;}}
