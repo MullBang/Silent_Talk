@@ -1,9 +1,30 @@
 # 립리딩 프로젝트 — 개발 규칙 (설계문서 완성본 기준)
 
+> **2026-11-10 병실 "내 입 모양 등록" 기능 추가 (기준값 미동결, 문장 모드 불변).**
+> - **등록 화면:** `#enroll`(`frontend/src/pages/EnrollPage.jsx`, 상태도 `frontend/src/ward/wardEnroll.js`). 환자 역할이 20개 명령을 소리 내어 한 번씩 찍는다(명령당 5초). 인식 1등이 다른 명령이면 '확인 필요'로 표시하고 다시 찍게 한다. 병실 화면 설정에서 쓸 등록을 고른다.
+> - **서버:** `POST /api/record`(ward 전용)에 `enroll_profile`·`enroll_command`를 더했다. 명령을 함께 보내면 저장(store)하고, 이름만 보내면 비교(match)해 `results[0].enroll`을 붙인다. ward phrase에는 `rule`이 붙는다. 등록 필드가 있는데 Origin이 화이트리스트 밖이면 403이다. 목록·조회·삭제는 `GET/DELETE /api/ward/profiles[/{id}]`이다.
+>   - 거리는 은닉 특징 T×256에 코사인 DTW를 쓴다(`backend/services/ward_templates.py`는 `scripts/ward_tools/enroll.py`와 같은 코드).
+>   - 저장 폴더는 `LIPNET_WARD_PROFILE_DIR`(기본 `backend/data/ward_profiles`, gitignore)이다. 입 모양 특징은 개인 자료라 시연 뒤 지운다.
+>   - 명령 목록이나 가중치가 바뀌면 등록이 stale이 되어 다시 등록해야 한다.
+> - **기준값:** 등록 거리 `LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE`는 임시 0.27이고, 긴급 가능성 하한 `LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE`는 기본으로 쓰지 않는다. P01·P03 명령 영상으로 함께 정해 동결한다.
+> - **판정표**(서버 `metrics.decide`·화면 `wardResult.js decideWard`, 고정 사례 66개 `frontend/tests/fixtures/ward_decision_cases.json`로 일치를 시험):
+>   - 글자 규칙을 통과하지 못해도, 등록 1등이 글자 1등과 같고 거리 D 이하이면 그 명령을 고른다.
+>   - 고른 명령이 긴급이면 빨간 카드가 아니라 긴급 가능성으로 보낸다.
+>   - 등록으로 고른 일반 명령이라도 글자 2등이 긴급이면 긴급 가능성으로 보낸다. 등록은 알림을 없애지 않는다.
+>   - 등록 1등과 글자 1등이 다르면 고르지 않는다.
+> - **P01 서비스 경로(같은 사람, 같은 날 등록·시험한 조정 표본):**
+>   - 0.5/−3.40 + D 0.27: 소리 없이·기댄 자세 명령 표시 46/50, 오답 0. 목록 밖 표시는 3/120, 긴급 도달은 12/12다.
+>   - 0.5/−3.05 + D 0.28: 표시 45/50, 오답 0, 목록 밖 0/120이다.
+>   - 서버 거리는 오프라인 계산과 3,280값 모두 같다. HEAD 화면보다 알림이 약해진 클립은 0개다.
+>   - 거짓 긴급 알림은 92/158로 많다(대부분 문장 촬영·함정 → W10·W03). 하한으로 정할 문제다.
+> - **문장 모드 회귀:** P03 100클립은 차이 0이다. P01 100클립은 수치 차이 0이고, `accepted` 3건 차이는 10/31 기준 파일 이후 기준값을 바꾼 탓이다.
+> - **시연 노트북:** `build_bundle.py --freeze <커밋한 동결 파일>`로 만들어야 노트북이 동결 기준값 4개로 켜진다. 없으면 config 기본값으로 켜지고, launch·check가 주의를 띄운다. 커밋하지 않은 새 코드 파일이 있으면 묶음을 거부한다(`--allow-dirty`). 시연 전 노트북에서 등록하고, 시연 뒤 지운다(설치안내 5-1·5-2).
+> - **확인하지 못한 것:** 실제 카메라로 등록한 품질은 재지 않았다. 브라우저 시험은 가짜 카메라(canvas 재인코딩)로 했다. 처음 보는 사람과 P03의 등록 성능도 아직 모른다.
+
 > **2026-11-10 병실 명령 채점 도구와 시연 노트북 스크립트 추가.**
 > - **채점 도구:** `scripts/ward_service_batch.py`(서버로 클립 일괄 전송), `scripts/ward_eval_tools.py`(calibrate·report·validate·fingerprint), `scripts/ward_enroll.py`(등록 거리), 판정표는 `scripts/ward_tools/metrics.py`이다. 사용법은 `docs/병실명령_채점도구_사용법_2026-11-10.md`에 있다.
 > - **봉인:** P02·ward_eval 자료는 `--allow-sealed`와 커밋된 동결 파일(`--freeze`)이 모두 있어야 읽는다.
-> - **긴급 가능성 점수 하한:** 기본으로 쓰지 않아 화면 규칙과 같다. 쓰려면 화면(wardMachine.js)에도 같은 규칙을 넣어야 한다.
+> - **긴급 가능성 점수 하한:** 기본으로 쓰지 않는다. (위 등록 기능 기록에서 화면 `wardResult.js decideWard`에도 같은 규칙을 넣었다.)
 > - **목록 밖 말 재채점:** P01·P03 문장 200클립을 병실 묶음으로 다시 채점했다. 임시 기준 0.5/−3.40에서 명령으로 표시된 것은 2/200(P01 A09 → W10 빨간 카드, P01 A06 → W18)이다. 긴급 가능성은 124/200(대부분 W10·W03)으로, 명령 촬영 뒤 기준과 함께 다시 정한다.
 > - **시연 노트북:** `deploy/`에 묶음 만들기(`build_bundle.py`), 설치.bat·시연_실행.bat·시연_점검.bat·시연_중지.bat가 있고, 안내는 `docs/시연노트북_설치안내_2026-11-10.md`이다.
 >   - Python 3.11 하나만 있으면 되고 Node·Git은 필요 없다. Visual C++ 런타임은 필요하다.
