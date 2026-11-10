@@ -21,6 +21,31 @@ export function extensionFor(mime) {
   return mime && mime.startsWith('video/mp4') ? 'mp4' : 'webm';
 }
 
+/**
+ * 열린 카메라 스트림을 미리보기 <video>에 연결하고 재생한다 (순수에 가까운 함수, 테스트 가능).
+ *
+ * 화면이 카메라를 연 뒤에 <video>를 그리는 경우(예: 등록 화면은 이름을 고른 뒤에 미리보기를 그린다)에도
+ * 미리보기와 프레임 시각 기록(requestVideoFrameCallback)이 동작하도록, <video>가 붙을 때마다 부른다.
+ * 재생 실패(요소가 곧 떨어짐 등)는 미리보기만의 문제라 조용히 넘긴다(녹화는 스트림에서 직접 한다).
+ *
+ * @param {HTMLVideoElement|null} el 미리보기 요소
+ * @param {MediaStream|null} stream 열린 스트림
+ * @returns {boolean} 연결했으면 true
+ */
+export function attachPreviewStream(el, stream) {
+  try {
+    if (!el || !stream) return false;
+    if (el.srcObject !== stream) el.srcObject = stream;
+    el.muted = true;
+    const played = typeof el.play === 'function' ? el.play() : null;
+    // 미리보기 재생 실패는 녹화와 무관하므로 화면 상태는 바꾸지 않고 콘솔에만 남긴다(검은 미리보기 신고 때 원인 확인용).
+    if (played && typeof played.catch === 'function') played.catch((e) => logCameraError('미리보기 재생 실패', e));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 프레임 시각 로그에서 요약 통계를 만든다 (순수 함수, 테스트 가능). */
 export function summarizeFrameLog(log) {
   if (!log || log.length < 2) return { frameCallbacks: log ? log.length : 0, meanGapMs: null, maxGapMs: null, estimatedFps: null };
@@ -56,8 +81,17 @@ export function publicTrackSettings(settings) {
  * @param {(result:{blob:Blob,mime:string,meta:object}) => void} [opts.onResult] 녹화가 끝날 때(수동·자동 모두) 호출.
  */
 export default function useRecorder({ maxSeconds = 8, video = { width: 1280, height: 720, frameRate: 30 }, onResult } = {}) {
-  const videoRef = useRef(null);
   const streamRef = useRef(null);
+  // 미리보기 <video> 콜백 ref(.current도 유지). 카메라를 연 뒤에 <video>가 처음 붙거나 다시 붙어도 열린 스트림을 연결한다.
+  // (전에는 open() 때 한 번만 연결해서, 그때 <video>가 없던 등록 화면은 미리보기가 검게 나오고 프레임 시각도 비었다.)
+  const [videoRef] = useState(() => {
+    const ref = (el) => {
+      ref.current = el;
+      if (el) attachPreviewStream(el, streamRef.current);
+    };
+    ref.current = null;
+    return ref;
+  });
   const recRef = useRef(null);
   const chunksRef = useRef([]);
   const frameLogRef = useRef([]);

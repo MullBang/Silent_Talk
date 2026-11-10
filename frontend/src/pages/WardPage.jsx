@@ -395,6 +395,18 @@ export default function WardPage() {
               </div>
             )}
           </div>
+          {camStatus === 'error' && globalThis.isSecureContext && (
+            <div data-no-switch onClick={blurAfterPointerClick}>
+              <button
+                type="button"
+                onClick={() => open()}
+                className="rounded-lg border-2 px-4 py-2 text-lg font-semibold"
+                style={{ borderColor: WARD_COLORS.line, color: WARD_COLORS.ink, background: WARD_COLORS.paper }}
+              >
+                카메라 다시 열기
+              </button>
+            </div>
+          )}
           <p className="text-2xl font-bold" aria-live="polite" style={view.status ? { color: WARD_COLORS.infoBg } : undefined}>
             {view.status || `상태: ${PHASE_LABELS[view.phase] || ''}`}
           </p>

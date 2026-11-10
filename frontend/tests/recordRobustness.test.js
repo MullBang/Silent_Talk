@@ -11,6 +11,7 @@ import {
   CAMERA_BUSY_ERROR, CAMERA_LOST_ERROR, CAMERA_NOT_FOUND_ERROR, CAMERA_PERMISSION_ERROR, INSECURE_CONTEXT_ERROR,
   cameraErrorType, cameraOpenErrorMessage, clientCameraError, isStreamLost, logCameraError,
 } from '../src/hooks/cameraErrors.js';
+import { attachPreviewStream } from '../src/hooks/useRecorder.js';
 import { blurAfterPointerClick, isPointerClick } from '../src/record/pointerFocus.js';
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -161,6 +162,44 @@ test('useRecorder 소스 계약: 트랙 ended·스트림 inactive 감시, MediaR
   const record = src('../src/pages/RecordPage.jsx');
   assert.match(record, /errorSeq <= 0 \|\| work === 'UPLOADING' \|\| work === 'INFERRING'\) return;/);
   assert.match(record, /current\?\.type === 'UPLOAD_ERROR'\s*\? current\s*: \{ type: errorType \|\| 'DEVICE_ERROR', message: error \|\| undefined \}/);
+});
+
+test('attachPreviewStream: 늦게 붙은 <video>에도 열린 스트림을 연결·재생하고, 실패는 조용히 넘긴다', async () => {
+  const stream = { id: 's1' };
+  const mkVideo = (play) => ({ srcObject: null, muted: false, plays: 0, play() { this.plays += 1; return play(); } });
+  const v = mkVideo(() => Promise.resolve());
+  assert.equal(attachPreviewStream(v, stream), true);
+  assert.equal(v.srcObject, stream);
+  assert.equal(v.muted, true);
+  assert.equal(v.plays, 1);
+  // 같은 스트림이면 srcObject를 다시 넣지 않는다(미리보기 깜빡임 방지), 재생만 다시 시도한다.
+  let sets = 0;
+  const guarded = { muted: false, play: () => Promise.resolve(), get srcObject() { return stream; }, set srcObject(_x) { sets += 1; } };
+  assert.equal(attachPreviewStream(guarded, stream), true);
+  assert.equal(sets, 0);
+  // 카메라가 아직 안 열렸거나 요소가 없으면 아무것도 하지 않는다.
+  const idle = mkVideo(() => Promise.resolve());
+  assert.equal(attachPreviewStream(idle, null), false);
+  assert.equal(idle.srcObject, null);
+  assert.equal(idle.plays, 0);
+  assert.equal(attachPreviewStream(null, stream), false);
+  // play()가 거부돼도(요소가 곧 떨어짐 등) 예외가 새지 않는다.
+  const rejecting = mkVideo(() => Promise.reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  assert.equal(attachPreviewStream(rejecting, stream), true);
+  await new Promise((r) => setTimeout(r, 0));
+  // srcObject 설정 자체가 던져도 false.
+  const throwing = { set srcObject(_x) { throw new Error('bad'); }, get srcObject() { return null; } };
+  assert.equal(attachPreviewStream(throwing, stream), false);
+});
+
+test('useRecorder 소스 계약: 미리보기는 콜백 ref로 붙을 때마다 열린 스트림을 연결한다 (등록 화면 검은 미리보기 회귀)', () => {
+  const hook = src('../src/hooks/useRecorder.js');
+  assert.match(hook, /const \[videoRef\] = useState\(\(\) => \{/);
+  assert.match(hook, /ref\.current = el;\s*if \(el\) attachPreviewStream\(el, streamRef\.current\);/);
+  assert.doesNotMatch(hook, /const videoRef = useRef\(/);
+  // 등록 화면은 이름을 고른 뒤에야 <video>를 그린다(카메라는 처음에 연다). 이 구조가 바뀌어도 위 연결이 필요하다.
+  const enroll = src('../src/pages/EnrollPage.jsx');
+  assert.match(enroll, /<video ref=\{videoRef\}/);
 });
 
 test('isPointerClick: 마우스 클릭(detail>0)만', () => {

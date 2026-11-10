@@ -373,6 +373,13 @@ export default function EnrollPage() {
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ border: `10px solid ${WARD_COLORS.infoBg}` }} />
               )}
             </div>
+            {camStatus === 'error' && globalThis.isSecureContext && (
+              <div data-no-switch onClick={blurAfterPointerClick}>
+                <button type="button" onClick={() => open()} className="rounded-lg border-2 px-4 py-2 text-lg font-semibold" style={buttonStyle('secondary')}>
+                  카메라 다시 열기
+                </button>
+              </div>
+            )}
             <p className="text-2xl font-bold">{state.profile} · {ENROLL_TEXT.progress(count, total)}</p>
             {line && line.tone === 'warn' && state.info?.status === 'stale' && (
               <div role="alert" className="rounded-lg px-3 py-2" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
