@@ -1,0 +1,4287 @@
+{
+  "schema": "ward-freeze-v1",
+  "status": "frozen",
+  "created": "2026-11-10T14:30:18.959657+00:00",
+  "phrase_set": "ward",
+  "synthetic": false,
+  "commands": {
+    "path": "frontend/src/ward/commands.json",
+    "version": "ward-commands-v1",
+    "sha256": "b24aed889b95fef5d5e328a191908800fb1cc6b94e3a08defbae333c262a60e5",
+    "ids": [
+      "W01",
+      "W02",
+      "W03",
+      "W04",
+      "W05",
+      "W06",
+      "W07",
+      "W08",
+      "W09",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20"
+    ],
+    "emergency_ids": [
+      "W02",
+      "W03",
+      "W04",
+      "W10"
+    ]
+  },
+  "full_list": {
+    "min_margin": 0.7,
+    "min_score": -2.9,
+    "delta": null,
+    "chosen_by": "사람이 고른 값(2026-11-10, 사용자 승인). 미리 정한 규칙(δ 90% 규칙)으로는 0.39/-3.015였으나, 가장 가까운 나쁜 클립과의 여유가 좁았다(함정 P01_silent_D03_1→W10 빨간 카드까지 점수 0.051, 짧은 긴급 P01_silent_E03_1→W18 요청까지 차이 0.093). 앱 판정(서버 등록 거리 포함)에서 표시를 거의 잃지 않는 범위에서 여유를 넓혔다: 점수 여유 0.166, 차이 여유 0.40 이상. P01로 정한 값은 P03으로 옮겨졌지만 P03으로 정한 S(-3.44)는 P01에서 목록 밖 2개를 W10 빨간 카드로 표시해, 더 어려운 사람(P01)에 여유를 둔 값이다. P02 평가 입력(함정 문장 목록)은 선택 근거로 쓰지 않았다.",
+    "env": {
+      "LIPNET_OLKAVS_WARD_MIN_MARGIN": "0.7",
+      "LIPNET_OLKAVS_WARD_MIN_SCORE": "-2.9",
+      "LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE": "none",
+      "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE": "0.26"
+    },
+    "env_note": "서버 환경 변수. 기준값·하한·D를 고치면 env도 같게 고친다(validate가 확인, ward_eval_tools.py env로 출력)",
+    "rule_by_tool": {
+      "min_margin": 0.39,
+      "min_score": -3.015,
+      "possible_min_score": null,
+      "enroll_max_distance": 0.2769
+    }
+  },
+  "reduced_list": {
+    "ids": [
+      "W02",
+      "W03",
+      "W04",
+      "W05",
+      "W06",
+      "W07",
+      "W08",
+      "W09",
+      "W10",
+      "W12",
+      "W16",
+      "W20"
+    ],
+    "size": 12,
+    "protected_ids": [
+      "W02",
+      "W03",
+      "W04",
+      "W10"
+    ],
+    "method": "목록 안 명령별 혼동 관여 점수(1등 오답 시 정답·오답 각 +1, 정답 1등이지만 기준 미달이면 정답·2등 각 +0.5, 막아야 할 입력이나 1등이 긴급이 아닌 짧은 긴급 표현이 기준을 넘으면 그 1등 +1)가 가장 큰 비보호 명령을 하나씩 뺌. 동점은 정답 1등 차이의 중앙값이 작은 명령, 그다음 ID가 큰 명령. 매 단계 후보별 점수로 다시 순위를 매김.",
+    "exact": true,
+    "trace": [
+      {
+        "dropped": "W01",
+        "involvement": 4.5,
+        "median_correct_margin": 1.7197,
+        "list_size_after": 19,
+        "involvement_all": {
+          "W10": 11.0,
+          "W01": 4.5,
+          "W19": 4.5,
+          "W13": 4.0,
+          "W14": 4.0,
+          "W15": 4.0,
+          "W18": 4.0,
+          "W03": 3.5,
+          "W04": 3.0,
+          "W11": 3.0,
+          "W20": 3.0,
+          "W17": 2.5,
+          "W08": 2.0,
+          "W16": 2.0,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W05": 1.0,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W13",
+        "involvement": 4.5,
+        "median_correct_margin": 1.0068,
+        "list_size_after": 18,
+        "involvement_all": {
+          "W10": 11.5,
+          "W13": 4.5,
+          "W14": 4.0,
+          "W15": 4.0,
+          "W18": 4.0,
+          "W19": 4.0,
+          "W03": 3.5,
+          "W04": 3.0,
+          "W11": 3.0,
+          "W20": 3.0,
+          "W17": 2.5,
+          "W08": 2.0,
+          "W16": 2.0,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W05": 1.0,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W15",
+        "involvement": 4.0,
+        "median_correct_margin": 0.3028,
+        "list_size_after": 17,
+        "involvement_all": {
+          "W10": 12.0,
+          "W14": 4.0,
+          "W15": 4.0,
+          "W18": 4.0,
+          "W19": 4.0,
+          "W04": 3.0,
+          "W11": 3.0,
+          "W20": 3.0,
+          "W17": 2.5,
+          "W08": 2.0,
+          "W16": 2.0,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W05": 1.0,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W03": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W18",
+        "involvement": 4.0,
+        "median_correct_margin": 1.2446,
+        "list_size_after": 16,
+        "involvement_all": {
+          "W10": 10.0,
+          "W14": 4.0,
+          "W18": 4.0,
+          "W11": 3.0,
+          "W19": 3.0,
+          "W20": 3.0,
+          "W04": 2.5,
+          "W17": 2.5,
+          "W08": 2.0,
+          "W16": 2.0,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W03": 0.5,
+          "W05": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W14",
+        "involvement": 4.0,
+        "median_correct_margin": 1.6162,
+        "list_size_after": 15,
+        "involvement_all": {
+          "W10": 9.0,
+          "W14": 4.0,
+          "W19": 3.5,
+          "W11": 3.0,
+          "W20": 3.0,
+          "W04": 2.5,
+          "W16": 2.5,
+          "W17": 2.5,
+          "W08": 2.0,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W03": 0.5,
+          "W05": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W19",
+        "involvement": 3.5,
+        "median_correct_margin": 2.1451,
+        "list_size_after": 14,
+        "involvement_all": {
+          "W10": 10.0,
+          "W19": 3.5,
+          "W11": 3.0,
+          "W16": 3.0,
+          "W04": 2.5,
+          "W17": 2.5,
+          "W20": 2.5,
+          "W08": 2.0,
+          "W03": 1.5,
+          "W09": 1.5,
+          "W12": 1.5,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W05": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W11",
+        "involvement": 3.0,
+        "median_correct_margin": 1.1664,
+        "list_size_after": 13,
+        "involvement_all": {
+          "W10": 10.0,
+          "W11": 3.0,
+          "W16": 3.0,
+          "W17": 3.0,
+          "W04": 2.5,
+          "W20": 2.5,
+          "W03": 2.0,
+          "W08": 2.0,
+          "W12": 2.0,
+          "W09": 1.5,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W05": 0.5,
+          "W06": 0.5
+        }
+      },
+      {
+        "dropped": "W17",
+        "involvement": 3.0,
+        "median_correct_margin": 1.3985,
+        "list_size_after": 12,
+        "involvement_all": {
+          "W10": 9.0,
+          "W17": 3.0,
+          "W04": 2.5,
+          "W16": 2.5,
+          "W20": 2.5,
+          "W08": 2.0,
+          "W12": 2.0,
+          "W09": 1.5,
+          "W07": 1.0,
+          "W02": 0.5,
+          "W03": 0.5,
+          "W05": 0.5,
+          "W06": 0.5
+        }
+      }
+    ],
+    "min_margin": 0.56,
+    "min_score": -2.915,
+    "chosen_by": "합친 맞추기 중 정답 표시가 δ=0의 90% 이상인 가장 큰 여유 δ=0.15"
+  },
+  "enrollment": {
+    "max_distance": 0.26,
+    "template": "voiced",
+    "feature": "olkavs_medium_hidden_256",
+    "distance": "dtw_cosine_unit_steps_over_path_length",
+    "source": "service",
+    "require_agreement": true,
+    "conflict_rule": "글자 규칙을 통과하면 등록 거리와 관계없이 글자 1등을 고른다. 통과하지 못했고 등록 1등 거리가 D 이하일 때만 글자 1등과 등록 1등이 같은지 보고(require_agreement), 같으면 등록 1등을 고른다. 고르지 못했을 때 글자 1·2등에 긴급이 있거나 거리 D 이하인 등록 1등이 긴급이면 긴급 가능성이다.",
+    "unbounded": false,
+    "min_negatives_with_dist": 50,
+    "negatives_with_dist": {
+      "fit_P01": 111,
+      "fit_P03": 109,
+      "pooled": 220
+    },
+    "chosen_by": "사람이 고른 값(2026-11-10). 규칙값(사람별·합친 D 중 가장 작은 값)은 0.2769였다. 정답에 필요한 가장 큰 거리 0.2745(P01)와 가장 가까운 나쁜 클립 0.2844(P03_voiced_F09_1 문장→W06) 사이가 0.01뿐이라, 나쁜 쪽 여유를 0.0075에서 0.0244로 넓혔다. 대가는 표시 2/100. 등록 거리를 5% 가깝게 바꾼 시험에서 0.2769는 사람마다 목록 밖 표시 1개, 0.26은 0개였다."
+  },
+  "decision_rule": {
+    "table": "docs/병실무음도우미_기획_및_개발계획_2026-11-09.md 9.3 (scripts/ward_tools/metrics.py)",
+    "possible_ranks": 2,
+    "possible_min_score": null,
+    "floor_implemented_in_ui": true,
+    "chosen_by": "하한 없음(2026-11-10 사용자 결정, 기획 9.3 그대로: 고르지 못했을 때 글자 1·2등에 긴급이 있으면 긴급 가능성). P01·P03에서 긴급을 놓치지 않는 하한 -4.143은 근거가 클립 하나(P01_silent_W04_2, 여유 0.2)이고, P03으로 정한 하한(-3.235)을 P01에 쓰면 긴급 16개 중 5개를 놓쳐 사람 사이에 옮겨지지 않았다. 대가는 거짓 긴급 알림(조정 자료 161/316).",
+    "fit_rule": "맞추는 사람 자료에서 표시 중 오답 0, 함정·말하지 않기·문장 촬영 클립의 명령 표시 0, 짧은 긴급 표현의 일반 명령 실행 0, 그다음 표시 최대"
+  },
+  "sealed_folders": [
+    {
+      "path": "<바탕화면>/병실 웹캠 영상 모음/P02",
+      "files": 206,
+      "videos": 103,
+      "bytes": 160793020,
+      "listing_sha256": "61a1601d701bb55f2cf8c37aba19d29c2faf3defdffed32c8e3bd8b2c2aae110"
+    },
+    {
+      "path": "<바탕화면>/웹캠 영상 모음/웹캠 영상 P02/p02최종",
+      "files": 280,
+      "videos": 140,
+      "bytes": 214509985,
+      "listing_sha256": "cedde3bc1108e7c33769cfb4cf7b4623e8def2e4cc78df9e602d4d3f9bf7826e"
+    },
+    {
+      "path": "<바탕화면>/웹캠 영상 모음/웹캠 영상 P02/silent_talk_P02",
+      "files": 200,
+      "videos": 100,
+      "bytes": 133895322,
+      "listing_sha256": "ecae9e61b341aee662ab95ed7e988a5dc2132448e5986eae657c5935843961bb"
+    }
+  ],
+  "evidence": {
+    "provisional": {
+      "rule": {
+        "min_margin": 0.5,
+        "min_score": -3.4,
+        "max_distance": null,
+        "ids": null,
+        "possible_min_score": null
+      },
+      "commands_shown": "107/140",
+      "commands_shown_k": 107,
+      "commands_n": 140,
+      "shown_wrong": "0/107 (한쪽 95% 상한 2.8%)",
+      "shown_wrong_k": 0,
+      "shown_wrong_clips": [],
+      "negatives_shown": "3/240",
+      "negatives_shown_k": 3,
+      "negatives_shown_clips": [
+        "P01_silent_D03_1.webm->W10",
+        "P01_silent_A09_2.webm->W10",
+        "P01_voiced_A06_1.webm->W18"
+      ],
+      "false_alarms": "155/348",
+      "false_alarms_k": 155,
+      "emergency_recall": "32/32",
+      "short_alarm": "1/6",
+      "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+      "short_as_request_k": 0,
+      "short_as_request_clips": [],
+      "via_enroll": 0
+    },
+    "lopo": {
+      "fit_P01": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.0,
+          "max_correct_shown": 46,
+          "M": 0.365,
+          "S": -3.06,
+          "max_safety": 0.0034159377261828716,
+          "safety": 0.0034159377261828716,
+          "safety_vs_bad": 0.005798557387530323,
+          "safety_vs_kept": 0.0034159377261828716,
+          "optimal_M_range_at_S": [
+            0.3,
+            0.43
+          ],
+          "optimal_S_range_at_M": [
+            -3.065,
+            -3.06
+          ],
+          "n_optimal_grid_points": 54,
+          "n_items": 184,
+          "n_good": 68,
+          "n_bad": 116
+        },
+        "on_fit_person": {
+          "rule": {
+            "min_margin": 0.365,
+            "min_score": -3.06,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "46/70",
+          "commands_shown_k": 46,
+          "commands_n": 70,
+          "shown_wrong": "0/46 (한쪽 95% 상한 6.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "97/174",
+          "false_alarms_k": 97,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.365,
+            "min_score": -3.06,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "44/70",
+          "commands_shown_k": 44,
+          "commands_n": 70,
+          "shown_wrong": "0/44 (한쪽 95% 상한 6.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "65/174",
+          "false_alarms_k": 65,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest_on_P03": {
+          "bad_closest": [
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.106
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.186
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.081,
+              "score": -3.081,
+              "slack": 0.284
+            },
+            {
+              "file": "P03_none_X10_1.webm",
+              "cls": "block",
+              "top": "W09",
+              "margin": 0.046,
+              "score": -3.311,
+              "slack": 0.319
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P03_silent_W14_1.webm",
+              "cls": "good",
+              "top": "W14",
+              "margin": 1.556,
+              "score": -3.049,
+              "slack": 0.011
+            },
+            {
+              "file": "P03_silent_W07_2.webm",
+              "cls": "good",
+              "top": "W07",
+              "margin": 1.792,
+              "score": -3.046,
+              "slack": 0.014
+            },
+            {
+              "file": "P03_reclined_W10_1.webm",
+              "cls": "good",
+              "top": "W10",
+              "margin": 0.88,
+              "score": -3.035,
+              "slack": 0.025
+            },
+            {
+              "file": "P03_voiced_W13_1.webm",
+              "cls": "good",
+              "top": "W13",
+              "margin": 3.27,
+              "score": -3.026,
+              "slack": 0.034
+            }
+          ]
+        }
+      },
+      "fit_P03": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.0,
+          "max_correct_shown": 57,
+          "M": 0.57,
+          "S": -3.44,
+          "max_safety": 0.024025086593733036,
+          "safety": 0.011760940135628672,
+          "safety_vs_bad": 0.017274487855008847,
+          "safety_vs_kept": 0.011760940135628672,
+          "optimal_M_range_at_S": [
+            0.26,
+            0.88
+          ],
+          "optimal_S_range_at_M": [
+            -3.455,
+            -3.43
+          ],
+          "n_optimal_grid_points": 966,
+          "n_items": 182,
+          "n_good": 69,
+          "n_bad": 113
+        },
+        "on_fit_person": {
+          "rule": {
+            "min_margin": 0.57,
+            "min_score": -3.44,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "57/70",
+          "commands_shown_k": 57,
+          "commands_n": 70,
+          "shown_wrong": "0/57 (한쪽 95% 상한 5.1%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "62/174",
+          "false_alarms_k": 62,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.57,
+            "min_score": -3.44,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "54/70",
+          "commands_shown_k": 54,
+          "commands_n": 70,
+          "shown_wrong": "0/54 (한쪽 95% 상한 5.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "2/120",
+          "negatives_shown_k": 2,
+          "negatives_shown_clips": [
+            "P01_silent_D03_1.webm->W10",
+            "P01_silent_A09_2.webm->W10"
+          ],
+          "false_alarms": "92/174",
+          "false_alarms_k": 92,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest_on_P01": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": -0.374
+            },
+            {
+              "file": "P01_silent_A09_2.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.819,
+              "score": -3.27,
+              "slack": -0.17
+            },
+            {
+              "file": "P01_voiced_A06_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.563,
+              "score": -3.298,
+              "slack": 0.007
+            },
+            {
+              "file": "P01_voiced_A06_2.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.423,
+              "score": -3.502,
+              "slack": 0.147
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_reclined_W02_1.webm",
+              "cls": "good",
+              "top": "W02",
+              "margin": 0.61,
+              "score": -3.432,
+              "slack": 0.008
+            },
+            {
+              "file": "P01_reclined_W04_1.webm",
+              "cls": "good",
+              "top": "W04",
+              "margin": 0.797,
+              "score": -3.402,
+              "slack": 0.038
+            },
+            {
+              "file": "P01_voiced_W08_1.webm",
+              "cls": "good",
+              "top": "W08",
+              "margin": 0.841,
+              "score": -3.4,
+              "slack": 0.04
+            },
+            {
+              "file": "P01_voiced_W12_1.webm",
+              "cls": "good",
+              "top": "W12",
+              "margin": 0.637,
+              "score": -2.591,
+              "slack": 0.067
+            }
+          ]
+        }
+      }
+    },
+    "pooled": {
+      "0.00": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.0,
+          "max_correct_shown": 90,
+          "M": 0.365,
+          "S": -3.06,
+          "max_safety": 0.0034159377261828716,
+          "safety": 0.0034159377261828716,
+          "safety_vs_bad": 0.005798557387530323,
+          "safety_vs_kept": 0.0034159377261828716,
+          "optimal_M_range_at_S": [
+            0.3,
+            0.43
+          ],
+          "optimal_S_range_at_M": [
+            -3.065,
+            -3.06
+          ],
+          "n_optimal_grid_points": 54,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.365,
+            "min_score": -3.06,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "90/140",
+          "commands_shown_k": 90,
+          "commands_n": 140,
+          "shown_wrong": "0/90 (한쪽 95% 상한 3.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "162/348",
+          "false_alarms_k": 162,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.365,
+            "min_score": -3.06,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "46/70",
+          "commands_shown_k": 46,
+          "commands_n": 70,
+          "shown_wrong": "0/46 (한쪽 95% 상한 6.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "97/174",
+          "false_alarms_k": 97,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.365,
+            "min_score": -3.06,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "44/70",
+          "commands_shown_k": 44,
+          "commands_n": 70,
+          "shown_wrong": "0/44 (한쪽 95% 상한 6.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "65/174",
+          "false_alarms_k": 65,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.006
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.068
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.106
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.186
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_silent_W09_2.webm",
+              "cls": "good",
+              "top": "W09",
+              "margin": 1.319,
+              "score": -3.057,
+              "slack": 0.003
+            },
+            {
+              "file": "P03_silent_W14_1.webm",
+              "cls": "good",
+              "top": "W14",
+              "margin": 1.556,
+              "score": -3.049,
+              "slack": 0.011
+            },
+            {
+              "file": "P03_silent_W07_2.webm",
+              "cls": "good",
+              "top": "W07",
+              "margin": 1.792,
+              "score": -3.046,
+              "slack": 0.014
+            },
+            {
+              "file": "P01_reclined_W13_1.webm",
+              "cls": "good",
+              "top": "W13",
+              "margin": 0.848,
+              "score": -3.043,
+              "slack": 0.017
+            }
+          ]
+        }
+      },
+      "0.05": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.05,
+          "max_correct_shown": 82,
+          "M": 0.39,
+          "S": -3.015,
+          "max_safety": 0.004194461260578652,
+          "safety": 0.004194461260578652,
+          "safety_vs_bad": 0.05079855738753025,
+          "safety_vs_kept": 0.004194461260578652,
+          "optimal_M_range_at_S": [
+            0.35,
+            0.43
+          ],
+          "optimal_S_range_at_M": [
+            -3.015,
+            -3.015
+          ],
+          "n_optimal_grid_points": 17,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "82/140",
+          "commands_shown_k": 82,
+          "commands_n": 140,
+          "shown_wrong": "0/82 (한쪽 95% 상한 3.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "167/348",
+          "false_alarms_k": 167,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "42/70",
+          "commands_shown_k": 42,
+          "commands_n": 70,
+          "shown_wrong": "0/42 (한쪽 95% 상한 6.9%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "100/174",
+          "false_alarms_k": 100,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "40/70",
+          "commands_shown_k": 40,
+          "commands_n": 70,
+          "shown_wrong": "0/40 (한쪽 95% 상한 7.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "67/174",
+          "false_alarms_k": 67,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.051
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.093
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.131
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.211
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_silent_W18_1.webm",
+              "cls": "good",
+              "top": "W18",
+              "margin": 0.685,
+              "score": -3.011,
+              "slack": 0.004
+            },
+            {
+              "file": "P01_silent_W08_1.webm",
+              "cls": "good",
+              "top": "W08",
+              "margin": 0.434,
+              "score": -2.982,
+              "slack": 0.033
+            },
+            {
+              "file": "P03_silent_W14_2.webm",
+              "cls": "good",
+              "top": "W14",
+              "margin": 1.554,
+              "score": -2.948,
+              "slack": 0.067
+            },
+            {
+              "file": "P01_silent_W11_1.webm",
+              "cls": "good",
+              "top": "W11",
+              "margin": 1.297,
+              "score": -2.937,
+              "slack": 0.078
+            }
+          ]
+        }
+      },
+      "0.10": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.1,
+          "max_correct_shown": 80,
+          "M": 0.52,
+          "S": -2.96,
+          "max_safety": 0.016681966471125076,
+          "safety": 0.011681966471125182,
+          "safety_vs_bad": 0.10579855738753041,
+          "safety_vs_kept": 0.011681966471125182,
+          "optimal_M_range_at_S": [
+            0.4,
+            0.635
+          ],
+          "optimal_S_range_at_M": [
+            -2.965,
+            -2.95
+          ],
+          "n_optimal_grid_points": 192,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.52,
+            "min_score": -2.96,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "80/140",
+          "commands_shown_k": 80,
+          "commands_n": 140,
+          "shown_wrong": "0/80 (한쪽 95% 상한 3.7%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "169/348",
+          "false_alarms_k": 169,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.52,
+            "min_score": -2.96,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "40/70",
+          "commands_shown_k": 40,
+          "commands_n": 70,
+          "shown_wrong": "0/40 (한쪽 95% 상한 7.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "102/174",
+          "false_alarms_k": 102,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.52,
+            "min_score": -2.96,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "40/70",
+          "commands_shown_k": 40,
+          "commands_n": 70,
+          "shown_wrong": "0/40 (한쪽 95% 상한 7.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "67/174",
+          "false_alarms_k": 67,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.106
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.223
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.261
+            },
+            {
+              "file": "P01_silent_A09_2.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.819,
+              "score": -3.27,
+              "slack": 0.31
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P03_silent_W14_2.webm",
+              "cls": "good",
+              "top": "W14",
+              "margin": 1.554,
+              "score": -2.948,
+              "slack": 0.012
+            },
+            {
+              "file": "P01_silent_W11_1.webm",
+              "cls": "good",
+              "top": "W11",
+              "margin": 1.297,
+              "score": -2.937,
+              "slack": 0.023
+            },
+            {
+              "file": "P01_silent_W02_2.webm",
+              "cls": "good",
+              "top": "W02",
+              "margin": 0.732,
+              "score": -2.928,
+              "slack": 0.032
+            },
+            {
+              "file": "P01_voiced_W07_1.webm",
+              "cls": "good",
+              "top": "W07",
+              "margin": 1.931,
+              "score": -2.914,
+              "slack": 0.046
+            }
+          ]
+        }
+      },
+      "0.15": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.15,
+          "max_correct_shown": 77,
+          "M": 0.54,
+          "S": -2.915,
+          "max_safety": 0.0008893743573863411,
+          "safety": 0.0008893743573863411,
+          "safety_vs_bad": 0.15079855738753034,
+          "safety_vs_kept": 0.0008893743573863411,
+          "optimal_M_range_at_S": [
+            0.45,
+            0.635
+          ],
+          "optimal_S_range_at_M": [
+            -2.915,
+            -2.915
+          ],
+          "n_optimal_grid_points": 38,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.54,
+            "min_score": -2.915,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "77/140",
+          "commands_shown_k": 77,
+          "commands_n": 140,
+          "shown_wrong": "0/77 (한쪽 95% 상한 3.8%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "169/348",
+          "false_alarms_k": 169,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.54,
+            "min_score": -2.915,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "38/70",
+          "commands_shown_k": 38,
+          "commands_n": 70,
+          "shown_wrong": "0/38 (한쪽 95% 상한 7.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "102/174",
+          "false_alarms_k": 102,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.54,
+            "min_score": -2.915,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "39/70",
+          "commands_shown_k": 39,
+          "commands_n": 70,
+          "shown_wrong": "0/39 (한쪽 95% 상한 7.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "67/174",
+          "false_alarms_k": 67,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.151
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.243
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.281
+            },
+            {
+              "file": "P01_silent_A09_2.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.819,
+              "score": -3.27,
+              "slack": 0.355
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_voiced_W07_1.webm",
+              "cls": "good",
+              "top": "W07",
+              "margin": 1.931,
+              "score": -2.914,
+              "slack": 0.001
+            },
+            {
+              "file": "P03_voiced_W20_1.webm",
+              "cls": "good",
+              "top": "W20",
+              "margin": 1.643,
+              "score": -2.908,
+              "slack": 0.007
+            },
+            {
+              "file": "P01_reclined_W18_1.webm",
+              "cls": "good",
+              "top": "W18",
+              "margin": 1.745,
+              "score": -2.896,
+              "slack": 0.019
+            },
+            {
+              "file": "P01_reclined_W10_1.webm",
+              "cls": "good",
+              "top": "W10",
+              "margin": 0.864,
+              "score": -2.891,
+              "slack": 0.024
+            }
+          ]
+        }
+      },
+      "0.20": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.2,
+          "max_correct_shown": 69,
+          "M": 0.57,
+          "S": -2.86,
+          "max_safety": 0.009433693451144087,
+          "safety": 0.00443369345114375,
+          "safety_vs_bad": 0.2057985573875305,
+          "safety_vs_kept": 0.00443369345114375,
+          "optimal_M_range_at_S": [
+            0.5,
+            0.635
+          ],
+          "optimal_S_range_at_M": [
+            -2.865,
+            -2.86
+          ],
+          "n_optimal_grid_points": 56,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.57,
+            "min_score": -2.86,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "69/140",
+          "commands_shown_k": 69,
+          "commands_n": 140,
+          "shown_wrong": "0/69 (한쪽 95% 상한 4.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "173/348",
+          "false_alarms_k": 173,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.57,
+            "min_score": -2.86,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "34/70",
+          "commands_shown_k": 34,
+          "commands_n": 70,
+          "shown_wrong": "0/34 (한쪽 95% 상한 8.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "105/174",
+          "false_alarms_k": 105,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.57,
+            "min_score": -2.86,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "35/70",
+          "commands_shown_k": 35,
+          "commands_n": 70,
+          "shown_wrong": "0/35 (한쪽 95% 상한 8.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "68/174",
+          "false_alarms_k": 68,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.206
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.273
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.311
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.391
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_silent_W14_2.webm",
+              "cls": "good",
+              "top": "W14",
+              "margin": 0.82,
+              "score": -2.856,
+              "slack": 0.004
+            },
+            {
+              "file": "P01_silent_W17_1.webm",
+              "cls": "good",
+              "top": "W17",
+              "margin": 0.994,
+              "score": -2.827,
+              "slack": 0.033
+            },
+            {
+              "file": "P01_silent_W16_2.webm",
+              "cls": "good",
+              "top": "W16",
+              "margin": 1.392,
+              "score": -2.81,
+              "slack": 0.05
+            },
+            {
+              "file": "P01_voiced_W20_1.webm",
+              "cls": "good",
+              "top": "W20",
+              "margin": 1.194,
+              "score": -2.807,
+              "slack": 0.053
+            }
+          ]
+        }
+      },
+      "0.25": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.25,
+          "max_correct_shown": 67,
+          "M": 0.59,
+          "S": -2.81,
+          "max_safety": 0.005043365402101596,
+          "safety": 4.33654021017027e-05,
+          "safety_vs_bad": 0.2557985573875303,
+          "safety_vs_kept": 4.33654021017027e-05,
+          "optimal_M_range_at_S": [
+            0.55,
+            0.635
+          ],
+          "optimal_S_range_at_M": [
+            -2.815,
+            -2.81
+          ],
+          "n_optimal_grid_points": 36,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.59,
+            "min_score": -2.81,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "67/140",
+          "commands_shown_k": 67,
+          "commands_n": 140,
+          "shown_wrong": "0/67 (한쪽 95% 상한 4.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "173/348",
+          "false_alarms_k": 173,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.59,
+            "min_score": -2.81,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "32/70",
+          "commands_shown_k": 32,
+          "commands_n": 70,
+          "shown_wrong": "0/32 (한쪽 95% 상한 8.9%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "105/174",
+          "false_alarms_k": 105,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.59,
+            "min_score": -2.81,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "35/70",
+          "commands_shown_k": 35,
+          "commands_n": 70,
+          "shown_wrong": "0/35 (한쪽 95% 상한 8.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "68/174",
+          "false_alarms_k": 68,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.256
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.293
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.331
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.411
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_silent_W16_2.webm",
+              "cls": "good",
+              "top": "W16",
+              "margin": 1.392,
+              "score": -2.81,
+              "slack": 0.0
+            },
+            {
+              "file": "P01_voiced_W20_1.webm",
+              "cls": "good",
+              "top": "W20",
+              "margin": 1.194,
+              "score": -2.807,
+              "slack": 0.003
+            },
+            {
+              "file": "P01_voiced_W12_1.webm",
+              "cls": "good",
+              "top": "W12",
+              "margin": 0.637,
+              "score": -2.591,
+              "slack": 0.047
+            },
+            {
+              "file": "P01_voiced_W11_1.webm",
+              "cls": "good",
+              "top": "W11",
+              "margin": 0.844,
+              "score": -2.762,
+              "slack": 0.048
+            }
+          ]
+        }
+      },
+      "0.30": {
+        "fit": {
+          "feasible": true,
+          "delta": 0.3,
+          "max_correct_shown": 65,
+          "M": 0.62,
+          "S": -2.765,
+          "max_safety": 0.0027214465791089992,
+          "safety": 0.0027214465791089992,
+          "safety_vs_bad": 0.30079855738753025,
+          "safety_vs_kept": 0.0027214465791089992,
+          "optimal_M_range_at_S": [
+            0.6,
+            0.635
+          ],
+          "optimal_S_range_at_M": [
+            -2.765,
+            -2.765
+          ],
+          "n_optimal_grid_points": 8,
+          "n_items": 366,
+          "n_good": 137,
+          "n_bad": 229
+        },
+        "all": {
+          "rule": {
+            "min_margin": 0.62,
+            "min_score": -2.765,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "65/140",
+          "commands_shown_k": 65,
+          "commands_n": 140,
+          "shown_wrong": "0/65 (한쪽 95% 상한 4.5%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "174/348",
+          "false_alarms_k": 174,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.62,
+            "min_score": -2.765,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "30/70",
+          "commands_shown_k": 30,
+          "commands_n": 70,
+          "shown_wrong": "0/30 (한쪽 95% 상한 9.5%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "106/174",
+          "false_alarms_k": 106,
+          "emergency_recall": "16/16",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.62,
+            "min_score": -2.765,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "35/70",
+          "commands_shown_k": 35,
+          "commands_n": 70,
+          "shown_wrong": "0/35 (한쪽 95% 상한 8.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "68/174",
+          "false_alarms_k": 68,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "nearest": {
+          "bad_closest": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "cls": "block",
+              "top": "W10",
+              "margin": 1.523,
+              "score": -3.066,
+              "slack": 0.301
+            },
+            {
+              "file": "P01_silent_E03_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.297,
+              "score": -3.015,
+              "slack": 0.323
+            },
+            {
+              "file": "P03_none_X08_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.259,
+              "score": -2.819,
+              "slack": 0.361
+            },
+            {
+              "file": "P03_none_X09_1.webm",
+              "cls": "block",
+              "top": "W18",
+              "margin": 0.179,
+              "score": -3.034,
+              "slack": 0.441
+            }
+          ],
+          "kept_good_closest": [
+            {
+              "file": "P01_voiced_W11_1.webm",
+              "cls": "good",
+              "top": "W11",
+              "margin": 0.844,
+              "score": -2.762,
+              "slack": 0.003
+            },
+            {
+              "file": "P01_silent_W20_2.webm",
+              "cls": "good",
+              "top": "W20",
+              "margin": 0.863,
+              "score": -2.76,
+              "slack": 0.005
+            },
+            {
+              "file": "P01_voiced_W12_1.webm",
+              "cls": "good",
+              "top": "W12",
+              "margin": 0.637,
+              "score": -2.591,
+              "slack": 0.017
+            },
+            {
+              "file": "P03_reclined_W18_1.webm",
+              "cls": "good",
+              "top": "W18",
+              "margin": 1.494,
+              "score": -2.732,
+              "slack": 0.033
+            }
+          ]
+        }
+      }
+    },
+    "proposal_on_all": {
+      "rule": {
+        "min_margin": 0.39,
+        "min_score": -3.015,
+        "max_distance": null,
+        "ids": null,
+        "possible_min_score": null
+      },
+      "commands_shown": "82/140",
+      "commands_shown_k": 82,
+      "commands_n": 140,
+      "shown_wrong": "0/82 (한쪽 95% 상한 3.6%)",
+      "shown_wrong_k": 0,
+      "shown_wrong_clips": [],
+      "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+      "negatives_shown_k": 0,
+      "negatives_shown_clips": [],
+      "false_alarms": "167/348",
+      "false_alarms_k": 167,
+      "emergency_recall": "32/32",
+      "short_alarm": "1/6",
+      "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+      "short_as_request_k": 0,
+      "short_as_request_clips": [],
+      "via_enroll": 0
+    },
+    "possible_floor": {
+      "fit_P01": {
+        "fit": {
+          "floor": -4.142635644752417,
+          "needed": -3.942635644752417,
+          "needed_clip": "P01_silent_W04_2.webm",
+          "clearance": 0.2,
+          "n_emergency_clips": 16,
+          "n_relying_on_possible": 5
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": -4.142635644752417
+          },
+          "commands_shown": "40/70",
+          "commands_shown_k": 40,
+          "commands_n": 70,
+          "shown_wrong": "0/40 (한쪽 95% 상한 7.2%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "6/174",
+          "false_alarms_k": 6,
+          "emergency_recall": "16/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        }
+      },
+      "fit_P03": {
+        "fit": {
+          "floor": -3.2346959223408187,
+          "needed": -3.0346959223408185,
+          "needed_clip": "P03_reclined_W10_1.webm",
+          "clearance": 0.2,
+          "n_emergency_clips": 16,
+          "n_relying_on_possible": 1
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": -3.2346959223408187
+          },
+          "commands_shown": "42/70",
+          "commands_shown_k": 42,
+          "commands_n": 70,
+          "shown_wrong": "0/42 (한쪽 95% 상한 6.9%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "9/174",
+          "false_alarms_k": 9,
+          "emergency_recall": "11/16",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        }
+      },
+      "pooled": {
+        "floor": -4.142635644752417,
+        "needed": -3.942635644752417,
+        "needed_clip": "P01_silent_W04_2.webm",
+        "clearance": 0.2,
+        "n_emergency_clips": 32,
+        "n_relying_on_possible": 6,
+        "without_floor": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "82/140",
+          "commands_shown_k": 82,
+          "commands_n": 140,
+          "shown_wrong": "0/82 (한쪽 95% 상한 3.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "167/348",
+          "false_alarms_k": 167,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        },
+        "with_floor": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": null,
+            "ids": null,
+            "possible_min_score": -4.142635644752417
+          },
+          "commands_shown": "82/140",
+          "commands_shown_k": 82,
+          "commands_n": 140,
+          "shown_wrong": "0/82 (한쪽 95% 상한 3.6%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "57/348",
+          "false_alarms_k": 57,
+          "emergency_recall": "32/32",
+          "short_alarm": "1/6",
+          "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 0
+        }
+      }
+    },
+    "reduced": {
+      "lopo": {
+        "fit_P01": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.0,
+            "max_correct_shown": 33,
+            "M": 0.385,
+            "S": -3.06,
+            "max_safety": 0.0034159377261828716,
+            "safety": 0.0034159377261828716,
+            "safety_vs_bad": 0.005798557387530323,
+            "safety_vs_kept": 0.0034159377261828716,
+            "optimal_M_range_at_S": [
+              0.34,
+              0.43
+            ],
+            "optimal_S_range_at_M": [
+              -3.065,
+              -3.06
+            ],
+            "n_optimal_grid_points": 38,
+            "n_items": 155,
+            "n_good": 41,
+            "n_bad": 114
+          },
+          "on_fit_person": {
+            "rule": {
+              "min_margin": 0.385,
+              "min_score": -3.06,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "33/42",
+            "commands_shown_k": 33,
+            "commands_n": 42,
+            "shown_wrong": "0/33 (한쪽 95% 상한 8.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "110/146",
+            "false_alarms_k": 110,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.385,
+              "min_score": -3.06,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "33/42",
+            "commands_shown_k": 33,
+            "commands_n": 42,
+            "shown_wrong": "0/33 (한쪽 95% 상한 8.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "90/146",
+            "false_alarms_k": 90,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest_on_P03": {
+            "bad_closest": [
+              {
+                "file": "P03_none_X10_1.webm",
+                "cls": "block",
+                "top": "W09",
+                "margin": 0.102,
+                "score": -3.311,
+                "slack": 0.283
+              },
+              {
+                "file": "P03_none_X09_1.webm",
+                "cls": "block",
+                "top": "W16",
+                "margin": 0.06,
+                "score": -3.161,
+                "slack": 0.325
+              },
+              {
+                "file": "P03_none_X08_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.052,
+                "score": -3.077,
+                "slack": 0.333
+              },
+              {
+                "file": "P03_none_X06_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.031,
+                "score": -3.415,
+                "slack": 0.355
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P03_silent_W07_2.webm",
+                "cls": "good",
+                "top": "W07",
+                "margin": 1.792,
+                "score": -3.046,
+                "slack": 0.014
+              },
+              {
+                "file": "P03_reclined_W10_1.webm",
+                "cls": "good",
+                "top": "W10",
+                "margin": 1.144,
+                "score": -3.035,
+                "slack": 0.025
+              },
+              {
+                "file": "P03_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.643,
+                "score": -2.908,
+                "slack": 0.152
+              },
+              {
+                "file": "P03_silent_W16_1.webm",
+                "cls": "good",
+                "top": "W16",
+                "margin": 1.272,
+                "score": -2.871,
+                "slack": 0.189
+              }
+            ]
+          }
+        },
+        "fit_P03": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.0,
+            "max_correct_shown": 38,
+            "M": 0.8,
+            "S": -3.56,
+            "max_safety": 0.07646137485252558,
+            "safety": 0.07572391257573807,
+            "safety_vs_bad": 0.07572391257573807,
+            "safety_vs_kept": 0.08146137485252547,
+            "optimal_M_range_at_S": [
+              0.615,
+              0.985
+            ],
+            "optimal_S_range_at_M": [
+              -3.635,
+              -3.48
+            ],
+            "n_optimal_grid_points": 2400,
+            "n_items": 153,
+            "n_good": 42,
+            "n_bad": 111
+          },
+          "on_fit_person": {
+            "rule": {
+              "min_margin": 0.8,
+              "min_score": -3.56,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "38/42",
+            "commands_shown_k": 38,
+            "commands_n": 42,
+            "shown_wrong": "0/38 (한쪽 95% 상한 7.6%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "87/146",
+            "false_alarms_k": 87,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.8,
+              "min_score": -3.56,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "32/42",
+            "commands_shown_k": 32,
+            "commands_n": 42,
+            "shown_wrong": "0/32 (한쪽 95% 상한 8.9%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "2/120",
+            "negatives_shown_k": 2,
+            "negatives_shown_clips": [
+              "P01_silent_D03_1.webm->W10",
+              "P01_silent_A09_2.webm->W10"
+            ],
+            "false_alarms": "110/146",
+            "false_alarms_k": 110,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest_on_P01": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": -0.494
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": -0.29
+              },
+              {
+                "file": "P01_voiced_A09_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.102,
+                "score": -3.675,
+                "slack": 0.115
+              },
+              {
+                "file": "P01_silent_N06_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.68,
+                "score": -3.809,
+                "slack": 0.249
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_voiced_W08_1.webm",
+                "cls": "good",
+                "top": "W08",
+                "margin": 0.841,
+                "score": -3.4,
+                "slack": 0.041
+              },
+              {
+                "file": "P01_silent_W20_2.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 0.863,
+                "score": -2.76,
+                "slack": 0.063
+              },
+              {
+                "file": "P01_silent_W12_2.webm",
+                "cls": "good",
+                "top": "W12",
+                "margin": 0.917,
+                "score": -2.653,
+                "slack": 0.117
+              },
+              {
+                "file": "P01_silent_W08_2.webm",
+                "cls": "good",
+                "top": "W08",
+                "margin": 0.921,
+                "score": -2.884,
+                "slack": 0.121
+              }
+            ]
+          }
+        }
+      },
+      "pooled": {
+        "0.00": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.0,
+            "max_correct_shown": 66,
+            "M": 0.385,
+            "S": -3.06,
+            "max_safety": 0.0034159377261828716,
+            "safety": 0.0034159377261828716,
+            "safety_vs_bad": 0.005798557387530323,
+            "safety_vs_kept": 0.0034159377261828716,
+            "optimal_M_range_at_S": [
+              0.34,
+              0.43
+            ],
+            "optimal_S_range_at_M": [
+              -3.065,
+              -3.06
+            ],
+            "n_optimal_grid_points": 38,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.385,
+              "min_score": -3.06,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "66/84",
+            "commands_shown_k": 66,
+            "commands_n": 84,
+            "shown_wrong": "0/66 (한쪽 95% 상한 4.4%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "200/292",
+            "false_alarms_k": 200,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.385,
+              "min_score": -3.06,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "33/42",
+            "commands_shown_k": 33,
+            "commands_n": 42,
+            "shown_wrong": "0/33 (한쪽 95% 상한 8.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "110/146",
+            "false_alarms_k": 110,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.385,
+              "min_score": -3.06,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "33/42",
+            "commands_shown_k": 33,
+            "commands_n": 42,
+            "shown_wrong": "0/33 (한쪽 95% 상한 8.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "90/146",
+            "false_alarms_k": 90,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.006
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.045
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.21
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.257
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W09_2.webm",
+                "cls": "good",
+                "top": "W09",
+                "margin": 1.319,
+                "score": -3.057,
+                "slack": 0.003
+              },
+              {
+                "file": "P03_silent_W07_2.webm",
+                "cls": "good",
+                "top": "W07",
+                "margin": 1.792,
+                "score": -3.046,
+                "slack": 0.014
+              },
+              {
+                "file": "P03_reclined_W10_1.webm",
+                "cls": "good",
+                "top": "W10",
+                "margin": 1.144,
+                "score": -3.035,
+                "slack": 0.025
+              },
+              {
+                "file": "P01_silent_W16_1.webm",
+                "cls": "good",
+                "top": "W16",
+                "margin": 1.403,
+                "score": -3.026,
+                "slack": 0.034
+              }
+            ]
+          }
+        },
+        "0.05": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.05,
+            "max_correct_shown": 62,
+            "M": 0.41,
+            "S": -3.0,
+            "max_safety": 0.03309715426493254,
+            "safety": 0.018097154264932414,
+            "safety_vs_bad": 0.06579855738753038,
+            "safety_vs_kept": 0.018097154264932414,
+            "optimal_M_range_at_S": [
+              0.39,
+              0.43
+            ],
+            "optimal_S_range_at_M": [
+              -3.015,
+              -2.985
+            ],
+            "n_optimal_grid_points": 63,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.41,
+              "min_score": -3.0,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "62/84",
+            "commands_shown_k": 62,
+            "commands_n": 84,
+            "shown_wrong": "0/62 (한쪽 95% 상한 4.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "202/292",
+            "false_alarms_k": 202,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.41,
+              "min_score": -3.0,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "31/42",
+            "commands_shown_k": 31,
+            "commands_n": 42,
+            "shown_wrong": "0/31 (한쪽 95% 상한 9.2%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "111/146",
+            "false_alarms_k": 111,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.41,
+              "min_score": -3.0,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "31/42",
+            "commands_shown_k": 31,
+            "commands_n": 42,
+            "shown_wrong": "0/31 (한쪽 95% 상한 9.2%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.066
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.07
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.27
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.282
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W08_1.webm",
+                "cls": "good",
+                "top": "W08",
+                "margin": 0.434,
+                "score": -2.982,
+                "slack": 0.018
+              },
+              {
+                "file": "P01_silent_W02_2.webm",
+                "cls": "good",
+                "top": "W02",
+                "margin": 0.732,
+                "score": -2.928,
+                "slack": 0.072
+              },
+              {
+                "file": "P01_voiced_W07_1.webm",
+                "cls": "good",
+                "top": "W07",
+                "margin": 1.931,
+                "score": -2.914,
+                "slack": 0.086
+              },
+              {
+                "file": "P03_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.643,
+                "score": -2.908,
+                "slack": 0.092
+              }
+            ]
+          }
+        },
+        "0.10": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.1,
+            "max_correct_shown": 61,
+            "M": 0.54,
+            "S": -2.95,
+            "max_safety": 0.03674281818569991,
+            "safety": 0.02174281818570023,
+            "safety_vs_bad": 0.1157985573875302,
+            "safety_vs_kept": 0.02174281818570023,
+            "optimal_M_range_at_S": [
+              0.44,
+              0.635
+            ],
+            "optimal_S_range_at_M": [
+              -2.965,
+              -2.93
+            ],
+            "n_optimal_grid_points": 320,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.54,
+              "min_score": -2.95,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "61/84",
+            "commands_shown_k": 61,
+            "commands_n": 84,
+            "shown_wrong": "0/61 (한쪽 95% 상한 4.8%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "203/292",
+            "false_alarms_k": 203,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.54,
+              "min_score": -2.95,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "30/42",
+            "commands_shown_k": 30,
+            "commands_n": 42,
+            "shown_wrong": "0/30 (한쪽 95% 상한 9.5%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "112/146",
+            "false_alarms_k": 112,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.54,
+              "min_score": -2.95,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "31/42",
+            "commands_shown_k": 31,
+            "commands_n": 42,
+            "shown_wrong": "0/31 (한쪽 95% 상한 9.2%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.116
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.2
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.32
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.412
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W02_2.webm",
+                "cls": "good",
+                "top": "W02",
+                "margin": 0.732,
+                "score": -2.928,
+                "slack": 0.022
+              },
+              {
+                "file": "P01_voiced_W07_1.webm",
+                "cls": "good",
+                "top": "W07",
+                "margin": 1.931,
+                "score": -2.914,
+                "slack": 0.036
+              },
+              {
+                "file": "P03_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.643,
+                "score": -2.908,
+                "slack": 0.042
+              },
+              {
+                "file": "P01_reclined_W10_1.webm",
+                "cls": "good",
+                "top": "W10",
+                "margin": 1.464,
+                "score": -2.891,
+                "slack": 0.059
+              }
+            ]
+          }
+        },
+        "0.15": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.15,
+            "max_correct_shown": 60,
+            "M": 0.56,
+            "S": -2.915,
+            "max_safety": 0.0008893743573863411,
+            "safety": 0.0008893743573863411,
+            "safety_vs_bad": 0.15079855738753034,
+            "safety_vs_kept": 0.0008893743573863411,
+            "optimal_M_range_at_S": [
+              0.49,
+              0.635
+            ],
+            "optimal_S_range_at_M": [
+              -2.915,
+              -2.915
+            ],
+            "n_optimal_grid_points": 30,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.56,
+              "min_score": -2.915,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "60/84",
+            "commands_shown_k": 60,
+            "commands_n": 84,
+            "shown_wrong": "0/60 (한쪽 95% 상한 4.9%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "203/292",
+            "false_alarms_k": 203,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.56,
+              "min_score": -2.915,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "29/42",
+            "commands_shown_k": 29,
+            "commands_n": 42,
+            "shown_wrong": "0/29 (한쪽 95% 상한 9.8%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "112/146",
+            "false_alarms_k": 112,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.56,
+              "min_score": -2.915,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "31/42",
+            "commands_shown_k": 31,
+            "commands_n": 42,
+            "shown_wrong": "0/31 (한쪽 95% 상한 9.2%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.151
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.22
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.355
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.432
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_voiced_W07_1.webm",
+                "cls": "good",
+                "top": "W07",
+                "margin": 1.931,
+                "score": -2.914,
+                "slack": 0.001
+              },
+              {
+                "file": "P03_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.643,
+                "score": -2.908,
+                "slack": 0.007
+              },
+              {
+                "file": "P01_reclined_W10_1.webm",
+                "cls": "good",
+                "top": "W10",
+                "margin": 1.464,
+                "score": -2.891,
+                "slack": 0.024
+              },
+              {
+                "file": "P01_silent_W08_2.webm",
+                "cls": "good",
+                "top": "W08",
+                "margin": 0.921,
+                "score": -2.884,
+                "slack": 0.031
+              }
+            ]
+          }
+        },
+        "0.20": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.2,
+            "max_correct_shown": 54,
+            "M": 0.59,
+            "S": -2.84,
+            "max_safety": 0.05504336540210186,
+            "safety": 0.030043365402101507,
+            "safety_vs_bad": 0.22579855738753052,
+            "safety_vs_kept": 0.030043365402101507,
+            "optimal_M_range_at_S": [
+              0.54,
+              0.635
+            ],
+            "optimal_S_range_at_M": [
+              -2.865,
+              -2.81
+            ],
+            "n_optimal_grid_points": 240,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.59,
+              "min_score": -2.84,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "54/84",
+            "commands_shown_k": 54,
+            "commands_n": 84,
+            "shown_wrong": "0/54 (한쪽 95% 상한 5.4%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "205/292",
+            "false_alarms_k": 205,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.59,
+              "min_score": -2.84,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "26/42",
+            "commands_shown_k": 26,
+            "commands_n": 42,
+            "shown_wrong": "0/26 (한쪽 95% 상한 10.9%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "114/146",
+            "false_alarms_k": 114,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.59,
+              "min_score": -2.84,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "28/42",
+            "commands_shown_k": 28,
+            "commands_n": 42,
+            "shown_wrong": "0/28 (한쪽 95% 상한 10.1%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.226
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.25
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.43
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.462
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W16_2.webm",
+                "cls": "good",
+                "top": "W16",
+                "margin": 1.392,
+                "score": -2.81,
+                "slack": 0.03
+              },
+              {
+                "file": "P01_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.194,
+                "score": -2.807,
+                "slack": 0.033
+              },
+              {
+                "file": "P01_voiced_W12_1.webm",
+                "cls": "good",
+                "top": "W12",
+                "margin": 0.637,
+                "score": -2.591,
+                "slack": 0.047
+              },
+              {
+                "file": "P01_silent_W20_2.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 0.863,
+                "score": -2.76,
+                "slack": 0.08
+              }
+            ]
+          }
+        },
+        "0.25": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.25,
+            "max_correct_shown": 54,
+            "M": 0.61,
+            "S": -2.81,
+            "max_safety": 0.005043365402101596,
+            "safety": 4.33654021017027e-05,
+            "safety_vs_bad": 0.2557985573875303,
+            "safety_vs_kept": 4.33654021017027e-05,
+            "optimal_M_range_at_S": [
+              0.59,
+              0.635
+            ],
+            "optimal_S_range_at_M": [
+              -2.815,
+              -2.81
+            ],
+            "n_optimal_grid_points": 20,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.61,
+              "min_score": -2.81,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "54/84",
+            "commands_shown_k": 54,
+            "commands_n": 84,
+            "shown_wrong": "0/54 (한쪽 95% 상한 5.4%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "205/292",
+            "false_alarms_k": 205,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.61,
+              "min_score": -2.81,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "26/42",
+            "commands_shown_k": 26,
+            "commands_n": 42,
+            "shown_wrong": "0/26 (한쪽 95% 상한 10.9%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "114/146",
+            "false_alarms_k": 114,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.61,
+              "min_score": -2.81,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "28/42",
+            "commands_shown_k": 28,
+            "commands_n": 42,
+            "shown_wrong": "0/28 (한쪽 95% 상한 10.1%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.256
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.27
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.46
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.482
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W16_2.webm",
+                "cls": "good",
+                "top": "W16",
+                "margin": 1.392,
+                "score": -2.81,
+                "slack": 0.0
+              },
+              {
+                "file": "P01_voiced_W20_1.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 1.194,
+                "score": -2.807,
+                "slack": 0.003
+              },
+              {
+                "file": "P01_voiced_W12_1.webm",
+                "cls": "good",
+                "top": "W12",
+                "margin": 0.637,
+                "score": -2.591,
+                "slack": 0.027
+              },
+              {
+                "file": "P01_silent_W20_2.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 0.863,
+                "score": -2.76,
+                "slack": 0.05
+              }
+            ]
+          }
+        },
+        "0.30": {
+          "fit": {
+            "feasible": true,
+            "delta": 0.3,
+            "max_correct_shown": 51,
+            "M": 0.75,
+            "S": -2.76,
+            "max_safety": 0.005039499405857573,
+            "safety": 3.9499405857235104e-05,
+            "safety_vs_bad": 0.3057985573875306,
+            "safety_vs_kept": 3.9499405857235104e-05,
+            "optimal_M_range_at_S": [
+              0.64,
+              0.86
+            ],
+            "optimal_S_range_at_M": [
+              -2.765,
+              -2.76
+            ],
+            "n_optimal_grid_points": 90,
+            "n_items": 308,
+            "n_good": 83,
+            "n_bad": 225
+          },
+          "all": {
+            "rule": {
+              "min_margin": 0.75,
+              "min_score": -2.76,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "51/84",
+            "commands_shown_k": 51,
+            "commands_n": 84,
+            "shown_wrong": "0/51 (한쪽 95% 상한 5.7%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/240 (한쪽 95% 상한 1.2%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "206/292",
+            "false_alarms_k": 206,
+            "emergency_recall": "32/32",
+            "short_alarm": "2/6",
+            "short_as_request": "0/6 (한쪽 95% 상한 39.3%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P01": {
+            "rule": {
+              "min_margin": 0.75,
+              "min_score": -2.76,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "23/42",
+            "commands_shown_k": 23,
+            "commands_n": 42,
+            "shown_wrong": "0/23 (한쪽 95% 상한 12.2%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "115/146",
+            "false_alarms_k": 115,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "on_P03": {
+            "rule": {
+              "min_margin": 0.75,
+              "min_score": -2.76,
+              "max_distance": null,
+              "ids": 12,
+              "possible_min_score": null
+            },
+            "commands_shown": "28/42",
+            "commands_shown_k": 28,
+            "commands_n": 42,
+            "shown_wrong": "0/28 (한쪽 95% 상한 10.1%)",
+            "shown_wrong_k": 0,
+            "shown_wrong_clips": [],
+            "negatives_shown": "0/120 (한쪽 95% 상한 2.5%)",
+            "negatives_shown_k": 0,
+            "negatives_shown_clips": [],
+            "false_alarms": "91/146",
+            "false_alarms_k": 91,
+            "emergency_recall": "16/16",
+            "short_alarm": "1/3",
+            "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+            "short_as_request_k": 0,
+            "short_as_request_clips": [],
+            "via_enroll": 0
+          },
+          "nearest": {
+            "bad_closest": [
+              {
+                "file": "P01_silent_D03_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 2.008,
+                "score": -3.066,
+                "slack": 0.306
+              },
+              {
+                "file": "P01_silent_D06_1.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 0.34,
+                "score": -2.783,
+                "slack": 0.41
+              },
+              {
+                "file": "P01_silent_A09_2.webm",
+                "cls": "block",
+                "top": "W10",
+                "margin": 1.893,
+                "score": -3.27,
+                "slack": 0.51
+              },
+              {
+                "file": "P01_none_X08_1.webm",
+                "cls": "block",
+                "top": "W12",
+                "margin": 0.128,
+                "score": -2.988,
+                "slack": 0.622
+              }
+            ],
+            "kept_good_closest": [
+              {
+                "file": "P01_silent_W20_2.webm",
+                "cls": "good",
+                "top": "W20",
+                "margin": 0.863,
+                "score": -2.76,
+                "slack": 0.0
+              },
+              {
+                "file": "P03_silent_W04_2.webm",
+                "cls": "good",
+                "top": "W04",
+                "margin": 2.319,
+                "score": -2.708,
+                "slack": 0.052
+              },
+              {
+                "file": "P03_silent_W16_2.webm",
+                "cls": "good",
+                "top": "W16",
+                "margin": 1.145,
+                "score": -2.67,
+                "slack": 0.09
+              },
+              {
+                "file": "P03_reclined_W04_1.webm",
+                "cls": "good",
+                "top": "W04",
+                "margin": 1.713,
+                "score": -2.665,
+                "slack": 0.095
+              }
+            ]
+          }
+        }
+      }
+    },
+    "distance": {
+      "fit_P01": {
+        "fit": {
+          "D": 0.2812914955136675,
+          "blocking_dist": 0.2880528735581021,
+          "largest_needed_dist": 0.27453011746923284,
+          "unbounded": false,
+          "n_enroll_only_good": 18,
+          "n_enroll_only_bad": 15,
+          "good_gained": 16,
+          "closest_bad": [
+            {
+              "file": "P01_silent_D03_1.webm",
+              "participant": "P01",
+              "dist": 0.2880528735581021,
+              "cls": "bad",
+              "chosen_id": "W10",
+              "role": "decoy",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_voiced_A09_2.webm",
+              "participant": "P01",
+              "dist": 0.2957551913229514,
+              "cls": "bad",
+              "chosen_id": "W10",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_voiced_A07_2.webm",
+              "participant": "P01",
+              "dist": 0.3064170972267585,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_silent_N05_2.webm",
+              "participant": "P01",
+              "dist": 0.3140866535418093,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            }
+          ],
+          "n_negatives": 120,
+          "n_negatives_with_dist": 111
+        },
+        "on_fit_person": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2812914955136675,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "45/50",
+          "commands_shown_k": 45,
+          "commands_n": 50,
+          "shown_wrong": "0/45 (한쪽 95% 상한 6.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/111 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "96/149",
+          "false_alarms_k": 96,
+          "emergency_recall": "12/12",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 16
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2812914955136675,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "46/50",
+          "commands_shown_k": 46,
+          "commands_n": 50,
+          "shown_wrong": "0/46 (한쪽 95% 상한 6.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/109 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "63/147",
+          "false_alarms_k": 63,
+          "emergency_recall": "12/12",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 18
+        }
+      },
+      "fit_P03": {
+        "fit": {
+          "D": 0.2769458234132228,
+          "blocking_dist": 0.28439995656526795,
+          "largest_needed_dist": 0.2694916902611777,
+          "unbounded": false,
+          "n_enroll_only_good": 20,
+          "n_enroll_only_bad": 32,
+          "good_gained": 18,
+          "closest_bad": [
+            {
+              "file": "P03_voiced_F09_1.webm",
+              "participant": "P03",
+              "dist": 0.28439995656526795,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P03_silent_N05_1.webm",
+              "participant": "P03",
+              "dist": 0.3120645602687116,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P03_voiced_N05_2.webm",
+              "participant": "P03",
+              "dist": 0.3221520721418704,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P03_voiced_N05_1.webm",
+              "participant": "P03",
+              "dist": 0.33899834447443616,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            }
+          ],
+          "n_negatives": 120,
+          "n_negatives_with_dist": 109
+        },
+        "on_fit_person": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2769458234132228,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "46/50",
+          "commands_shown_k": 46,
+          "commands_n": 50,
+          "shown_wrong": "0/46 (한쪽 95% 상한 6.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/109 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "63/147",
+          "false_alarms_k": 63,
+          "emergency_recall": "12/12",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 18
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2769458234132228,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "45/50",
+          "commands_shown_k": 45,
+          "commands_n": 50,
+          "shown_wrong": "0/45 (한쪽 95% 상한 6.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/111 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "96/149",
+          "false_alarms_k": 96,
+          "emergency_recall": "12/12",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 16
+        }
+      },
+      "pooled": {
+        "fit": {
+          "D": 0.2794650370172504,
+          "blocking_dist": 0.28439995656526795,
+          "largest_needed_dist": 0.27453011746923284,
+          "unbounded": false,
+          "n_enroll_only_good": 38,
+          "n_enroll_only_bad": 47,
+          "good_gained": 34,
+          "closest_bad": [
+            {
+              "file": "P03_voiced_F09_1.webm",
+              "participant": "P03",
+              "dist": 0.28439995656526795,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_silent_D03_1.webm",
+              "participant": "P01",
+              "dist": 0.2880528735581021,
+              "cls": "bad",
+              "chosen_id": "W10",
+              "role": "decoy",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_voiced_A09_2.webm",
+              "participant": "P01",
+              "dist": 0.2957551913229514,
+              "cls": "bad",
+              "chosen_id": "W10",
+              "role": "sentence_speech",
+              "effect": "shown"
+            },
+            {
+              "file": "P01_voiced_A07_2.webm",
+              "participant": "P01",
+              "dist": 0.3064170972267585,
+              "cls": "bad",
+              "chosen_id": "W06",
+              "role": "sentence_speech",
+              "effect": "shown"
+            }
+          ],
+          "n_negatives": 240,
+          "n_negatives_with_dist": 220
+        },
+        "on_P01": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2794650370172504,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "45/50",
+          "commands_shown_k": 45,
+          "commands_n": 50,
+          "shown_wrong": "0/45 (한쪽 95% 상한 6.4%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/111 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "96/149",
+          "false_alarms_k": 96,
+          "emergency_recall": "12/12",
+          "short_alarm": "1/3",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 16
+        },
+        "on_P03": {
+          "rule": {
+            "min_margin": 0.39,
+            "min_score": -3.015,
+            "max_distance": 0.2794650370172504,
+            "ids": null,
+            "possible_min_score": null
+          },
+          "commands_shown": "46/50",
+          "commands_shown_k": 46,
+          "commands_n": 50,
+          "shown_wrong": "0/46 (한쪽 95% 상한 6.3%)",
+          "shown_wrong_k": 0,
+          "shown_wrong_clips": [],
+          "negatives_shown": "0/109 (한쪽 95% 상한 2.7%)",
+          "negatives_shown_k": 0,
+          "negatives_shown_clips": [],
+          "false_alarms": "63/147",
+          "false_alarms_k": 63,
+          "emergency_recall": "12/12",
+          "short_alarm": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request": "0/3 (한쪽 95% 상한 63.2%)",
+          "short_as_request_k": 0,
+          "short_as_request_clips": [],
+          "via_enroll": 18
+        }
+      }
+    },
+    "repro": {
+      "n_compared": 366,
+      "n_different": 0,
+      "max_score_abs_diff": 0.0,
+      "max_margin_abs_diff": 0.0,
+      "service_phrase_without_offline_scores": [],
+      "examples": []
+    }
+  },
+  "data": {
+    "rows_files": [
+      {
+        "path": "experiments/ward_calib_20261110/P01_ward_tune.json",
+        "sha256": "79b072152a54598b119acaa83e24b393cb4fc8e4968067390231bbcdd3372201",
+        "schema": "ward-service-rows-v1",
+        "enroll": {
+          "profile": "P01",
+          "mode": "from_voiced",
+          "run_id": "35a37b2dc0f2495fbc0161834f1ab5c8",
+          "profile_sha256": "22db6add4953e367d268e910d19705cc857c33284896d4a66360a4d713fbed6d",
+          "deleted": false,
+          "status_before": {
+            "status": "missing",
+            "count": 0,
+            "complete": false,
+            "sha256": "0bb25ca3c1f9b6f4641341aa261371e139ed10572083e5c51f2d722447f61210"
+          },
+          "status_after": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "22db6add4953e367d268e910d19705cc857c33284896d4a66360a4d713fbed6d"
+          }
+        },
+        "service_enroll_rows": {
+          "store": 20,
+          "match": 73
+        },
+        "phrase_set": "ward",
+        "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P01",
+        "clips_listing_sha256": "25aacb247f166543d4120175f3bc5fd798ec664e4565df45ef5d74e818f06432",
+        "n_rows": 93,
+        "participants": [
+          "P01"
+        ],
+        "sessions": [
+          "ward_tune"
+        ],
+        "server_thresholds": {
+          "min_margin": 0.5,
+          "min_score": -3.4,
+          "possible_min_score": null,
+          "enroll_max_distance": 0.27
+        },
+        "git_head_at_run": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "created": "2026-11-10T07:49:36.873315+00:00",
+        "freeze": null,
+        "synthetic": false,
+        "phrase_problems": 0,
+        "sealed": false,
+        "role": "tune"
+      },
+      {
+        "path": "experiments/ward_calib_20261110/P03_ward_tune.json",
+        "sha256": "d913108efd8949637beb7157ef2ad461c9f5ccf53808d15131d4f4f38ede8e96",
+        "schema": "ward-service-rows-v1",
+        "enroll": {
+          "profile": "P03",
+          "mode": "from_voiced",
+          "run_id": "d0f9747c201c4f23a8ab7329a6c860cc",
+          "profile_sha256": "19d19fc8e2e44668dedf425411b5f8636b116373824103709ae16930ef3da44a",
+          "deleted": false,
+          "status_before": {
+            "status": "missing",
+            "count": 0,
+            "complete": false,
+            "sha256": "0bb25ca3c1f9b6f4641341aa261371e139ed10572083e5c51f2d722447f61210"
+          },
+          "status_after": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "19d19fc8e2e44668dedf425411b5f8636b116373824103709ae16930ef3da44a"
+          }
+        },
+        "service_enroll_rows": {
+          "store": 20,
+          "match": 73
+        },
+        "phrase_set": "ward",
+        "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P03",
+        "clips_listing_sha256": "e177713232d32278c3da3931a490563dfaf6db9fd70e8c360b78bdf6b7407984",
+        "n_rows": 93,
+        "participants": [
+          "P03"
+        ],
+        "sessions": [
+          "ward_tune"
+        ],
+        "server_thresholds": {
+          "min_margin": 0.5,
+          "min_score": -3.4,
+          "possible_min_score": null,
+          "enroll_max_distance": 0.27
+        },
+        "git_head_at_run": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "created": "2026-11-10T07:55:20.801869+00:00",
+        "freeze": null,
+        "synthetic": false,
+        "phrase_problems": 0,
+        "sealed": false,
+        "role": "tune"
+      },
+      {
+        "path": "experiments/ward_calib_20261110/P01_sentences_as_ward.json",
+        "sha256": "a107fa4afe771c9aec81cd221573d51eb02185ca4f1a985aaa64c173de29d06b",
+        "schema": "ward-service-rows-v1",
+        "enroll": {
+          "profile": "P01",
+          "mode": "match_only",
+          "run_id": "a441fc67f1b144c9866dd083d7d1a601",
+          "profile_sha256": "22db6add4953e367d268e910d19705cc857c33284896d4a66360a4d713fbed6d",
+          "deleted": false,
+          "status_before": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "22db6add4953e367d268e910d19705cc857c33284896d4a66360a4d713fbed6d"
+          },
+          "status_after": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "22db6add4953e367d268e910d19705cc857c33284896d4a66360a4d713fbed6d"
+          }
+        },
+        "service_enroll_rows": {
+          "store": 0,
+          "match": 100
+        },
+        "phrase_set": "ward",
+        "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P01",
+        "clips_listing_sha256": "9bf79a8285fd21deee98fcecc1d65ec239f51778bd6909feba4ff74288a712e3",
+        "n_rows": 100,
+        "participants": [
+          "P01"
+        ],
+        "sessions": [
+          "pilot"
+        ],
+        "server_thresholds": {
+          "min_margin": 0.5,
+          "min_score": -3.4,
+          "possible_min_score": null,
+          "enroll_max_distance": 0.27
+        },
+        "git_head_at_run": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "created": "2026-11-10T07:52:33.963225+00:00",
+        "freeze": null,
+        "synthetic": false,
+        "phrase_problems": 0,
+        "sealed": false,
+        "role": "negatives"
+      },
+      {
+        "path": "experiments/ward_calib_20261110/P03_sentences_as_ward.json",
+        "sha256": "a42cde47b30b490ecec9a502b23077f8e82fcb0a6d391c047f956bb9d0513610",
+        "schema": "ward-service-rows-v1",
+        "enroll": {
+          "profile": "P03",
+          "mode": "match_only",
+          "run_id": "2a5996cd94b14e9d8bc5f108f335d758",
+          "profile_sha256": "19d19fc8e2e44668dedf425411b5f8636b116373824103709ae16930ef3da44a",
+          "deleted": false,
+          "status_before": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "19d19fc8e2e44668dedf425411b5f8636b116373824103709ae16930ef3da44a"
+          },
+          "status_after": {
+            "status": "ok",
+            "count": 20,
+            "complete": true,
+            "sha256": "19d19fc8e2e44668dedf425411b5f8636b116373824103709ae16930ef3da44a"
+          }
+        },
+        "service_enroll_rows": {
+          "store": 0,
+          "match": 100
+        },
+        "phrase_set": "ward",
+        "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P03",
+        "clips_listing_sha256": "e13e84bcfe00e681692e18a007a1b3fe3d6f5193a7c598af3be88186d59860bb",
+        "n_rows": 100,
+        "participants": [
+          "P03"
+        ],
+        "sessions": [
+          "pilot"
+        ],
+        "server_thresholds": {
+          "min_margin": 0.5,
+          "min_score": -3.4,
+          "possible_min_score": null,
+          "enroll_max_distance": 0.27
+        },
+        "git_head_at_run": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "created": "2026-11-10T07:58:10.164349+00:00",
+        "freeze": null,
+        "synthetic": false,
+        "phrase_problems": 0,
+        "sealed": false,
+        "role": "negatives"
+      }
+    ],
+    "enroll_files": [
+      {
+        "path": "experiments/ward_calib_20261110/P01_enroll.json",
+        "sha256": "e61fd288c11ce8323627632ebef5c6eaebc6605f66f14c3fb95d61cb6776551b",
+        "template": "voiced",
+        "feature": "olkavs_medium_hidden_256",
+        "distance": "dtw_cosine_unit_steps_over_path_length",
+        "commands_sha256": "b24aed889b95fef5d5e328a191908800fb1cc6b94e3a08defbae333c262a60e5",
+        "n_clips": 193,
+        "participants": [
+          "P01"
+        ],
+        "sessions": [
+          "pilot",
+          "ward_tune"
+        ],
+        "synthetic": false,
+        "created": "2026-11-10T08:05:53.020650+00:00",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "freeze": null,
+        "inputs_listing": [
+          {
+            "dir": "experiments\\ward_tune_20261110\\enroll\\P01_ward_tune",
+            "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P01",
+            "listing_sha256": "25aacb247f166543d4120175f3bc5fd798ec664e4565df45ef5d74e818f06432"
+          },
+          {
+            "dir": "experiments\\ward_tune_20261110\\enroll\\P01_sentences",
+            "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P01",
+            "listing_sha256": "9bf79a8285fd21deee98fcecc1d65ec239f51778bd6909feba4ff74288a712e3"
+          }
+        ],
+        "sealed": false
+      },
+      {
+        "path": "experiments/ward_calib_20261110/P03_enroll.json",
+        "sha256": "d05ccc079accad45b315e40ee92f053a6bb0e9a0c38385e1f5b0358e4ddc9cd8",
+        "template": "voiced",
+        "feature": "olkavs_medium_hidden_256",
+        "distance": "dtw_cosine_unit_steps_over_path_length",
+        "commands_sha256": "b24aed889b95fef5d5e328a191908800fb1cc6b94e3a08defbae333c262a60e5",
+        "n_clips": 193,
+        "participants": [
+          "P03"
+        ],
+        "sessions": [
+          "pilot",
+          "ward_tune"
+        ],
+        "synthetic": false,
+        "created": "2026-11-10T08:05:27.469216+00:00",
+        "git_head": "30a1e44159d5d57cf6af56496348565337098a0a",
+        "freeze": null,
+        "inputs_listing": [
+          {
+            "dir": "experiments\\ward_calib_20261110\\enroll\\P03_ward_tune",
+            "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P03",
+            "listing_sha256": "e177713232d32278c3da3931a490563dfaf6db9fd70e8c360b78bdf6b7407984"
+          },
+          {
+            "dir": "experiments\\ward_calib_20261110\\enroll\\P03_sentences",
+            "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P03",
+            "listing_sha256": "e13e84bcfe00e681692e18a007a1b3fe3d6f5193a7c598af3be88186d59860bb"
+          }
+        ],
+        "sealed": false
+      }
+    ],
+    "folder_checks": [
+      {
+        "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P01",
+        "checked": true,
+        "listing_sha256": "25aacb247f166543d4120175f3bc5fd798ec664e4565df45ef5d74e818f06432",
+        "files": 186,
+        "bytes": 121726048,
+        "same_as_run": true
+      },
+      {
+        "clips_dir": "<바탕화면>\\병실 웹캠 영상 모음\\P03",
+        "checked": true,
+        "listing_sha256": "e177713232d32278c3da3931a490563dfaf6db9fd70e8c360b78bdf6b7407984",
+        "files": 186,
+        "bytes": 129422007,
+        "same_as_run": true
+      },
+      {
+        "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P01",
+        "checked": true,
+        "listing_sha256": "9bf79a8285fd21deee98fcecc1d65ec239f51778bd6909feba4ff74288a712e3",
+        "files": 200,
+        "bytes": 109172549,
+        "same_as_run": true
+      },
+      {
+        "clips_dir": "<바탕화면>\\웹캠 영상 모음\\웹캠 영상 P03",
+        "checked": true,
+        "listing_sha256": "e13e84bcfe00e681692e18a007a1b3fe3d6f5193a7c598af3be88186d59860bb",
+        "files": 200,
+        "bytes": 97536287,
+        "same_as_run": true
+      }
+    ],
+    "listing_format": "UTF-8 text, one line per regular file 'name<TAB>size_bytes<TAB>sha256_hex', lines sorted by name and joined with '\\n' (no trailing newline); the listing fingerprint is the SHA-256 of that text"
+  },
+  "code": {
+    "git_head": "d1871ec0cf9e3fc8a55621bfd1b92a078d1024a9",
+    "files": {
+      "backend/api/infer.py": "4864f11484a668a170116b3c4a15f0afda0cb4ca295fc7d3074866106cbf48ce",
+      "backend/api/record.py": "9b0f4f703f3360272e17e73d5f6ec6747fb57931c380644ff638ef7aafd71000",
+      "backend/api/routes.py": "d79cd49bf9d88270616dadd53bf6aa412759aed55f20041e1b718ed51c3c7ea6",
+      "backend/api/ward_profiles.py": "82ecf9b9ea9b6f76bf4fd111d60ee9e3df362c73f4804276efc3290a0c2bea19",
+      "backend/config.py": "7ae30790e0913e428094b53ccb707fa63757e837627ac66a3c06d285eb5023a2",
+      "backend/main.py": "df21071b88302c9973e14a4879b07f5c11a11f94da4b32610455c9b8222c9834",
+      "backend/schemas/models.py": "584d3d4d8e8945c47b08a1e264a5affbc147dbc948949c2f140bcf4177e379ec",
+      "backend/services/olkavs_service.py": "8ec8227dc06f5c44653dd5a65d696f7592c013d4ec02b5b96a94c8652e68a40a",
+      "backend/services/olkavs_worker.py": "2faca88d09aa9c33e9b249ee648497b622fdc7df426a47423c9cc59d9617bcf9",
+      "backend/services/ward_profiles.py": "562fefcbabb8bb98b05d6779282e5ccd5ddc1c5c2f3b4dc2830c48c4280a2f51",
+      "backend/services/ward_templates.py": "849f893128594b04985e0b8936058cea170167f9ac61906ce7e62acf7c1568f1",
+      "frontend/src/api/client.js": "166bd19363c4f8e89253adafd670c81b7e7c06ed6bc6bdbf4851b6eead8120b0",
+      "frontend/src/capture/ward_prompts.json": "e96ff52619212e5835330f648916c5bfa0604ea053beb145f471f7f1c7a71efc",
+      "frontend/src/pages/EnrollPage.jsx": "cf97cb9431d33e500505a4d6846a2c2edd732b9dfeff693194c5aa3d2ae0ca16",
+      "frontend/src/pages/NursePage.jsx": "2e3d485d9afa79a5b7a1a3537a9c8030dd66f54713675ce56e28378bc1e5ef2e",
+      "frontend/src/pages/WardPage.jsx": "dbbd753ef5a5096138f5b0950755fdcf9866f851b7bebbd544b046f1b60cfdb2",
+      "frontend/src/ward/PracticePanel.jsx": "e70587f169e9d1fbe32cc93f0631136ba1bf8ae10364c750b2f1465ba57bc5d6",
+      "frontend/src/ward/RoomPanel.jsx": "fb0aec3b965455ac7ba5f24b2a2a8cdc96e26b3ac81418941bde7960f0aa01af",
+      "frontend/src/ward/WardIcons.jsx": "bc73e6f9c9e3d4fe8a86d186efda2f90a54cc8869f5a65f3741db056399b2b71",
+      "frontend/src/ward/WardSettingsPanel.jsx": "6579c95b5fbc3dfd1f8de7c438e13dd748b55b0cfa35821a2c9abd1ebc4f5c33",
+      "frontend/src/ward/commands.json": "b24aed889b95fef5d5e328a191908800fb1cc6b94e3a08defbae333c262a60e5",
+      "frontend/src/ward/wardChannel.js": "227068e612e9d2913ed53416efc801318f3b5fdaf23fa7ace482b41c61ca1ccf",
+      "frontend/src/ward/wardCommands.js": "cf9093c288aa57bfb9438d024b3afc6ea2d3d1e2a684e1f0b290d61988a0f4e7",
+      "frontend/src/ward/wardEnroll.js": "ea8b5b4bd5a2ce77856f9637b275985ad4748b7b8215a332ed55821b76a54e44",
+      "frontend/src/ward/wardInput.js": "958a7ebf0612990315a4d4c5e77384f9d098946f25b450f26373a51597775964",
+      "frontend/src/ward/wardMachine.js": "2232fde80c35ff3b8dc64fcc117defc4b356413d22e8374014b60be15832eb6a",
+      "frontend/src/ward/wardPoll.js": "278f8d2c9b16a112da59339a05dcfb679becc582022414860604a053db39bb41",
+      "frontend/src/ward/wardPractice.js": "d06b3601c8f2ced341787da1b42a8e9db6dd7b89f5141cf03942eecee834c435",
+      "frontend/src/ward/wardResult.js": "ac64e21e54b0cad02209ec179d056c473fcce100498fbca0ae7229b07f78d176",
+      "frontend/src/ward/wardSettings.js": "e80a7896373d9c05c02fe0734e8c85d515ee76954ec78a9b6be0ed136506d3f9",
+      "frontend/src/ward/wardSound.js": "60e15a91c2c769f02c63649d67331002a9fee8c2d49c8e9ea1ae5465648e186a",
+      "frontend/src/ward/wardSpeech.js": "a45e162d9af3ddd0a42ecec81b4e82311933f7f48cb55267782eb316467e0e43",
+      "frontend/src/ward/wardStore.js": "d02daaa2131626db81e4785856968dcd381ae3b16e5e4dfb65de16b61b152f7e",
+      "frontend/src/ward/wardTheme.js": "1479832ac995c1c7665d94229da1f181d6a34fddaa14958a561a85fe271274fd",
+      "frontend/src/ward/wardUpload.js": "8498771973eedfdd0d78d5931ffb26b6f843b82db2da0a398f29a94eb4584370",
+      "scripts/olkavs_transcribe.py": "14900fe00f47c2fb3b539c47d51149613ec450ab259cec80083817a4e209d3e4",
+      "scripts/pilot_evaluate.py": "6d1eafa6a3e2fef0315f895da4915db6a23f38284d9f97c2a0f9559b8ffb6a07",
+      "scripts/ward_enroll.py": "09e96dd8ceacec27e9b80b988efb8b78ae43789af770f4a4c220550f0f2275d9",
+      "scripts/ward_eval_tools.py": "e756a60b254fb8e531acaf1b088df43156047316e2a3decffa1577072e972c77",
+      "scripts/ward_service_batch.py": "2b6ebe135c87847b0995f88bbe52a3a2d9f540f442ee65f89518eb5626d7d387",
+      "scripts/ward_tools/__init__.py": "129d2b7f85914c11cf34e7165a314343f4619e29e5a2f01b21adfca66f67e2cd",
+      "scripts/ward_tools/calibrate.py": "ff8993a8edb6fba5cf4ae5f0e477b8405dd3e6432ff4a17ace0ce36f2a790a1e",
+      "scripts/ward_tools/common.py": "883b40b602b6c19f26eb5da6c8eb07e84b892dda67d037d5de81f3b476734909",
+      "scripts/ward_tools/enroll.py": "03a505a10709ffe1e4e5a544697f699f2d50c4ce0cd44784bf1586c957baf38c",
+      "scripts/ward_tools/metrics.py": "db4c835f7c8c3754299ab7a419f5aa41c001783cf99eea8c0f43ad51ec3f65cf",
+      "scripts/ward_tools/report.py": "be776237344d0d26928e593dcc47142ef09209d255a2406ab64a6f5d1536e3ef"
+    }
+  },
+  "sealed_check": {
+    "participants_used": [
+      "P01",
+      "P03"
+    ],
+    "sessions_used": [
+      "pilot",
+      "ward_tune"
+    ],
+    "sealed_data_read": false,
+    "sealed_folders_hash_only": true
+  },
+  "notes": [
+    "M·S·D는 calibrate 규칙값에서 사람이 고친 값이다(위 chosen_by). env 4줄도 같게 고쳤다."
+  ],
+  "validation_problems": [],
+  "secondary_analyses": [
+    {
+      "name": "possible_floor_-4.143",
+      "purpose": "긴급 가능성 하한을 넣었다면 어땠는지(거짓 긴급 알림 감소와 긴급 놓침) P02에서 함께 보고한다. 주 결과는 하한 없음이다.",
+      "possible_min_score": -4.143,
+      "same_as_primary": "M·S·D와 판정표는 주 결과와 같고 하한만 다르다",
+      "how": "py -3.11 scripts/ward_eval_tools.py metrics --rows <P02 결과 행> --margin 0.70 --score -2.90 --possible-floor -4.143 --D 0.26 --enroll-source service --allow-sealed --freeze <이 파일>",
+      "registered_before_sealed_data": true
+    }
+  ],
+  "tuning_result_with_frozen_rule": {
+    "source": "scripts/ward_eval_tools.py metrics, 서버 등록 거리, 등록 영상 제외 시험 클립, P01·P03 합계 (같은 날 등록·시험한 조정 자료)",
+    "commands_shown": "89/100 (P01 44/50, P03 45/50; 소리 없이 74/80, 기댄 자세 15/20; 등록 거리로 고른 표시 37)",
+    "shown_wrong": "0/89 (한쪽 95% 상한 3.3%)",
+    "out_of_list_shown": "0/240 (한쪽 95% 상한 1.2%)",
+    "emergency_reach": "24/24 (소리 없이 16/16: 빨간 카드 13·긴급 가능성 3, 기댄 자세 8/8)",
+    "short_emergency_as_request": "0/6",
+    "false_emergency_alarms": "161/316 (긴급 아닌 명령 18/76, 함정 13/20, 말하지 않기 5/20, 문장 121/180, 문장 무발화 4/20)",
+    "with_secondary_floor": "거짓 긴급 58/316, 그 밖 같음",
+    "text_rule_only_shown": "P01 25/50, P03 27/50 (등록이 없으면 표시가 약 절반)"
+  },
+  "frozen_at": "2026-11-10T14:30:19.282942+00:00",
+  "frozen_by": "사용자 결정(2026-11-10 '하한 없이 추천대로'), Claude 작성",
+  "evaluation_plan": {
+    "registered_before_sealed_data": true,
+    "server": "동결 기준값 4개로 켠 서버(backend/config.py 기본값과 같음). ward_service_batch는 --freeze로 /health·phrase.rule이 동결 값과 같은지 확인한다",
+    "steps": [
+      "P02 병실 평가 103클립: ward_service_batch.py --phrase-set ward --expect-clips 103 --enroll-profile P02 --enroll-from voiced --allow-sealed --freeze <이 파일> (소리 내어 1회 찍은 명령 20개로 등록 → 나머지 83개를 등록 거리와 함께 채점)",
+      "P02 문장 폴더 2개(평가용 140·조정용 100, 모두 병실 목록 밖 말): 같은 등록으로 --enroll-match-only --allow-sealed --freeze",
+      "끝나면 서버의 P02 등록을 지운다(개인 자료)",
+      "주 결과: ward_eval_tools.py report --allow-sealed --freeze <이 파일> (동결 M·S·D, 하한 없음, 서버 등록 거리)",
+      "보조 결과: secondary_analyses의 하한 -4.143을 같은 결과 행에 적용한 metrics"
+    ],
+    "primary_metrics": "docs/병실명령_채점도구_사용법_2026-11-10.md 3절 (표시 중 오답, 긴급 도달, 거짓 긴급, 목록 밖 표시, 짧은 긴급의 일반 요청 실행 등)"
+  }
+}
