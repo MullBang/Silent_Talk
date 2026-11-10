@@ -1,6 +1,7 @@
 """시연 노트북용 묶음(폴더 + zip)을 만든다 — 개발 PC에서 실행한다 (Node·git·저장소가 있는 곳).
 
-  py -3.11 deploy/build_bundle.py [--sample-clips] [--out 폴더] [--ref HEAD] [--force] [--no-zip]
+  py -3.11 deploy/build_bundle.py [--freeze <커밋한 병실 동결 파일>] [--sample-clips] [--out 폴더] [--ref HEAD]
+                                 [--force] [--no-zip] [--allow-dirty]
 
 만드는 것 (기본 위치: 바탕화면 SilentTalk_시연패키지_<날짜>/):
   <out>/SilentTalk/            ← 노트북에서 실행하는 묶음. 폴더 이름은 영문이어야 한다(mediapipe가 한글 경로에서
@@ -16,10 +17,16 @@
     작업 폴더의 frontend/dist는 건드리지 않는다.
   - deploy/의 설치·실행·점검 스크립트와 고정 패키지 목록(작업 폴더에서 복사), 최상위 .bat 4개, 설치 안내 문서
   - --sample-clips: 점검용 예시 영상 3개(조정 참가자 P01의 무음 문장 녹화). P02(최종 평가 대상) 영상은 절대 넣지 않는다.
+  - --freeze: 커밋한 병실 동결 파일의 기준값 4개(1·2등 차이·1등 점수·긴급 가능성 하한·등록 거리)를 deploy/ward_thresholds.json에
+    넣는다. 노트북 서버는 이 값으로 켜지고(bundle_common.service_env), 시연 점검이 /health 기준값과 같은지 본다.
+    주지 않으면 코드 기본값(임시값)으로 판정한다(경고로 알린다).
+  - 코드 폴더(backend·frontend/src·scripts)에 커밋하지 않은 새 파일이 있으면 만들지 않는다(--allow-dirty로 무시).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import shutil
 import stat
@@ -37,6 +44,10 @@ import bundle_common as bc  # noqa: E402
 REPO = bc.ROOT
 BUNDLE_NAME = "SilentTalk"
 ARCHIVE_PATHS = ("backend", "frontend", "scripts", "experiments/olkavs_official", "README.md", "requirements.txt")
+SCRIPTS_DIR = REPO / "scripts"
+"""동결 파일 검사(ward_tools)를 가져오는 곳 (개발 PC 저장소)."""
+CODE_DIRS = ("backend", "frontend/src", "scripts")
+"""커밋하지 않은 새 파일이 있으면 묶음을 거부하는 코드 폴더(--allow-dirty로 무시)."""
 DEPLOY_FILES = ("bundle_common.py", "git_shim.py", "install.py", "launch.py", "check.py", "serve_frontend.py",
                 "run_server.py", "requirements-server.in", "requirements-server-lock.txt")
 ROOT_SCRIPTS = ("설치.bat", "시연_실행.bat", "시연_점검.bat", "시연_중지.bat")
@@ -122,6 +133,76 @@ def dirty_paths() -> list[str]:
     """묶음에 들어갈 경로 중 커밋하지 않은 변경(추적 파일 수정·새 파일)."""
     out = git("status", "--porcelain", "--", *ARCHIVE_PATHS)
     return [line[3:] for line in out.splitlines() if line.strip()]
+
+
+def untracked_code_paths() -> list[str]:
+    """코드 폴더(CODE_DIRS)의 커밋하지 않은 새 파일('??').
+
+    커밋한 코드가 이 파일을 import하면 묶음에는 빠져 노트북에서 서버가 켜지지 않는다(git archive는 추적 파일만 꺼낸다).
+    """
+    out = git("status", "--porcelain", "-z", "--untracked-files=all", "--", *CODE_DIRS)
+    try:
+        entries = out.split("\0")
+        found: list[str] = []
+        i = 0
+        while i < len(entries):
+            entry = entries[i]
+            i += 1
+            if len(entry) < 4:
+                continue
+            code, path = entry[:2], entry[3:]
+            if code[0] in "RC":
+                i += 1  # 이름 바꾸기·복사는 다음 항목이 원래 경로다
+            if code == "??":
+                found.append(path)
+        return found
+    except (AttributeError, IndexError, TypeError) as exc:
+        raise bc.BundleError(f"git status 출력을 읽지 못했습니다: {exc}") from exc
+
+
+def freeze_thresholds(freeze: str, commit: str) -> dict[str, Any]:
+    """커밋된 병실 동결 파일(<commit> 시점의 내용)에서 서버 기준값 4개를 꺼내 묶음 기준값 파일 내용을 만든다.
+
+    동결 파일은 저장소 안 경로여야 하고 <commit>에 들어 있어야 한다. status frozen, 형식 검사(validate_freeze)와
+    full_list.env 검사를 통과해야 한다. 작업 폴더의 내용과 다르면 거부한다(커밋하지 않은 수정).
+
+    Raises:
+        BundleError: 위 조건이 하나라도 맞지 않을 때
+    """
+    try:
+        rel = Path(freeze).resolve().relative_to(REPO.resolve()).as_posix()
+    except ValueError as exc:
+        raise bc.BundleError(f"동결 파일이 저장소 밖에 있습니다: {freeze}") from exc
+    try:
+        raw = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:{rel}"], check=True, capture_output=True).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise bc.BundleError(f"동결 파일이 묶을 커밋 {commit[:12]}에 없습니다: {rel}",
+                             "동결 파일을 커밋한 뒤 그 커밋(또는 HEAD)으로 묶음을 만드세요.") from exc
+    try:
+        working = (REPO / rel).read_bytes()
+    except OSError:
+        working = None
+    if working is not None and working.replace(b"\r\n", b"\n") != raw.replace(b"\r\n", b"\n"):
+        raise bc.BundleError(f"동결 파일이 커밋 뒤 수정됐습니다: {rel}", "수정을 되돌리거나 커밋한 뒤 다시 만드세요.")
+    try:
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        from ward_tools import calibrate as cal  # noqa: PLC0415  (개발 PC 저장소에서만 쓴다)
+        from ward_tools import common as wcommon  # noqa: PLC0415
+
+        data = json.loads(raw.decode("utf-8"))
+        problems = cal.validate_freeze(data)
+        if isinstance(data, dict) and data.get("status") != "frozen":
+            problems.insert(0, "status가 frozen이 아닙니다(초안)")
+        expected = wcommon.expected_server_rule(data) if not problems else None
+    except (ImportError, UnicodeDecodeError, ValueError) as exc:
+        raise bc.BundleError(f"동결 파일을 읽지 못했습니다: {rel} ({exc})") from exc
+    if problems or expected is None:
+        raise bc.BundleError(f"동결 파일 검사 실패: {rel}", "; ".join(problems or ["full_list가 없습니다"])[:600])
+    changed = git("log", "-1", "--format=%H", commit, "--", rel).strip()
+    return bc.ward_thresholds_doc(expected, {
+        "kind": "freeze", "freeze_path": rel, "freeze_sha256": hashlib.sha256(raw).hexdigest(),
+        "freeze_commit": changed or None, "bundle_commit": commit})
 
 
 def extract_archive(ref: str, bundle: Path) -> int:
@@ -294,6 +375,22 @@ def run(args: argparse.Namespace) -> int:
     log(f"묶음 만들기: {args.ref} = {commit[:12]} → {bundle}")
     if dirty:
         log(f"  [주의] 커밋하지 않은 변경 {len(dirty)}개는 묶음에 들어가지 않습니다(예: {', '.join(dirty[:4])}).")
+    untracked = untracked_code_paths()
+    if untracked and not args.allow_dirty:
+        raise bc.BundleError(
+            f"코드 폴더에 커밋하지 않은 새 파일 {len(untracked)}개가 있습니다(예: {', '.join(untracked[:4])}).",
+            "커밋한 코드가 이 파일을 쓰면 노트북에서 서버가 켜지지 않습니다. 커밋하거나 지운 뒤 다시 만드세요"
+            "(필요 없는 파일임을 확인했으면 --allow-dirty).")
+    if untracked:
+        log(f"  [주의] --allow-dirty: 커밋하지 않은 새 코드 파일 {len(untracked)}개를 빼고 만듭니다.")
+    thresholds: dict[str, Any] | None = None
+    if args.freeze:
+        thresholds = freeze_thresholds(args.freeze, commit)
+        log(f"  병실 기준값: 동결 파일 {thresholds['source']['freeze_path']} "
+            f"({bc.describe_thresholds(thresholds['values'])})")
+    else:
+        log("  [주의] --freeze 없이 만듭니다. 노트북은 코드 기본값(임시 병실 기준값)으로 판정합니다. "
+            "기준값을 동결한 뒤에는 --freeze <커밋한 동결 파일>로 다시 만드세요.")
     if bundle.exists():
         if not args.force:
             raise bc.BundleError(f"이미 있습니다: {bundle}", "--force로 다시 만들거나 다른 --out을 주세요.")
@@ -313,6 +410,10 @@ def run(args: argparse.Namespace) -> int:
     log(f"  dist 파일 {front['files']}개, {front['bytes'] / 1e6:.1f}MB, {front['seconds']}초")
     log("[4/6] 설치·실행·점검 스크립트")
     copy_deploy(bundle)
+    if thresholds is not None:
+        bc.save_json(bundle / "deploy" / bc.WARD_THRESHOLDS.name, thresholds)
+        if bc.load_ward_thresholds(bundle / "deploy" / bc.WARD_THRESHOLDS.name) is None:
+            raise bc.BundleError("병실 기준값 파일을 묶음에 쓰지 못했습니다.")
     samples: list[dict[str, Any]] = []
     if args.sample_clips:
         samples = copy_samples(bundle, Path(args.samples_from))
@@ -326,6 +427,9 @@ def run(args: argparse.Namespace) -> int:
         "weights_sha256": model["weights_sha256"], "upstream_commit": model["upstream_commit"],
         "frontend_build": front, "samples": samples, "files": count + 1, "bytes": size,
         "builder_python": sys.version.split()[0],
+        "ward_thresholds": ({"values": thresholds["values"], **thresholds["source"]} if thresholds is not None
+                            else {"kind": "code_defaults"}),
+        "untracked_code_not_included": untracked,
     }
     bc.save_json(bundle / "deploy" / bc.MANIFEST_NAME, manifest)
     log(f"  파일 {count + 1}개, {size / 1e6:.0f}MB")
@@ -355,6 +459,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--samples-from", default=str(DEFAULT_SAMPLES), help="예시 영상 폴더(P01만 허용)")
     parser.add_argument("--force", action="store_true", help="이전에 만든 묶음 폴더를 지우고 다시 만든다")
     parser.add_argument("--no-zip", action="store_true", help="zip을 만들지 않는다")
+    parser.add_argument("--freeze", help="커밋한 병실 동결 파일: 그 기준값 4개(M·S·긴급 가능성 하한·등록 거리)로 노트북 서버를 켠다")
+    parser.add_argument("--allow-dirty", action="store_true",
+                        help="코드 폴더에 커밋하지 않은 새 파일이 있어도 만든다(그 파일은 묶음에 들어가지 않는다)")
     args = parser.parse_args(argv)
     try:
         return run(args)

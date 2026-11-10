@@ -2,7 +2,8 @@
 
 확인하는 것:
   1. 컴퓨터: CPU·메모리·전원 연결·NVIDIA 그래픽카드·Windows 한국어 음성(음성 읽기용)
-  2. 서버 상태(/health): 두 워커 준비, 인식 장치, 병실 명령 20개, 가중치 SHA·공식 코드 commit, CORS
+  2. 서버 상태(/health): 두 워커 준비, 인식 장치, 병실 명령 20개, 병실 기준값이 묶음의 동결 값(deploy/ward_thresholds.json)과
+     같은지, '내 입 모양 등록' 저장 폴더에 쓸 수 있는지, 가중치 SHA·공식 코드 commit, CORS
   3. 화면 서버: index.html과 화면 스크립트가 올바른 종류(MIME)로 오는지
   4. 카메라: 0번 카메라에서 영상 한 장을 읽을 수 있는지(--no-camera로 끔. 브라우저가 쓰는 중이면 실패할 수 있다)
   5. 처리 시간: 예시 영상(deploy/samples)을 병실(ward)·문장(sentences) 묶음으로 보내 결과가 오는지,
@@ -204,6 +205,7 @@ def server_status(report: Report) -> dict[str, Any] | None:
         report.add("통과", f"병실 명령 {ward.get('count')}개 (목록 {ward.get('version')})")
     else:
         report.add("실패", f"병실 명령 목록 이상: {ward}")
+    ward_thresholds_status(report, ward)
     try:
         expected = bc.core_constants()
         if model.get("checkpoint_sha256") == expected["checkpoint_sha256"]:
@@ -222,6 +224,40 @@ def server_status(report: Report) -> dict[str, Any] | None:
     else:
         report.add("실패", f"CORS 응답에 {bc.APP_ORIGIN}가 없습니다: {headers.get('access-control-allow-origin')}")
     return health
+
+
+def ward_thresholds_status(report: Report, ward: dict[str, Any]) -> None:
+    """/health ward_phrases의 기준값을 묶음의 동결 값(deploy/ward_thresholds.json)과 비교하고, 등록 저장 폴더를 확인한다."""
+    try:
+        server = ward.get("thresholds")
+        report.data["ward_thresholds_server"] = server
+        try:
+            expected = bc.load_ward_thresholds()
+        except bc.BundleError as exc:
+            report.add("실패", f"{exc.message} {exc.hint}".strip())
+            expected = None
+        else:
+            if expected is None:
+                report.add("주의", "동결한 병실 기준값 없이 만든 묶음입니다. 코드 기본값(임시값)으로 판정합니다: "
+                                  f"{bc.describe_thresholds(server)}. 기준값을 동결한 뒤 --freeze로 묶음을 다시 만드세요.")
+            else:
+                report.data["ward_thresholds_expected"] = expected["values"]
+                problems = bc.thresholds_problems(server, expected["values"])
+                if problems:
+                    report.add("실패", f"서버 병실 기준값이 묶음의 동결 값과 다릅니다: {'; '.join(problems)}. "
+                                      "시연_중지.bat 후 시연_실행.bat으로 다시 켜세요.")
+                else:
+                    report.add("통과", f"병실 기준값이 동결 값과 같음 ({bc.describe_thresholds(expected['values'])})")
+        enroll = ward.get("enroll") if isinstance(ward.get("enroll"), dict) else None
+        if enroll is None:
+            report.add("주의", "서버가 '내 입 모양 등록' 상태를 알려 주지 않습니다(옛 서버).")
+        elif enroll.get("profile_dir_writable") is True:
+            report.add("통과", "'내 입 모양 등록' 저장 폴더에 쓸 수 있음")
+        else:
+            report.add("실패", "'내 입 모양 등록' 저장 폴더(backend\\data\\ward_profiles)에 쓸 수 없습니다. "
+                              "묶음 폴더를 C:\\SilentTalk처럼 쓸 수 있는 곳에 두었는지 확인하세요.")
+    except (AttributeError, TypeError) as exc:
+        report.add("실패", f"병실 기준값을 확인하지 못했습니다: {exc}")
 
 
 def frontend_status(report: Report) -> None:

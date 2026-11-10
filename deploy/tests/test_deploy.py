@@ -174,6 +174,7 @@ def test_percentile_and_median() -> None:
 
 
 def test_service_env_drops_lipnet_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", tmp_path / "no_thresholds.json")
     monkeypatch.setenv("LIPNET_OLKAVS_WARD_MIN_SCORE", "-9")
     monkeypatch.setenv("PYTHONPATH", "x")
     monkeypatch.setattr(bc, "GITSHIM_DIR", tmp_path / "gitshim")
@@ -570,3 +571,169 @@ def test_remove_old_bundle_refuses_unknown_folder_and_clears_leftover(tmp_path: 
     bundle.rmdir()
     build_bundle.remove_old_bundle(bundle)  # 지난번에 지우다 멈춘 폴더만 치운다
     assert not leftover.exists()
+
+
+# ---------------------------------------------------------------------------
+# 동결 병실 기준값 (build_bundle --freeze → deploy/ward_thresholds.json → service_env·시연 점검)
+# ---------------------------------------------------------------------------
+
+THRESHOLD_VALUES = {"min_margin": 0.45, "min_score": -3.3, "possible_min_score": -3.6, "enroll_max_distance": None}
+
+
+def _write_thresholds(path: Path, values: dict | None = None, **override: object) -> Path:
+    """묶음 기준값 파일을 쓴다 (override로 일부러 틀린 값)."""
+    doc = bc.ward_thresholds_doc(values or THRESHOLD_VALUES, {"kind": "freeze", "freeze_path": "x/freeze.json"})
+    doc.update(override)
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+def test_service_env_applies_bundle_thresholds_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """묶음 기준값 파일이 있으면 LIPNET_OLKAVS_WARD_* 4개만 그 값으로 넣고, 다른 LIPNET_* 값은 여전히 지운다."""
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", _write_thresholds(tmp_path / "ward_thresholds.json"))
+    monkeypatch.setattr(bc, "GITSHIM_DIR", tmp_path / "gitshim")
+    monkeypatch.setenv("LIPNET_OLKAVS_WARD_MIN_SCORE", "-9")
+    monkeypatch.setenv("LIPNET_WARD_PROFILE_DIR", "C:/elsewhere")
+    env = bc.service_env()
+    assert env["LIPNET_OLKAVS_WARD_MIN_MARGIN"] == "0.45" and env["LIPNET_OLKAVS_WARD_MIN_SCORE"] == "-3.3"
+    assert env["LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE"] == "-3.6"
+    assert env["LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE"] == "none"  # 서버는 'none'을 '등록 거리 안 씀'으로 읽는다
+    assert "LIPNET_WARD_PROFILE_DIR" not in env
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", tmp_path / "missing.json")
+    assert not any(k.startswith("LIPNET_OLKAVS_WARD_") for k in bc.service_env())  # 파일이 없으면 코드 기본값
+
+
+def test_service_env_values_are_accepted_by_server_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """묶음이 넣는 환경 변수 문자열을 서버 config.py가 같은 값으로 읽는다."""
+    import subprocess  # noqa: PLC0415
+
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", _write_thresholds(tmp_path / "ward_thresholds.json"))
+    env = {k: v for k, v in bc.service_env().items() if k.startswith("LIPNET_OLKAVS_WARD_")}
+    code = ("import json, sys; sys.path.insert(0, sys.argv[1]); import config; "
+            "print(json.dumps(config.ward_rule()))")
+    base = {k: v for k, v in os.environ.items() if not k.upper().startswith("LIPNET_")}
+    out = subprocess.run([sys.executable, "-c", code, str(bc.BACKEND)], capture_output=True, text=True,
+                         env={**base, **env}, timeout=120)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout.strip().splitlines()[-1]) == THRESHOLD_VALUES
+
+
+@pytest.mark.parametrize("override, values", [
+    ({"schema": "other"}, None),
+    ({"env": {"LIPNET_OLKAVS_WARD_MIN_MARGIN": "9"}}, None),
+    ({}, {**THRESHOLD_VALUES, "min_score": 0.5}),
+])
+def test_load_ward_thresholds_rejects_bad_files(tmp_path: Path, override: dict, values: dict | None) -> None:
+    path = tmp_path / "ward_thresholds.json"
+    if values is not None:
+        path.write_text(json.dumps({"schema": bc.WARD_THRESHOLDS_SCHEMA, "values": values}), encoding="utf-8")
+    else:
+        _write_thresholds(path, **override)
+    with pytest.raises(bc.BundleError):
+        bc.load_ward_thresholds(path)
+    path.write_text("{broken", encoding="utf-8")
+    with pytest.raises(bc.BundleError):
+        bc.load_ward_thresholds(path)
+    assert bc.load_ward_thresholds(tmp_path / "none.json") is None
+
+
+def test_ward_thresholds_doc_checks_ranges() -> None:
+    with pytest.raises(bc.BundleError):
+        bc.ward_thresholds_doc({**THRESHOLD_VALUES, "min_margin": None}, {})  # M·S는 비울 수 없다
+    with pytest.raises(bc.BundleError):
+        bc.ward_thresholds_doc({**THRESHOLD_VALUES, "enroll_max_distance": 0.0}, {})
+    with pytest.raises(bc.BundleError):
+        bc.ward_thresholds_doc({**THRESHOLD_VALUES, "possible_min_score": float("nan")}, {})
+    doc = bc.ward_thresholds_doc({**THRESHOLD_VALUES, "enroll_max_distance": 0.25}, {"kind": "freeze"})
+    assert doc["env"]["LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE"] == "0.25"
+
+
+def test_thresholds_problems_compares_health_with_bundle() -> None:
+    assert bc.thresholds_problems(dict(THRESHOLD_VALUES), THRESHOLD_VALUES) == []
+    assert bc.thresholds_problems({**THRESHOLD_VALUES, "min_score": -3.3 + 1e-12}, THRESHOLD_VALUES) == []
+    assert len(bc.thresholds_problems({**THRESHOLD_VALUES, "enroll_max_distance": 0.27}, THRESHOLD_VALUES)) == 1
+    assert len(bc.thresholds_problems({**THRESHOLD_VALUES, "possible_min_score": None}, THRESHOLD_VALUES)) == 1
+    assert len(bc.thresholds_problems({**THRESHOLD_VALUES, "min_margin": "0.45"}, THRESHOLD_VALUES)) == 1
+    assert bc.thresholds_problems(None, THRESHOLD_VALUES)  # 옛 서버(thresholds 없음)
+
+
+def test_check_reports_threshold_mismatch_and_enroll_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", _write_thresholds(tmp_path / "ward_thresholds.json"))
+    ok = check.Report()
+    check.ward_thresholds_status(ok, {"thresholds": dict(THRESHOLD_VALUES), "enroll": {"profile_dir_writable": True}})
+    assert [i["level"] for i in ok.items] == ["통과", "통과"]
+    bad = check.Report()
+    check.ward_thresholds_status(bad, {"thresholds": {**THRESHOLD_VALUES, "enroll_max_distance": 0.27},
+                                       "enroll": {"profile_dir_writable": False}})
+    assert [i["level"] for i in bad.items] == ["실패", "실패"]
+    monkeypatch.setattr(bc, "WARD_THRESHOLDS", tmp_path / "missing.json")
+    none = check.Report()
+    check.ward_thresholds_status(none, {"thresholds": dict(THRESHOLD_VALUES)})
+    assert [i["level"] for i in none.items] == ["주의", "주의"]  # 동결 값 없는 묶음, 옛 서버(등록 상태 없음)
+
+
+def test_untracked_code_paths_reads_porcelain_z(monkeypatch: pytest.MonkeyPatch) -> None:
+    out = "?? backend/api/new.py\0 M backend/old.py\0R  scripts/a.py\0scripts/b.py\0?? frontend/src/x.js\0"
+    monkeypatch.setattr(build_bundle, "git", lambda *args: out)
+    assert build_bundle.untracked_code_paths() == ["backend/api/new.py", "frontend/src/x.js"]
+
+
+def _valid_freeze(status: str = "frozen") -> dict:
+    """validate_freeze를 통과하는 최소 병실 동결 파일 (합성 값, 사람 자료 없음)."""
+    if str(bc.ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(bc.ROOT / "scripts"))
+    from ward_tools import common  # noqa: PLC0415
+
+    values = {"min_margin": 0.45, "min_score": -3.3, "possible_min_score": -3.6, "enroll_max_distance": 0.25}
+    ids = [f"W{i:02d}" for i in range(1, 21)]
+    return {
+        "schema": common.FREEZE_SCHEMA, "status": status, "phrase_set": "ward",
+        "commands": {"ids": ids, "emergency_ids": ["W02", "W03", "W04", "W10"], "sha256": "a" * 64},
+        "full_list": {"min_margin": 0.45, "min_score": -3.3, "env": common.server_env(values)},
+        "decision_rule": {"possible_ranks": 2, "possible_min_score": -3.6, "floor_implemented_in_ui": True},
+        "enrollment": {"max_distance": 0.25, "template": common.SERVICE_TEMPLATE, "feature": common.FEATURE_NAME,
+                       "distance": common.DISTANCE_NAME, "unbounded": False, "source": "service"},
+        "data": {"rows_files": [{"path": "rows/P01.json", "sha256": "b" * 64, "participants": ["P01"],
+                                 "sessions": ["ward_tune"]}]},
+        "code": {"files": {"scripts/ward_tools/metrics.py": "c" * 64}},
+        "sealed_check": {"sealed_data_read": False},
+    }
+
+
+def _git(repo: Path, *args: str) -> str:
+    """시험용 저장소 git (작성자는 이 명령에만 준다, 설정 파일은 바꾸지 않는다)."""
+    import subprocess  # noqa: PLC0415
+
+    return subprocess.run(["git", "-C", str(repo), "-c", "user.name=test", "-c", "user.email=test",
+                           "-c", "commit.gpgsign=false", *args],
+                          check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_freeze_thresholds_reads_committed_freeze(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "exp").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    freeze = repo / "exp" / "freeze.json"
+    freeze.write_text(json.dumps(_valid_freeze()), encoding="utf-8")
+    draft = repo / "exp" / "draft.json"
+    draft.write_text(json.dumps(_valid_freeze("draft")), encoding="utf-8")
+    _git(repo, "add", "exp")
+    _git(repo, "commit", "-q", "-m", "freeze")
+    commit = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(build_bundle, "REPO", repo)
+    doc = build_bundle.freeze_thresholds(str(freeze), commit)
+    assert doc["values"] == {"min_margin": 0.45, "min_score": -3.3, "possible_min_score": -3.6, "enroll_max_distance": 0.25}
+    assert doc["source"]["freeze_path"] == "exp/freeze.json" and doc["source"]["freeze_commit"] == commit
+    assert doc["env"]["LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE"] == "0.25"
+    with pytest.raises(bc.BundleError) as info:
+        build_bundle.freeze_thresholds(str(draft), commit)  # 초안은 묶지 않는다
+    assert "frozen" in info.value.hint
+    freeze.write_text(json.dumps({**_valid_freeze(), "note": "edited"}), encoding="utf-8")
+    with pytest.raises(bc.BundleError, match="수정"):
+        build_bundle.freeze_thresholds(str(freeze), commit)  # 커밋 뒤 고친 동결 파일
+    untracked = repo / "exp" / "new.json"
+    untracked.write_text(json.dumps(_valid_freeze()), encoding="utf-8")
+    with pytest.raises(bc.BundleError, match="커밋"):
+        build_bundle.freeze_thresholds(str(untracked), commit)  # 커밋하지 않은 동결 파일
+    with pytest.raises(bc.BundleError, match="저장소 밖"):
+        build_bundle.freeze_thresholds(str(tmp_path / "outside.json"), commit)

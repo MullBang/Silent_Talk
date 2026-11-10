@@ -93,6 +93,21 @@ downloads는 내려받은 파일 드라이브(pip 임시 폴더 + pip 보관 폴
 MIN_FREE_GB: float = SPACE_NEED_GB[CPU_FLAVOR]["venvs"] + SPACE_NEED_GB[CPU_FLAVOR]["downloads"]
 EXPECTED_WARD_PHRASES: int = 20
 
+WARD_THRESHOLDS: Path = DEPLOY / "ward_thresholds.json"
+"""묶음에 넣은 동결 병실 기준값(build_bundle.py --freeze). 있으면 서버를 이 값으로 켜고(service_env), 시연 점검이
+/health model.ward_phrases.thresholds와 같은지 본다. 없으면 코드 기본값(임시값)으로 켠다. 저장소에는 넣지 않는다."""
+WARD_THRESHOLDS_SCHEMA: str = "silenttalk-ward-thresholds-v1"
+WARD_THRESHOLD_ENV: dict[str, str] = {
+    "min_margin": "LIPNET_OLKAVS_WARD_MIN_MARGIN",
+    "min_score": "LIPNET_OLKAVS_WARD_MIN_SCORE",
+    "possible_min_score": "LIPNET_OLKAVS_WARD_POSSIBLE_MIN_SCORE",
+    "enroll_max_distance": "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE",
+}
+"""병실 기준값 4개 → 서버 환경 변수 (scripts/ward_tools/common.py SERVER_RULE_ENV와 같은 이름)."""
+WARD_THRESHOLD_TOL: float = 1e-9
+WARD_THRESHOLD_KO: dict[str, str] = {"min_margin": "1·2등 차이", "min_score": "1등 점수", "possible_min_score": "긴급 가능성 하한",
+                                     "enroll_max_distance": "등록 거리"}
+
 _LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 """로컬 서버(127.0.0.1)용 요청기. Windows에 프록시가 설정돼 있어도 거치지 않는다(파이썬은 127.0.0.1을 프록시로 보낼 수 있다).
 인터넷 확인(pypi·pytorch)은 시스템 프록시를 그대로 쓴다."""
@@ -580,16 +595,127 @@ def free_gb(path: Path) -> float:
         return float("nan")
 
 
+def _threshold_value(key: str, value: Any) -> float | None:
+    """병실 기준값 하나를 검사한다(서버 config.py와 같은 허용 범위). 하한·등록 거리는 None(쓰지 않음)도 된다.
+
+    Raises:
+        ValueError: 숫자가 아니거나 범위 밖일 때
+    """
+    if value is None:
+        if key in ("possible_min_score", "enroll_max_distance"):
+            return None
+        raise ValueError(f"{key}는 비워 둘 수 없습니다")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{key}가 숫자가 아닙니다: {value!r}")
+    try:
+        number = float(value)
+        ok = {"min_margin": lambda v: v >= 0.0, "min_score": lambda v: v <= 0.0,
+              "possible_min_score": lambda v: v <= 0.0, "enroll_max_distance": lambda v: v > 0.0}[key]
+    except (KeyError, OverflowError, TypeError) as exc:
+        raise ValueError(f"{key}: 알 수 없는 기준값이거나 숫자가 아닙니다") from exc
+    if not (number == number and abs(number) != float("inf") and ok(number)):
+        raise ValueError(f"{key} 값이 허용 범위 밖입니다: {value!r}")
+    return number
+
+
+def threshold_env_value(value: float | None) -> str:
+    """기준값 → 환경 변수 문자열 (None이면 'none', 서버는 'none'을 '쓰지 않음'으로 읽는다).
+
+    Raises:
+        ValueError: 숫자가 아닐 때
+    """
+    try:
+        return "none" if value is None else repr(float(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"환경 변수 값으로 바꿀 수 없습니다: {value!r}") from exc
+
+
+def ward_thresholds_doc(values: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    """묶음에 넣을 기준값 파일 내용 {schema, values, env, source}. values는 기준값 4개다.
+
+    Raises:
+        BundleError: 기준값이 빠졌거나 범위 밖일 때
+    """
+    try:
+        checked = {key: _threshold_value(key, values.get(key)) for key in WARD_THRESHOLD_ENV}
+    except (AttributeError, ValueError) as exc:
+        raise BundleError(f"병실 기준값이 올바르지 않습니다: {exc}") from exc
+    return {"schema": WARD_THRESHOLDS_SCHEMA, "values": checked,
+            "env": {WARD_THRESHOLD_ENV[k]: threshold_env_value(v) for k, v in checked.items()}, "source": source}
+
+
+def load_ward_thresholds(path: Path | None = None) -> dict[str, Any] | None:
+    """묶음의 동결 병실 기준값 파일을 읽어 검사한다. 파일이 없으면 None(코드 기본값으로 켠다).
+
+    Returns:
+        {schema, values, env, source} (env는 values에서 다시 만든 값)
+    Raises:
+        BundleError: 파일이 깨졌거나 값이 틀릴 때(옛 값이나 기본값으로 조용히 켜지지 않게 막는다)
+    """
+    target = path or WARD_THRESHOLDS
+    if not target.exists():
+        return None
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BundleError(f"병실 기준값 파일을 읽지 못했습니다: {target.name} ({exc})",
+                          "zip을 처음부터 다시 풀거나 묶음을 다시 만드세요.") from exc
+    if not isinstance(data, dict) or data.get("schema") != WARD_THRESHOLDS_SCHEMA or not isinstance(data.get("values"), dict):
+        raise BundleError(f"병실 기준값 파일 형식이 다릅니다: {target.name}", "묶음을 다시 만드세요.")
+    doc = ward_thresholds_doc(data["values"], data.get("source") if isinstance(data.get("source"), dict) else {})
+    if isinstance(data.get("env"), dict) and data["env"] != doc["env"]:
+        raise BundleError(f"병실 기준값 파일의 env가 values와 다릅니다: {target.name}", "묶음을 다시 만드세요.")
+    return doc
+
+
+def describe_thresholds(values: Any) -> str:
+    """'1·2등 차이 0.5, 1등 점수 -3.4, 긴급 가능성 하한 없음, 등록 거리 0.27'처럼."""
+    try:
+        if not isinstance(values, dict):
+            return "알 수 없음"
+        return ", ".join(f"{name} {'없음' if values.get(key) is None else values.get(key)}"
+                         for key, name in WARD_THRESHOLD_KO.items())
+    except (TypeError, ValueError):
+        return "알 수 없음"
+
+
+def thresholds_problems(server: Any, expected: dict[str, Any]) -> list[str]:
+    """서버 /health model.ward_phrases.thresholds가 묶음 기준값과 다른 항목(한국어 문제 목록, 같으면 빈 목록)."""
+    if not isinstance(server, dict):
+        return ["서버가 병실 기준값(thresholds)을 알려 주지 않습니다(옛 서버이거나 병실 명령이 꺼짐)"]
+    problems = []
+    for key, name in WARD_THRESHOLD_KO.items():
+        want, got = expected.get(key), server.get(key)
+        if want is None and got is None:
+            continue
+        try:
+            same = (want is not None and got is not None and not isinstance(got, bool) and isinstance(got, (int, float))
+                    and abs(float(got) - float(want)) <= WARD_THRESHOLD_TOL)
+        except (TypeError, ValueError):
+            same = False
+        if not same:
+            problems.append(f"{name}: 서버 {'없음' if got is None else got} ≠ 묶음 {'없음' if want is None else want}")
+    return problems
+
+
 def service_env(device: str | None = None) -> dict[str, str]:
     """서버·워커에 넘길 환경변수.
 
-    - LIPNET_* 값은 모두 지우고 저장소 기본값(병실 기준값 포함)으로 실행한다. 노트북에 남은 옛 설정이 섞이지 않게 한다.
+    - LIPNET_* 값은 모두 지우고 저장소 기본값으로 실행한다. 노트북에 남은 옛 설정이 섞이지 않게 한다.
+    - 묶음에 동결 병실 기준값 파일(deploy/ward_thresholds.json)이 있으면 그 4개(LIPNET_OLKAVS_WARD_*)만 다시 넣는다.
+      없으면 병실 기준값도 코드 기본값(임시값)이다.
     - device가 'cpu'·'cuda:0'이면 인식 장치를 그 값으로 고정한다(기본 auto: CUDA가 되면 GPU).
     - git 대체 명령을 만들었으면 PATH 맨 앞에 둔다(인식 워커의 commit 확인용).
+
+    Raises:
+        BundleError: 기준값 파일이 깨졌거나 값이 틀릴 때
     """
     env = {k: v for k, v in os.environ.items()
            if not k.upper().startswith("LIPNET_") and k.upper() not in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV")}
     env["LIPNET_MODEL_BACKEND"] = "olkavs"
+    thresholds = load_ward_thresholds()
+    if thresholds is not None:
+        env.update(thresholds["env"])
     if device and device != "auto":
         env["LIPNET_OLKAVS_DEVICE"] = device
     env["PYTHONIOENCODING"] = "utf-8"

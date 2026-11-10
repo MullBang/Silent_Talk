@@ -263,7 +263,13 @@ def run_start(args: argparse.Namespace) -> int:
     if not state.get("ok"):
         print("  [주의] 설치 완료 기록이 없습니다. 실패하면 설치.bat을 다시 실행하세요.")
     device = {"auto": None, "cpu": "cpu", "cuda": "cuda:0"}[args.device]
-    env = bc.service_env(device)
+    try:
+        env = bc.service_env(device)
+        thresholds = bc.load_ward_thresholds()
+    except bc.BundleError as exc:
+        return fail(exc.message, exc.hint)
+    if thresholds is None:
+        print("  [주의] 이 묶음에는 동결한 병실 기준값이 없어 코드 기본값(임시값)으로 판정합니다.")
     env["PYTHONUNBUFFERED"] = "1"
     if not acquire_start_lock():
         print("  [주의] 다른 창에서 이미 시연을 켜는 중입니다. 먼저 연 '시연 실행' 창에 '준비 완료'가 뜰 때까지 "
@@ -323,6 +329,18 @@ def _start_locked(args: argparse.Namespace, device: str | None, env: dict[str, s
     print(f"  [통과] 준비 완료: 인식 장치 {device_text}, 병실 명령 {ward.get('count')}개")
     if ward.get("count") != bc.EXPECTED_WARD_PHRASES:
         print(f"  [주의] 병실 명령이 {ward.get('count')}개입니다({bc.EXPECTED_WARD_PHRASES}개여야 합니다). 시연_점검.bat을 실행하세요.")
+    try:
+        thresholds = bc.load_ward_thresholds()
+    except bc.BundleError as exc:
+        thresholds = None
+        print(f"  [주의] {exc.message}")
+    if thresholds is not None:
+        problems = bc.thresholds_problems(ward.get("thresholds"), thresholds["values"])
+        if problems:
+            print(f"  [주의] 서버 병실 기준값이 묶음의 동결 값과 다릅니다: {'; '.join(problems)}. "
+                  "시연_중지.bat 후 시연_실행.bat으로 다시 켜세요.")
+        else:
+            print(f"  [통과] 병실 기준값: 동결 값 ({bc.describe_thresholds(thresholds['values'])})")
 
     if not args.no_browser:
         open_windows(args.browser)
