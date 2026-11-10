@@ -269,7 +269,7 @@ def run_start(args: argparse.Namespace) -> int:
     except bc.BundleError as exc:
         return fail(exc.message, exc.hint)
     if thresholds is None:
-        print("  [주의] 이 묶음에는 동결한 병실 기준값이 없어 코드 기본값(임시값)으로 판정합니다.")
+        print("  [주의] 이 묶음에는 동결한 병실 기준값이 없어 코드 기본값으로 판정합니다.")
     env["PYTHONUNBUFFERED"] = "1"
     if not acquire_start_lock():
         print("  [주의] 다른 창에서 이미 시연을 켜는 중입니다. 먼저 연 '시연 실행' 창에 '준비 완료'가 뜰 때까지 "

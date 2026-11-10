@@ -288,18 +288,20 @@ OLKAVS_WARD_PHRASE_FILE: str = os.environ.get(
     "LIPNET_OLKAVS_WARD_PHRASE_FILE", os.path.join(PROJECT_ROOT, "frontend", "src", "ward", "commands.json"))
 """병실 명령 20개 목록 파일(JSON의 fixed 배열, 서버는 id·text만 읽는다). 빈 문자열이면 ward 묶음의 지정 문장 결과를 끈다."""
 
-OLKAVS_WARD_MIN_MARGIN: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_MARGIN", "0.5"))
+OLKAVS_WARD_MIN_MARGIN: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_MARGIN", "0.70"))
 """ward 묶음 1·2등의 토큰당 CTC 점수 차이 하한. 아래 점수 하한과 함께 넘어야 명령을 고른 것으로 표시한다.
 
-임시값 0.5: 문장 묶음의 고정값을 그대로 가져왔을 뿐 병실 명령으로 잰 근거가 아직 없다. P01·P03 병실 조정 영상(ward_tune)으로
-다시 정한다. P02 평가 영상(ward_eval)은 동결 파일을 만들기 전에는 쓰지 않는다(docs/병실무음도우미_기획_및_개발계획_2026-11-09.md 9.3절)."""
+고정값 0.70 (2026-11-10, 조정 참가자 P01·P03 병실 조정 영상으로 정함. 이전 임시값 0.5). 미리 정한 규칙으로 나온 0.39는
+짧은 긴급 표현(1등 일반 명령)과 여유가 0.09뿐이라, 앱 판정(등록 포함)의 표시를 잃지 않는 범위에서 여유를 넓혔다.
+근거·값은 병실 동결 파일(docs/병실명령_동결_*.json)에 있다. P02 평가 영상(ward_eval)은 동결 커밋 전에는 쓰지 않는다."""
 if not (OLKAVS_WARD_MIN_MARGIN >= 0.0 and OLKAVS_WARD_MIN_MARGIN < float("inf")):
     raise ValueError(f"LIPNET_OLKAVS_WARD_MIN_MARGIN은 0 이상의 유한한 값이어야 합니다: {OLKAVS_WARD_MIN_MARGIN!r}")
 
-OLKAVS_WARD_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_SCORE", "-3.40"))
+OLKAVS_WARD_MIN_SCORE: float = float(os.environ.get("LIPNET_OLKAVS_WARD_MIN_SCORE", "-2.90"))
 """ward 묶음 1등의 토큰당 CTC 점수 하한. 낮으면 어느 명령과도 맞지 않는 말로 보고 고르지 않는다.
 
-임시값 -3.40: 문장 묶음의 고정값을 그대로 가져왔다. 위 차이 하한과 같이 P01·P03 병실 조정 영상으로 다시 정한다."""
+고정값 -2.90 (2026-11-10, P01·P03으로 정함. 이전 임시값 -3.40은 목록 밖 말 2개를 W10 빨간 카드로 표시했다).
+'…것 같아요'로 끝나는 목록 밖 말이 W10으로 강하게 끌려 점수 하한으로만 막히므로, 가장 가까운 함정(-3.066)과 여유 0.17을 둔다."""
 if not (OLKAVS_WARD_MIN_SCORE <= 0.0 and OLKAVS_WARD_MIN_SCORE > float("-inf")):
     raise ValueError(f"LIPNET_OLKAVS_WARD_MIN_SCORE는 0 이하의 유한한 값이어야 합니다: {OLKAVS_WARD_MIN_SCORE!r}")
 
@@ -331,10 +333,11 @@ def _env_optional_threshold(name: str, default: str | None, valid: Callable[[flo
 
 
 OLKAVS_WARD_ENROLL_MAX_DISTANCE: float | None = _env_optional_threshold(
-    "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE", "0.27", lambda v: v > 0.0, "0보다 큰 유한한 값")
+    "LIPNET_OLKAVS_WARD_ENROLL_MAX_DISTANCE", "0.26", lambda v: v > 0.0, "0보다 큰 유한한 값")
 """ward 묶음 '내 입 모양 등록' 거리 기준 D. 등록 1등 거리가 이 값 이하일 때만 등록으로 고르거나 긴급 가능성을 올린다.
 
-임시값 0.27: P02 등록 오프라인 분석의 미리 정한 규칙('자기 등록 거리 ≤ 0.27')을 가져왔다. P01·P03 명령 영상으로 다시 정한다.
+고정값 0.26 (2026-11-10, P01·P03 서버 등록 거리로 정함. 이전 임시값 0.27). 정답에 필요한 가장 큰 거리 0.2745와 가장 가까운
+나쁜 클립 0.2844 사이가 좁아, 규칙값 0.2769 대신 나쁜 쪽 여유를 넓힌 값이다(표시 2/100을 잃음).
 빈 값·'none'이면 거리는 계산해 결과에 남기지만 등록으로 고르거나 알리지 않는다(within·accepted가 항상 false).
 판정표는 scripts/ward_tools/metrics.py decide()와 같다(화면 wardResult.js가 적용한다)."""
 
@@ -343,7 +346,10 @@ OLKAVS_WARD_POSSIBLE_MIN_SCORE: float | None = _env_optional_threshold(
 """ward 묶음 '긴급 가능성' 점수 하한. 기본 None(꺼짐 = 이전 화면 규칙: 고르지 못했을 때 글자 1·2등에 긴급이 있으면 알린다).
 
 값을 주면 metrics.possible_score()와 같은 뜻이다: 1등 점수 = phrase.score, 2등 점수 = phrase.score − phrase.margin이고,
-그 점수가 이 값 이상인 긴급 후보만 긴급 가능성으로 올린다. 서버는 값을 결과 phrase.rule로 알리기만 하고 화면이 적용한다."""
+그 점수가 이 값 이상인 긴급 후보만 긴급 가능성으로 올린다. 서버는 값을 결과 phrase.rule로 알리기만 하고 화면이 적용한다.
+
+2026-11-10 결정: 쓰지 않는다(사용자 결정, '놓치는 쪽보다 확인하는 쪽'). P01·P03에서 긴급을 놓치지 않는 하한(-4.143)은
+근거가 클립 하나(여유 0.2)이고 사람 사이에 옮겨지지 않았다. 그 값은 P02 평가에서 보조 분석으로만 함께 계산한다."""
 
 WARD_PROFILE_DIR: str = os.environ.get("LIPNET_WARD_PROFILE_DIR") or os.path.join(BACKEND_ROOT, "data", "ward_profiles")
 """'내 입 모양 등록' 저장 폴더. 사람별 하위 폴더에 profile.json과 명령별 특징 <명령ID>.npz를 둔다.

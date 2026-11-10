@@ -95,7 +95,7 @@ EXPECTED_WARD_PHRASES: int = 20
 
 WARD_THRESHOLDS: Path = DEPLOY / "ward_thresholds.json"
 """묶음에 넣은 동결 병실 기준값(build_bundle.py --freeze). 있으면 서버를 이 값으로 켜고(service_env), 시연 점검이
-/health model.ward_phrases.thresholds와 같은지 본다. 없으면 코드 기본값(임시값)으로 켠다. 저장소에는 넣지 않는다."""
+/health model.ward_phrases.thresholds와 같은지 본다. 없으면 코드 기본값으로 켠다. 저장소에는 넣지 않는다."""
 WARD_THRESHOLDS_SCHEMA: str = "silenttalk-ward-thresholds-v1"
 WARD_THRESHOLD_ENV: dict[str, str] = {
     "min_margin": "LIPNET_OLKAVS_WARD_MIN_MARGIN",
@@ -703,7 +703,7 @@ def service_env(device: str | None = None) -> dict[str, str]:
 
     - LIPNET_* 값은 모두 지우고 저장소 기본값으로 실행한다. 노트북에 남은 옛 설정이 섞이지 않게 한다.
     - 묶음에 동결 병실 기준값 파일(deploy/ward_thresholds.json)이 있으면 그 4개(LIPNET_OLKAVS_WARD_*)만 다시 넣는다.
-      없으면 병실 기준값도 코드 기본값(임시값)이다.
+      없으면 병실 기준값도 코드 기본값이다.
     - device가 'cpu'·'cuda:0'이면 인식 장치를 그 값으로 고정한다(기본 auto: CUDA가 되면 GPU).
     - git 대체 명령을 만들었으면 PATH 맨 앞에 둔다(인식 워커의 commit 확인용).
 

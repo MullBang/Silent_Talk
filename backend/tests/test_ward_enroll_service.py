@@ -83,11 +83,11 @@ def _import_config(overrides: dict[str, str | None]) -> subprocess.CompletedProc
 
 
 def test_enroll_thresholds_defaults() -> None:
-    """환경변수가 없으면 D=0.27(임시값), 점수 하한 None(꺼짐), 저장 폴더는 backend/data/ward_profiles."""
+    """환경변수가 없으면 D=0.26(2026-11-10 고정값), 점수 하한 None(쓰지 않기로 결정), 저장 폴더는 backend/data/ward_profiles."""
     out = _import_config({})
     assert out.returncode == 0, out.stderr
     distance, floor, folder = json.loads(out.stdout)
-    assert (distance, floor) == (0.27, None)
+    assert (distance, floor) == (0.26, None)
     assert folder == os.path.join(config.BACKEND_ROOT, "data", "ward_profiles")
 
 

@@ -64,13 +64,13 @@ def test_phrase_set_config_reads_current_values(monkeypatch) -> None:
     assert config.phrase_set_config("sentences").min_margin == 0.1
 
 
-def test_ward_thresholds_default_to_provisional_values() -> None:
-    """환경 변수가 없으면 ward 기준은 임시값(차이 0.5, 점수 -3.40)이고 목록은 저장소의 ward/commands.json이다."""
+def test_ward_thresholds_default_to_frozen_values() -> None:
+    """환경 변수가 없으면 ward 기준은 2026-11-10 고정값(차이 0.70, 점수 -2.90)이고 목록은 저장소의 ward/commands.json이다."""
     if any(os.environ.get(name) for name in ("LIPNET_OLKAVS_WARD_MIN_MARGIN", "LIPNET_OLKAVS_WARD_MIN_SCORE",
                                              "LIPNET_OLKAVS_WARD_PHRASE_FILE")):
         pytest.skip("환경 변수로 ward 설정을 덮어쓴 실행")
-    assert config.OLKAVS_WARD_MIN_MARGIN == 0.5
-    assert config.OLKAVS_WARD_MIN_SCORE == -3.40
+    assert config.OLKAVS_WARD_MIN_MARGIN == 0.70
+    assert config.OLKAVS_WARD_MIN_SCORE == -2.90
     assert config.OLKAVS_WARD_PHRASE_FILE == os.path.join(config.PROJECT_ROOT, "frontend", "src", "ward",
                                                           "commands.json")
     assert os.path.isfile(config.OLKAVS_WARD_PHRASE_FILE)

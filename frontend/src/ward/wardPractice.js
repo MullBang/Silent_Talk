@@ -17,9 +17,9 @@ export const PRACTICE_SCENARIOS = Object.freeze([
   Object.freeze({ id: 'not_detected', label: '입 검출 실패' }),
 ]);
 
-/** 연습 결과의 서버 기준 (phrase.rule 모양, 값은 서버 임시값과 같은 크기의 예시). */
+/** 연습 결과의 서버 기준 (phrase.rule 모양, 값은 서버 기본값 = 2026-11-10 고정값과 같은 예시). */
 export const PRACTICE_RULE = Object.freeze({
-  min_margin: 0.5, min_score: -3.4, possible_min_score: null, enroll_max_distance: 0.27,
+  min_margin: 0.7, min_score: -2.9, possible_min_score: null, enroll_max_distance: 0.26,
 });
 
 /**

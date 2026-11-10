@@ -238,7 +238,7 @@ def ward_thresholds_status(report: Report, ward: dict[str, Any]) -> None:
             expected = None
         else:
             if expected is None:
-                report.add("주의", "동결한 병실 기준값 없이 만든 묶음입니다. 코드 기본값(임시값)으로 판정합니다: "
+                report.add("주의", "동결한 병실 기준값 없이 만든 묶음입니다. 코드 기본값으로 판정합니다: "
                                   f"{bc.describe_thresholds(server)}. 기준값을 동결한 뒤 --freeze로 묶음을 다시 만드세요.")
             else:
                 report.data["ward_thresholds_expected"] = expected["values"]

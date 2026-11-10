@@ -19,7 +19,7 @@
   - --sample-clips: 점검용 예시 영상 3개(조정 참가자 P01의 무음 문장 녹화). P02(최종 평가 대상) 영상은 절대 넣지 않는다.
   - --freeze: 커밋한 병실 동결 파일의 기준값 4개(1·2등 차이·1등 점수·긴급 가능성 하한·등록 거리)를 deploy/ward_thresholds.json에
     넣는다. 노트북 서버는 이 값으로 켜지고(bundle_common.service_env), 시연 점검이 /health 기준값과 같은지 본다.
-    주지 않으면 코드 기본값(임시값)으로 판정한다(경고로 알린다).
+    주지 않으면 코드 기본값으로 판정한다(경고로 알린다).
   - 코드 폴더(backend·frontend/src·scripts)에 커밋하지 않은 새 파일이 있으면 만들지 않는다(--allow-dirty로 무시).
 """
 from __future__ import annotations

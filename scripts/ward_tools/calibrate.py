@@ -26,7 +26,7 @@ from ward_tools import metrics as mt
 M_GRID = np.round(np.arange(0.0, 3.0 + 1e-9, 0.005), 3)
 S_GRID = np.round(np.arange(-6.0, -1.0 + 1e-9, 0.005), 3)
 DEFAULT_DELTAS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3)
-PROVISIONAL = (0.5, -3.40)  # backend/config.py OLKAVS_WARD_MIN_MARGIN·OLKAVS_WARD_MIN_SCORE 임시값
+PROVISIONAL = (0.5, -3.40)  # 조정 영상을 채점할 때 서버가 쓴 임시값(2026-11-10 고정 전 backend/config.py 기본값). 비교 기준으로 남긴다
 FREEZE_SCHEMA = common.FREEZE_SCHEMA
 MIN_NEGATIVES_FOR_D = 50  # D를 정하려면 사람마다 등록 거리가 있는 목록 밖 클립이 이만큼 있어야 한다
 
