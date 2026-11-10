@@ -354,7 +354,13 @@ OLKAVS_WARD_POSSIBLE_MIN_SCORE: float | None = _env_optional_threshold(
 WARD_PROFILE_DIR: str = os.environ.get("LIPNET_WARD_PROFILE_DIR") or os.path.join(BACKEND_ROOT, "data", "ward_profiles")
 """'내 입 모양 등록' 저장 폴더. 사람별 하위 폴더에 profile.json과 명령별 특징 <명령ID>.npz를 둔다.
 
-등록 특징은 개인 자료다. 저장소에 넣지 않는다(.gitignore의 backend/data/ward_profiles/). 시연 뒤 지운다."""
+등록 특징은 개인 자료다. 저장소에 넣지 않는다(.gitignore의 backend/data/ward_profiles/). 시연 뒤 지운다.
+내 목록의 등록은 이 폴더 안 lists.d/<목록 ID>/<등록 이름>/에 따로 둔다(services/ward_profiles.py ListProfileStore)."""
+
+WARD_LIST_DIR: str = os.environ.get("LIPNET_WARD_LIST_DIR") or os.path.join(BACKEND_ROOT, "data", "ward_lists")
+"""병실 '내 목록'(사용자가 만든 명령 목록) 저장 폴더. 목록마다 <목록 ID>.json 하나 (services/ward_lists.py).
+
+사용자가 쓴 문장이라 저장소에 넣지 않는다(.gitignore의 backend/data/ward_lists/). 기본 목록(commands.json)은 바꾸지 않는다."""
 
 PHRASE_SET_SENTENCES: str = "sentences"
 PHRASE_SET_WARD: str = "ward"

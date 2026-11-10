@@ -18,6 +18,12 @@ POST /api/record — 브라우저 MediaRecorder 녹화(WebM, Safari는 MP4)를 �
 - 선택 필드 enroll_profile·enroll_command(내 입 모양 등록): phrase_set=ward에서만 받는다. enroll_command는 enroll_profile과
   함께, 병실 명령 목록의 ID만 받는다. 규칙 위반·빈 값·중복 필드는 파일을 저장하기 전에 400(고정 문구)이다.
   응답 형식은 그대로이고, 등록 결과는 폴링 결과 results[0].enroll로 준다(services/ward_profiles.py).
+- 선택 필드 command_list(내 목록 ID, services/ward_lists.py): phrase_set=ward에서만 받는다. 값 하나, 목록 ID 규칙
+  (^[A-Za-z0-9_-]{1,32}$, Windows 장치 이름 제외), 목록이 있고 지금 검사기로 오류가 없어야 한다. 아니면 파일을 저장하기 전에
+  400(고정 문구)이다. 그 목록이 후보가 되고 결과 phrase에 list {id, sha256}가 붙는다. 등록 필드를 함께 보내면 그 목록의
+  등록 이름공간을 쓰고, enroll_command는 그 목록의 ID(U01…)만 받는다. command_list가 없으면 이 기능 이전과 같다.
+- 선택 필드 command_list_sha256(command_list와 함께만): 화면이 불러온 목록의 sha256. 서버의 지금 목록과 다르면 파일을
+  저장하기 전에 400(MSG_LIST_CHANGED)이다. 등록 화면이 다른 탭에서 고친 목록의 새 문장으로 옛 입 모양을 저장하지 않게 한다.
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 import statistics
 import sys
 import time
@@ -61,6 +68,17 @@ MSG_ENROLL_NEEDS_PROFILE = "등록할 명령(enroll_command)을 보낼 때는 �
 MSG_BAD_ENROLL_PROFILE = "등록 이름은 영문·숫자·밑줄(_)·하이픈(-)으로 1~32자만 쓸 수 있습니다."
 MSG_BAD_ENROLL_COMMAND = "알 수 없는 병실 명령입니다 (병실 명령 목록의 ID만 쓸 수 있습니다)."
 MSG_ENROLL_ORIGIN = "허용하지 않은 화면 주소에서 보낸 등록 요청입니다. 이 프로그램의 화면에서 다시 해 주세요."
+MSG_LIST_WARD_ONLY = "내 목록은 병실 명령 묶음(phrase_set=ward)에서만 쓸 수 있어요."
+MSG_BAD_COMMAND_LIST = "내 목록 ID는 영문·숫자·밑줄(_)·하이픈(-)으로 1~32자만 쓸 수 있어요."
+MSG_LIST_NOT_FOUND = "내 목록을 찾을 수 없어요."
+MSG_LIST_INVALID = "내 목록에 오류가 있어요. 내 목록 관리에서 고친 뒤 다시 해 주세요."
+MSG_BAD_LIST_ENROLL_COMMAND = "내 목록에 없는 명령이에요 (그 목록의 명령 ID만 쓸 수 있어요)."
+MSG_LIST_SHA_NEEDS_LIST = "목록 지문(command_list_sha256)은 내 목록(command_list)과 함께만 보낼 수 있어요."
+MSG_BAD_LIST_SHA = "목록 지문(command_list_sha256)은 SHA-256 16진수 64자여야 해요."
+MSG_LIST_CHANGED = "목록이 바뀌었어요. 다시 불러와 주세요."
+"""화면이 불러온 목록 판(sha256)과 서버의 지금 목록이 다를 때. 화면(frontend/src/api/client.js LIST_CHANGED_MESSAGE)도 이 문구로 알아본다."""
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 _MIN_FILE_BYTES = 32
 _EBML_MAGIC = b"\x1a\x45\xdf\xa3"
@@ -298,14 +316,78 @@ def _single_text(values: list[Any], message: str, name: str) -> str | None:
     raise RecordingRejected(message, f"{name}={shown!r} ({len(values)}개)")
 
 
+def resolve_command_list(values: list[Any] | None, phrase_set: str) -> dict[str, Any] | None:
+    """command_list 폼 필드(내 목록 ID)를 확인하고 그 목록을 읽는다 (선택, ward 묶음 전용).
+
+    - 보내지 않았으면 None(기본 목록, 이 기능 이전과 같다).
+    - phrase_set이 ward가 아니면 거부한다. 빈 값·같은 필드 여러 번·파일 파트·ID 규칙 위반도 거부한다.
+    - 목록이 없거나(대소문자만 다른 목록 포함) 지금 검사기로 오류가 있거나 파일을 읽지 못하면 거부한다.
+
+    Returns:
+        저장된 목록(services/ward_lists.py 형식) 또는 None.
+
+    Raises:
+        RecordingRejected: 위 규칙 위반 (고정 한국어 문구).
+    """
+    from services import ward_lists
+
+    values = list(values or [])
+    if not values:
+        return None
+    if phrase_set != config.PHRASE_SET_WARD:
+        raise RecordingRejected(MSG_LIST_WARD_ONLY, f"phrase_set={phrase_set!r}")
+    list_id = _single_text(values, MSG_BAD_COMMAND_LIST, "command_list")
+    if not ward_lists.is_valid_list_id(list_id):
+        raise RecordingRejected(MSG_BAD_COMMAND_LIST, f"command_list={str(list_id)[:40]!r}")
+    try:
+        return ward_lists.get_store().load_valid(list_id)
+    except (ward_lists.ListNotFound, ward_lists.ListConflict) as exc:
+        raise RecordingRejected(MSG_LIST_NOT_FOUND, exc.detail) from None
+    except ward_lists.ListError as exc:  # 검사 오류(ListInvalid)·읽기 실패
+        raise RecordingRejected(MSG_LIST_INVALID, exc.detail) from None
+
+
+def resolve_command_list_sha(values: list[Any] | None, custom_list: dict[str, Any] | None) -> str | None:
+    """command_list_sha256 폼 필드(화면이 불러온 목록 판)를 확인한다 (선택, command_list와 함께만).
+
+    - 보내지 않았으면 None(지금 목록을 그대로 쓴다, 이 필드 이전과 같다).
+    - command_list 없이 보냈거나, 빈 값·여러 번·64자 소문자 16진수가 아니면 거부한다.
+    - 지금 목록의 sha256과 다르면 MSG_LIST_CHANGED로 거부한다(목록이 그사이 바뀌었다).
+
+    Returns:
+        확인한 sha256 또는 None.
+
+    Raises:
+        RecordingRejected: 위 규칙 위반 (고정 한국어 문구).
+    """
+    values = list(values or [])
+    if not values:
+        return None
+    if custom_list is None:
+        raise RecordingRejected(MSG_LIST_SHA_NEEDS_LIST, "command_list 없이 command_list_sha256")
+    sha = _single_text(values, MSG_BAD_LIST_SHA, "command_list_sha256")
+    if sha is None or not _SHA256_RE.match(sha):
+        raise RecordingRejected(MSG_BAD_LIST_SHA, f"command_list_sha256={str(sha)[:70]!r}")
+    current = str(custom_list.get("sha256") or "")
+    if sha != current:
+        raise RecordingRejected(MSG_LIST_CHANGED, f"목록 {custom_list.get('id')!r} 판이 다름: {sha[:12]} != {current[:12]}")
+    return sha
+
+
 def resolve_enroll(profile_values: list[Any] | None, command_values: list[Any] | None,
-                   phrase_set: str) -> tuple[str | None, str | None]:
+                   phrase_set: str, command_ids: list[str] | None = None) -> tuple[str | None, str | None]:
     """enroll_profile·enroll_command 폼 필드를 확인한다 (둘 다 선택, ward 묶음 전용).
 
     - 둘 중 하나라도 보냈는데 phrase_set이 ward가 아니면 거부한다.
-    - enroll_command는 enroll_profile과 함께만, 현재 병실 명령 목록의 ID만 받는다.
+    - enroll_command는 enroll_profile과 함께만, 현재 병실 명령 목록의 ID만 받는다. 내 목록(command_ids)을 쓰면 그 목록의 ID만 받는다.
     - 등록 이름은 ^[A-Za-z0-9_-]{1,32}$ (Windows 장치 이름 제외). 경로 문자는 받지 않는다.
     - 빈 값·같은 필드 여러 번·파일 파트는 '보내지 않음'으로 바꾸지 않고 거부한다.
+
+    Args:
+        profile_values: 원래 폼의 enroll_profile 값 목록.
+        command_values: 원래 폼의 enroll_command 값 목록.
+        phrase_set: 확인을 마친 묶음 ID.
+        command_ids: 내 목록을 쓸 때 그 목록의 명령 ID들. None이면 기본 병실 명령 목록.
 
     Returns:
         (enroll_profile 또는 None, enroll_command 또는 None).
@@ -326,6 +408,11 @@ def resolve_enroll(profile_values: list[Any] | None, command_values: list[Any] |
     profile = _single_text(profile_values, MSG_BAD_ENROLL_PROFILE, "enroll_profile")
     if not ward_profiles.is_valid_profile_id(profile):
         raise RecordingRejected(MSG_BAD_ENROLL_PROFILE, f"enroll_profile={str(profile)[:40]!r}")
+    if command_ids is not None:
+        command = _single_text(command_values, MSG_BAD_LIST_ENROLL_COMMAND, "enroll_command")
+        if command is not None and command not in command_ids:
+            raise RecordingRejected(MSG_BAD_LIST_ENROLL_COMMAND, f"enroll_command={command[:40]!r}")
+        return profile, command
     command = _single_text(command_values, MSG_BAD_ENROLL_COMMAND, "enroll_command")
     if command is not None:
         commands = ward_profiles.current_commands()
@@ -388,7 +475,9 @@ async def start_record(request: Request,
                        file: UploadFile = File(...),
                        phrase_set: str | None = Form(None),
                        enroll_profile: str | None = Form(None),
-                       enroll_command: str | None = Form(None)) -> RecordStartResponse:
+                       enroll_command: str | None = Form(None),
+                       command_list: str | None = Form(None),
+                       command_list_sha256: str | None = Form(None)) -> RecordStartResponse:
     """웹캠 녹화를 받아 발화 전체 인식 Job을 등록한다 (결과 즉시 반환 금지).
 
     Args:
@@ -400,14 +489,17 @@ async def start_record(request: Request,
         enroll_profile: (선택, ward 전용) 내 입 모양 등록 이름. 보내면 결과 results[0]에 enroll이 붙는다.
         enroll_command: (선택, ward 전용, enroll_profile 필요) 이 녹화를 그 명령의 등록 템플릿으로 저장한다.
             없으면 등록 템플릿과 거리 판정만 한다. 두 필드도 원래 폼 값(resolve_enroll)으로 판정한다.
+        command_list: (선택, ward 전용) 내 목록 ID. 그 목록을 후보로 쓰고 결과 phrase에 list가 붙는다. 원래 폼 값
+            (resolve_command_list)으로 판정한다.
+        command_list_sha256: (선택, command_list와 함께) 화면이 불러온 목록의 sha256. 지금 목록과 다르면 400이다.
 
     Returns:
         {job_id, session_id, status:'processing', duration_sec}.
 
     Raises:
-        HTTPException: 접수 거부 400(고정 문구, 알 수 없는·빈·중복 phrase_set, ward가 아닌 묶음의 등록 필드, 이름 없는
-            등록 명령, 규칙에 맞지 않는 등록 이름·명령 포함), 허용하지 않은 Origin의 등록 요청 403,
-            compact 백엔드 503, 같은 세션 처리 중 409.
+        HTTPException: 접수 거부 400(고정 문구, 알 수 없는·빈·중복 phrase_set, ward가 아닌 묶음의 등록 필드·내 목록, 이름 없는
+            등록 명령, 규칙에 맞지 않는 등록 이름·명령·목록 ID·목록 지문, 없거나 오류가 있거나 그사이 바뀐 내 목록 포함),
+            허용하지 않은 Origin의 등록 요청 403, compact 백엔드 503, 같은 세션 처리 중 409.
     """
     if infer_api.MODEL_BACKEND != "olkavs":
         raise HTTPException(status_code=503, detail=MSG_BACKEND_UNSUPPORTED)
@@ -416,8 +508,15 @@ async def start_record(request: Request,
     try:
         # 파일을 저장하기 전에 거른다. phrase_set 인자 대신 원래 폼 값으로 판정한다(빈 값이 기본값으로 바뀌지 않게).
         phrase_set = resolve_phrase_set(await _form_phrase_set_values(request))
+        list_values = await _form_values(request, "command_list")
+        custom_list = (await asyncio.to_thread(resolve_command_list, list_values, phrase_set)) if list_values else None
+        sha_values = await _form_values(request, "command_list_sha256")
+        if sha_values:
+            resolve_command_list_sha(sha_values, custom_list)
+        command_ids = [c["id"] for c in custom_list["commands"]] if custom_list is not None else None
         enroll_profile, enroll_command = resolve_enroll(await _form_values(request, "enroll_profile"),
-                                                        await _form_values(request, "enroll_command"), phrase_set)
+                                                        await _form_values(request, "enroll_command"), phrase_set,
+                                                        command_ids)
         if enroll_profile is not None and not origin_allowed(request.headers.get("origin")):
             raise EnrollOriginRejected()
         path, size = await _save_capped(file, session_id)
@@ -444,10 +543,13 @@ async def start_record(request: Request,
             await file.close()
         except Exception:  # noqa: BLE001 - 업로드 임시 파일 정리 실패는 무시
             pass
-    logger.info("녹화 접수: %s %d바이트 %.3f초 묶음=%s%s", os.path.basename(path), size, duration, phrase_set,
+    logger.info("녹화 접수: %s %d바이트 %.3f초 묶음=%s%s%s", os.path.basename(path), size, duration, phrase_set,
+                f" 내목록={custom_list['id']}" if custom_list is not None else "",
                 f" 등록={enroll_profile}/{enroll_command or 'match'}" if enroll_profile else "")
-    enroll_kwargs = ({"enroll_profile": enroll_profile, "enroll_command": enroll_command}
-                     if enroll_profile is not None else {})
+    enroll_kwargs: dict[str, Any] = ({"enroll_profile": enroll_profile, "enroll_command": enroll_command}
+                                     if enroll_profile is not None else {})
+    if custom_list is not None:
+        enroll_kwargs["command_list"] = custom_list  # 녹화 요청 때 검사한 목록 그대로 Job에 넘긴다
     try:
         start = infer_api.start_background_job(session_id, path, background_tasks,
                                                mode="record", video_seconds=duration, phrase_set=phrase_set,

@@ -672,6 +672,19 @@ def test_check_reports_threshold_mismatch_and_enroll_folder(monkeypatch: pytest.
     assert [i["level"] for i in none.items] == ["주의", "주의"]  # 동결 값 없는 묶음, 옛 서버(등록 상태 없음)
 
 
+def test_check_reports_custom_lists_folder() -> None:
+    """/health custom_lists: 쓸 수 있으면 통과, 못 쓰면 실패, 내 목록 기능이 없는 옛 서버는 주의(묶음을 다시 만들라고 안내)."""
+    ok = check.Report()
+    check.custom_lists_status(ok, {"custom_lists": {"enabled": True, "dir_writable": True, "count": 2}})
+    assert [i["level"] for i in ok.items] == ["통과"] and "2개" in ok.items[0]["text"]
+    bad = check.Report()
+    check.custom_lists_status(bad, {"custom_lists": {"enabled": True, "dir_writable": False, "count": 0}})
+    assert [i["level"] for i in bad.items] == ["실패"] and "ward_lists" in bad.items[0]["text"]
+    old = check.Report()
+    check.custom_lists_status(old, {"enroll": {"profile_dir_writable": True}})
+    assert [i["level"] for i in old.items] == ["주의"] and "다시 만들어" in old.items[0]["text"]
+
+
 def test_untracked_code_paths_reads_porcelain_z(monkeypatch: pytest.MonkeyPatch) -> None:
     out = "?? backend/api/new.py\0 M backend/old.py\0R  scripts/a.py\0scripts/b.py\0?? frontend/src/x.js\0"
     monkeypatch.setattr(build_bundle, "git", lambda *args: out)

@@ -207,3 +207,6 @@ deploy/ward_thresholds.json
 
 # 병실 "내 입 모양 등록" 템플릿 (사람별 입 모양 특징 = 개인 자료, 서버 기본 저장 폴더)
 backend/data/ward_profiles/
+
+# 병실 "내 목록" (사용자가 직접 만든 명령 목록, 서버 기본 저장 폴더)
+backend/data/ward_lists/

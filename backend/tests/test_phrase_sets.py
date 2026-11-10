@@ -356,7 +356,7 @@ def test_status_includes_ward_phrases_without_paths(tmp_path, monkeypatch) -> No
     status = svc.OlkavsService(_StubWorker(lambda p, _p: {}), _StubWorker(lambda p, _p: {})).status()
     ward = status["ward_phrases"]
     assert {k: ward[k] for k in ("enabled", "count", "version")} == {"enabled": True, "count": 0, "version": None}
-    assert set(ward) == {"enabled", "count", "version", "thresholds", "enroll"}  # 등록 기능은 키를 더하기만 한다
+    assert set(ward) == {"enabled", "count", "version", "thresholds", "enroll", "custom_lists"}  # 키를 더하기만 한다
     assert "secret_dir" not in json.dumps(status, ensure_ascii=False, default=str)
     assert "secret_profiles" not in json.dumps(status, ensure_ascii=False, default=str)
 
@@ -398,7 +398,7 @@ def test_phrase_match_schema_set_field() -> None:
     with pytest.raises(ValueError):  # pydantic ValidationError는 ValueError의 하위 클래스다
         ResultItem(**item, phrase={**phrase, "set": "prompts"})
     assert list(PhraseMatch.model_fields) == ["id", "text", "score", "margin", "runner_up_id", "accepted", "set",
-                                              "rule"]  # rule은 ward 결과에만 있고 없으면 응답에서 키가 빠진다
+                                              "rule", "list"]  # rule·list는 ward 결과에만 있고 없으면 응답에서 키가 빠진다
     literal = typing.get_args(PhraseMatch.model_fields["set"].annotation)[0]
     assert typing.get_args(literal) == config.PHRASE_SET_IDS
     dumped = ResultItem(**item, phrase={**phrase, "set": "sentences"}).model_dump()["phrase"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UploadResponse(BaseModel):
@@ -61,6 +61,13 @@ class WardRule(BaseModel):
     enroll_max_distance: Optional[float] = None  # 등록 거리 기준 D. null이면 등록으로 고르지 않음
 
 
+class PhraseListRef(BaseModel):
+    """내 목록으로 고른 결과의 목록 표시 (화면이 지금 불러 둔 목록과 같은지 확인한다)."""
+
+    id: str  # 내 목록 ID
+    sha256: str  # 녹화 요청 때 그 목록 commands의 SHA-256
+
+
 class PhraseMatch(BaseModel):
     """지정 문장 보조 모드 결과 (7단계). 녹화 한 건 전체가 창 하나이고 모든 후보를 정렬할 수 있을 때만 있다.
 
@@ -77,6 +84,8 @@ class PhraseMatch(BaseModel):
     set: Optional[Literal["sentences", "ward"]] = None
     # ward 묶음에만 있다(판정 기준값). 문장 묶음 결과에는 키 자체가 없다.
     rule: Optional[WardRule] = Field(default=None, exclude_if=_absent)
+    # 내 목록(command_list)으로 녹화했을 때만 있다. 기본 목록·문장 묶음 결과에는 키 자체가 없다.
+    list: Optional[PhraseListRef] = Field(default=None, exclude_if=_absent)
 
 
 EnrollReason = Literal["multi_window", "partial_detection", "no_speech", "no_phrase", "no_features", "error"]
@@ -224,5 +233,108 @@ class WardProfileDetail(BaseModel):
 
 class WardProfileDeleted(BaseModel):
     """DELETE /api/ward/profiles/{profile} 응답."""
+
+    deleted: bool
+
+
+# ---------------------------------------------------------------------------
+# 병실 '내 목록' (services/ward_lists.py)
+# ---------------------------------------------------------------------------
+
+WardListCategory = Literal["emergency", "call", "care", "room", "answer"]
+
+
+class WardListCommand(BaseModel):
+    """내 목록의 명령 하나 (id는 서버가 저장할 때 U01부터 붙인다)."""
+
+    id: str
+    text: str  # 입 모양 문장 (인식용, 정규화됨)
+    display: str  # 화면·간호사 카드 문장
+    category: str  # emergency·call·care·room·answer (검사 결과의 normalized에는 틀린 값이 그대로 올 수 있다)
+    emergency: bool
+    cancel: bool  # '방금 요청 취소' 문장 (하나까지)
+
+
+class WardListIssue(BaseModel):
+    """검사 항목 하나. row·rows는 0부터 센 줄 번호다(목록 전체에 대한 항목은 row null, rows 빈 목록)."""
+
+    code: str  # 고정 식별자 (예: text_chars, lip_same)
+    level: Literal["error", "strong", "warning"]  # error는 저장을 막는다. strong·warning은 보여 주기만 한다
+    message: str  # 사용자에게 보여 줄 한국어 문구
+    row: Optional[int] = None
+    rows: list[int] = Field(default_factory=list)  # 두 줄 사이 항목은 두 줄 모두
+    field: Optional[str] = None  # title·commands·text·display·category·emergency·cancel
+
+
+class WardListChecks(BaseModel):
+    """지금 검사기로 본 오류·주의."""
+
+    errors: list[WardListIssue]
+    warnings: list[WardListIssue]
+
+
+class WardListSummary(BaseModel):
+    """GET /api/ward/lists의 목록 하나."""
+
+    id: str
+    title: str
+    count: int  # 명령 수
+    emergency_count: int
+    updated: Optional[str] = None  # 마지막 저장 시각(UTC ISO)
+    sha256: str  # commands의 SHA-256
+
+
+class WardListIndex(BaseModel):
+    """GET /api/ward/lists 응답."""
+
+    lists: list[WardListSummary]
+
+
+class WardListDetail(BaseModel):
+    """GET /api/ward/lists/{id} 응답: 저장된 목록 + 지금 검사 결과(checks)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_: str = Field(alias="schema")  # 'ward-custom-list-v1'
+    id: str
+    title: str
+    created: Optional[str] = None
+    updated: Optional[str] = None
+    commands: list[WardListCommand]
+    sha256: str
+    checks: WardListChecks
+
+
+class WardListSaved(WardListDetail):
+    """PUT /api/ward/lists/{id} 응답: 저장한 목록 + 주의(warnings, checks.warnings와 같다)."""
+
+    warnings: list[WardListIssue]
+
+
+class WardListNormalized(BaseModel):
+    """검사기가 정규화한 목록 (오류가 없으면 이대로 저장된다)."""
+
+    title: str
+    commands: list[WardListCommand]
+
+
+class WardListRowStats(BaseModel):
+    """줄 하나의 음절 수·OLKAVS 토큰 수 (입 모양 문장을 셀 수 없으면 null)."""
+
+    syllables: Optional[int] = None
+    tokens: Optional[int] = None
+
+
+class WardListCheckResult(BaseModel):
+    """POST /api/ward/lists/check 응답 (저장하지 않는다)."""
+
+    errors: list[WardListIssue]
+    warnings: list[WardListIssue]
+    normalized: WardListNormalized
+    stats: list[WardListRowStats]
+
+
+class WardListDeleted(BaseModel):
+    """DELETE /api/ward/lists/{id} 응답."""
 
     deleted: bool

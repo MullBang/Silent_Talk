@@ -206,6 +206,7 @@ def server_status(report: Report) -> dict[str, Any] | None:
     else:
         report.add("실패", f"병실 명령 목록 이상: {ward}")
     ward_thresholds_status(report, ward)
+    custom_lists_status(report, ward)
     try:
         expected = bc.core_constants()
         if model.get("checkpoint_sha256") == expected["checkpoint_sha256"]:
@@ -258,6 +259,25 @@ def ward_thresholds_status(report: Report, ward: dict[str, Any]) -> None:
                               "묶음 폴더를 C:\\SilentTalk처럼 쓸 수 있는 곳에 두었는지 확인하세요.")
     except (AttributeError, TypeError) as exc:
         report.add("실패", f"병실 기준값을 확인하지 못했습니다: {exc}")
+
+
+def custom_lists_status(report: Report, ward: dict[str, Any]) -> None:
+    """/health ward_phrases.custom_lists로 '내 목록' 저장 폴더에 쓸 수 있는지 확인한다.
+
+    내 목록 기능이 없는 서버(그 기능을 커밋하기 전에 만든 묶음)는 주의로 알린다: 내 목록으로 시연하려면 묶음을 다시 만들어야 한다.
+    """
+    try:
+        lists = ward.get("custom_lists") if isinstance(ward.get("custom_lists"), dict) else None
+        if lists is None:
+            report.add("주의", "이 서버에는 '내 목록' 기능이 없습니다. 내 목록으로 시연하려면 그 기능을 커밋한 뒤 "
+                              "build_bundle.py --freeze로 묶음을 다시 만들어 설치하세요(기본 목록 시연은 그대로 됩니다).")
+        elif lists.get("dir_writable") is True:
+            report.add("통과", f"'내 목록' 저장 폴더에 쓸 수 있음 (목록 {lists.get('count', 0)}개)")
+        else:
+            report.add("실패", "'내 목록' 저장 폴더(backend\\data\\ward_lists)에 쓸 수 없습니다. "
+                              "묶음 폴더를 C:\\SilentTalk처럼 쓸 수 있는 곳에 두었는지 확인하세요.")
+    except (AttributeError, TypeError) as exc:
+        report.add("실패", f"'내 목록' 상태를 확인하지 못했습니다: {exc}")
 
 
 def frontend_status(report: Report) -> None:

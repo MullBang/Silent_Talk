@@ -19,6 +19,18 @@ scripts/ward_enroll.py·scripts/ward_tools/enroll.py와 같은 특징·거리·�
 - 판정(match)은 상태 ok이고 녹화가 지정 문장 결과가 있는 창 하나일 때만 거리를 계산한다.
   within = 1등 거리 ≤ D(config.OLKAVS_WARD_ENROLL_MAX_DISTANCE, None이면 항상 false), agree = 등록 1등 == 글자 1등,
   accepted = within and agree. 긴급 여부 해석과 화면 판정표는 화면(wardResult.js)이 scripts/ward_tools/metrics.decide()와 같게 한다.
+
+내 목록(services/ward_lists.py)의 등록 (ListProfileStore): 기본 등록과 섞이지 않게 목록마다 따로 둔다.
+  <폴더>/lists.d/<목록 ID>/<등록 이름>/profile.json  {schema 'ward-list-profile-v1', profile, list_id, created, updated,
+                                                    checkpoint_sha256, feature, distance, template_mode,
+                                                    templates:{문장 SHA-256:{text, command, created, frames, start_ms,
+                                                    end_ms, text_top, text_top_text, text_top_matches}}}
+  <폴더>/lists.d/<목록 ID>/<등록 이름>/<문장 SHA-256 앞 32자>.npz   hidden: float32 (T, 256)
+- 'lists.d'는 등록 이름 규칙(마침표 없음) 밖이라 기본 등록 이름과 절대 겹치지 않는다(기본 등록의 목록·조회·삭제가 닿지 않는다).
+- 템플릿은 명령 ID가 아니라 정규화한 문장(text_key)으로 찾는다. 목록 순서를 바꾸거나 다른 문장을 고쳐도, 문장이 그대로인
+  명령의 템플릿은 그대로 쓴다. 고친 문장만 다시 찍으면 된다.
+- 상태: missing · stale(인식 가중치가 바뀜, 이때만 이전 템플릿을 모두 지우고 새로 시작) · incomplete(지금 목록의 명령 중
+  지금 문장의 템플릿이 있는 수 < 명령 수) · ok. 판정은 지금 목록 명령의 템플릿과만 비교한다.
 """
 from __future__ import annotations
 
@@ -33,6 +45,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,6 +81,9 @@ REASON_NO_FEATURES = "no_features"
 REASON_ERROR = "error"
 
 PROFILE_FILE = "profile.json"
+LIST_PROFILE_SCHEMA = "ward-list-profile-v1"
+LIST_NAMESPACE_DIR = "lists.d"
+"""내 목록 등록 이름공간 폴더 (등록 폴더 안). 마침표가 있어 기본 등록 이름(^[A-Za-z0-9_-]{1,32}$)이 될 수 없다."""
 _PROFILE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
 _WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(10)),
                                *(f"LPT{i}" for i in range(10))})
@@ -77,6 +93,7 @@ MSG_CONFLICT = "대소문자만 다른 같은 이름의 등록이 이미 있습�
 MSG_NOT_FOUND = "등록을 찾을 수 없습니다."
 MSG_UNREADABLE = "등록 파일을 읽지 못했습니다. 등록을 지우고 다시 만들어 주세요."
 MSG_STORAGE = "등록 파일을 저장하지 못했습니다. 저장 폴더를 확인해 주세요."
+MSG_BAD_LIST = "목록 ID는 영문·숫자·밑줄(_)·하이픈(-)으로 1~32자만 쓸 수 있어요."
 
 
 class ProfileError(ValueError):
@@ -340,13 +357,22 @@ class ProfileStore:
         except (OSError, KeyError, TypeError):
             return 0
 
+    def _status(self, data: dict[str, Any] | None, count: int, commands: dict[str, Any] | None,
+                checkpoint: str | None) -> str:
+        """등록 상태 (기본 등록은 profile_status)."""
+        return profile_status(data, count, commands, checkpoint)
+
+    def command_list(self) -> dict[str, Any] | None:
+        """이 저장소가 쓰는 명령 목록 (기본 등록은 부를 때의 current_commands(), 내 목록은 그 목록)."""
+        return current_commands()
+
     def _snapshot(self, profile_id: str, commands: dict[str, Any] | None,
                   checkpoint: str | None) -> tuple[Path | None, dict[str, Any] | None, int, str]:
         """(폴더, profile.json, 템플릿 수, 상태). 잠금 없이 부르지 않는다."""
         path = self._find(profile_id)
         data = self._read(path, profile_id) if path is not None else None
         count = self._count(path, data, commands) if path is not None else 0
-        return path, data, count, profile_status(data, count, commands, checkpoint)
+        return path, data, count, self._status(data, count, commands, checkpoint)
 
     def summary(self, profile_id: str, checkpoint: str | None = None) -> dict[str, Any]:
         """{profile, count, complete, status, updated}. 없는 등록은 status 'missing'.
@@ -355,7 +381,7 @@ class ProfileStore:
             InvalidProfileId / ProfileConflict / ProfileError.
         """
         validate_profile_id(profile_id)
-        commands = current_commands()
+        commands = self.command_list()
         total = len(commands["ids"]) if commands else 0
         with _lock_for(self.root, profile_id):
             _path, data, count, status = self._snapshot(profile_id, commands, checkpoint)
@@ -368,7 +394,7 @@ class ProfileStore:
         templates에는 현재 명령 목록에 있고 특징 파일이 있는 템플릿만 넣는다. 없는 등록은 status 'missing'·빈 templates.
         """
         validate_profile_id(profile_id)
-        commands = current_commands()
+        commands = self.command_list()
         total = len(commands["ids"]) if commands else 0
         with _lock_for(self.root, profile_id):
             path, data, count, status = self._snapshot(profile_id, commands, checkpoint)
@@ -490,6 +516,282 @@ def get_store() -> ProfileStore:
     return ProfileStore(config.WARD_PROFILE_DIR)
 
 
+# ---------------------------------------------------------------------------
+# 내 목록 등록 (목록마다 따로, 문장으로 찾는 템플릿)
+# ---------------------------------------------------------------------------
+
+def text_key(text: str) -> str:
+    """정규화한 문장(NFC, 공백 묶음 → 띄어쓰기 하나)의 UTF-8 SHA-256. 내 목록 등록 템플릿의 키다."""
+    return hashlib.sha256(" ".join(unicodedata.normalize("NFC", text).split()).encode("utf-8")).hexdigest()
+
+
+def list_namespace(list_id: Any, root: str | os.PathLike[str] | None = None) -> Path:
+    """내 목록 하나의 등록 이름공간 폴더 <등록 폴더>/lists.d/<목록 ID>.
+
+    Args:
+        list_id: 목록 ID (등록 이름과 같은 규칙).
+        root: 등록 폴더. None이면 config.WARD_PROFILE_DIR(부를 때의 값).
+
+    Raises:
+        InvalidProfileId: 규칙에 맞지 않는 목록 ID.
+    """
+    if not is_valid_profile_id(list_id):
+        shown = list_id[:40] if isinstance(list_id, str) else type(list_id).__name__
+        raise InvalidProfileId(MSG_BAD_LIST, f"list_id={shown!r}")
+    return Path(root if root is not None else config.WARD_PROFILE_DIR) / LIST_NAMESPACE_DIR / list_id
+
+
+def delete_list_namespace(list_id: Any, root: str | os.PathLike[str] | None = None, retries: int = 1,
+                          retry_seconds: float = 0.0) -> bool:
+    """내 목록 하나의 등록 이름공간을 통째로 지운다. 지웠으면 True, 없었으면 False.
+
+    Args:
+        list_id: 내 목록 ID.
+        root: 등록 폴더. None이면 config.WARD_PROFILE_DIR.
+        retries: 지우기를 해 볼 횟수(1 이상). Windows에서 다른 요청이 파일을 잠깐 열고 있으면 실패할 수 있어 다시 해 본다.
+        retry_seconds: 다시 해 보기 전에 기다리는 시간(초).
+
+    Raises:
+        InvalidProfileId: 규칙에 맞지 않는 목록 ID. ProfileError: 지우지 못했을 때.
+    """
+    path = list_namespace(list_id, root)
+    attempts = max(1, int(retries))
+    with _lock_for(path.parent, f"namespace|{list_id}"):
+        if not path.exists():
+            return False
+        for attempt in range(attempts):
+            if attempt > 0 and not path.exists():
+                break  # 앞 시도가 실패를 알렸지만 폴더는 이미 다 지워졌다
+            try:
+                shutil.rmtree(path)
+                break
+            except OSError as exc:
+                if attempt + 1 >= attempts:
+                    raise ProfileError(MSG_STORAGE, f"목록 등록 삭제 실패: {exc}") from exc
+                logger.warning("내 목록 등록 이름공간 지우기 다시 시도 (%s, %d/%d): %s", list_id, attempt + 1,
+                               attempts, exc)
+                time.sleep(max(0.0, float(retry_seconds)))
+        if path.exists():
+            raise ProfileError(MSG_STORAGE, f"목록 등록 폴더가 남았습니다: {list_id!r}")
+    logger.info("내 목록 등록 이름공간 삭제: %s", list_id)
+    return True
+
+
+def list_commands(doc: dict[str, Any]) -> dict[str, Any]:
+    """저장된 내 목록(services/ward_lists.py 형식) → 등록 저장소가 쓰는 명령 정보.
+
+    Returns:
+        {version: 'ward-custom-list-v1', sha256: 목록 SHA-256, ids: [명령 ID], texts: {명령 ID: 문장}, list_id}.
+
+    Raises:
+        ValueError: 형식이 틀렸을 때 (명령 2개 미만·ID 중복 포함).
+    """
+    try:
+        commands = doc["commands"]
+        ids = [str(c["id"]) for c in commands]
+        texts = {str(c["id"]): str(c["text"]) for c in commands}
+        out = {"version": str(doc.get("schema") or ""), "sha256": str(doc["sha256"]), "ids": ids, "texts": texts,
+               "list_id": str(doc["id"])}
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"내 목록 형식이 틀렸습니다: {type(exc).__name__}") from exc
+    if len(ids) < 2 or len(set(ids)) != len(ids):
+        raise ValueError("내 목록 명령이 2개 미만이거나 ID가 겹칩니다")
+    return out
+
+
+def list_profile_status(data: dict[str, Any] | None, count: int, commands: dict[str, Any] | None,
+                        checkpoint: str | None) -> str:
+    """내 목록 등록 상태 (missing → stale → incomplete → ok). 목록을 고쳐도 stale이 되지 않는다(문장으로 찾는다).
+
+    Args:
+        data: profile.json 내용 또는 None.
+        count: 지금 목록의 명령 중 지금 문장의 템플릿(특징 파일 포함)이 있는 수.
+        commands: list_commands() 결과. None이면 확인할 수 없어 stale.
+        checkpoint: 지금 인식 가중치 SHA-256. None이면(워커 기동 전) 비교하지 않는다.
+    """
+    try:
+        if data is None:
+            return STATUS_MISSING
+        if (commands is None or (checkpoint is not None and data.get("checkpoint_sha256") != checkpoint)
+                or data.get("feature") != FEATURE_NAME or data.get("distance") != DISTANCE_NAME
+                or data.get("template_mode") != TEMPLATE_MODE):
+            return STATUS_STALE
+        return STATUS_OK if count >= len(commands["ids"]) else STATUS_INCOMPLETE
+    except (AttributeError, KeyError, TypeError) as exc:
+        logger.warning("내 목록 등록 상태 판정 실패: %s", exc)
+        return STATUS_STALE
+
+
+class ListProfileStore(ProfileStore):
+    """내 목록 하나의 등록 이름공간 <등록 폴더>/lists.d/<목록 ID>/ 의 읽기·쓰기.
+
+    기본 ProfileStore와 같은 함수(summary·detail·list_profiles·delete·store_template·templates_for_match)를 가진다.
+    명령 목록은 만들 때 받은 list_commands() 결과다(녹화 요청 때 검사한 목록 그대로).
+    """
+
+    def __init__(self, list_id: str, commands: dict[str, Any] | None = None,
+                 root: str | os.PathLike[str] | None = None):
+        """
+        Args:
+            list_id: 목록 ID.
+            commands: list_commands() 결과. 지우기만 할 때는 None이어도 된다.
+            root: 등록 폴더. None이면 config.WARD_PROFILE_DIR(만들 때의 값).
+
+        Raises:
+            InvalidProfileId: 규칙에 맞지 않는 목록 ID.
+        """
+        super().__init__(list_namespace(list_id, root))
+        self.list_id = list_id
+        self.commands = commands
+
+    def command_list(self) -> dict[str, Any] | None:
+        """이 목록의 명령 정보 (만들 때 받은 값)."""
+        return self.commands
+
+    def _status(self, data: dict[str, Any] | None, count: int, commands: dict[str, Any] | None,
+                checkpoint: str | None) -> str:
+        """내 목록 등록 상태 (list_profile_status)."""
+        return list_profile_status(data, count, commands, checkpoint)
+
+    def _read(self, path: Path, profile_id: str) -> dict[str, Any] | None:  # type: ignore[override]
+        """profile.json을 읽는다. 없으면 None.
+
+        Raises:
+            ProfileError: 깨졌거나 다른 등록·다른 목록의 파일일 때.
+        """
+        file = path / PROFILE_FILE
+        try:
+            if not file.is_file():
+                return None
+            data = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ProfileError(MSG_UNREADABLE, f"profile.json 읽기 실패: {type(exc).__name__}") from exc
+        if (not isinstance(data, dict) or data.get("schema") != LIST_PROFILE_SCHEMA
+                or data.get("profile") != profile_id or data.get("list_id") != self.list_id
+                or not isinstance(data.get("templates"), dict)):
+            raise ProfileError(MSG_UNREADABLE, f"profile.json 형식이 다릅니다: {self.list_id!r}/{profile_id!r}")
+        return data
+
+    @staticmethod
+    def _file_name(key: str) -> str:
+        """문장 키 → 특징 파일 이름 (앞 32자, 경로 길이를 줄인다)."""
+        return f"{key[:32]}.npz"
+
+    def _count(self, path: Path, data: dict[str, Any] | None,  # type: ignore[override]
+               commands: dict[str, Any] | None) -> int:
+        """지금 목록의 명령 중 지금 문장의 템플릿(특징 파일 포함)이 있는 수."""
+        if data is None or commands is None:
+            return 0
+        try:
+            keys = [text_key(commands["texts"][cid]) for cid in commands["ids"]]
+            return sum(1 for key in keys if key in data["templates"] and (path / self._file_name(key)).is_file())
+        except (OSError, KeyError, TypeError):
+            return 0
+
+    def detail(self, profile_id: str, checkpoint: str | None = None) -> dict[str, Any]:
+        """{profile, count, complete, status, templates:{명령ID:{created, text_top, text_top_matches}}}.
+
+        templates는 지금 목록의 명령 ID로 쓴다. text_top은 찍을 때 글자 1등이던 문장이 지금 목록에서 가진 ID(없으면 None)다.
+        """
+        validate_profile_id(profile_id)
+        commands = self.commands
+        total = len(commands["ids"]) if commands else 0
+        with _lock_for(self.root, profile_id):
+            path, data, count, status = self._snapshot(profile_id, commands, checkpoint)
+            templates: dict[str, Any] = {}
+            if path is not None and data is not None and commands is not None:
+                by_key = {text_key(text): cid for cid, text in commands["texts"].items()}
+                for cid in commands["ids"]:
+                    key = text_key(commands["texts"][cid])
+                    entry = data["templates"].get(key)
+                    if isinstance(entry, dict) and (path / self._file_name(key)).is_file():
+                        top_text = entry.get("text_top_text")
+                        top = by_key.get(text_key(top_text)) if isinstance(top_text, str) else None
+                        templates[cid] = {"created": entry.get("created"), "text_top": top,
+                                          "text_top_matches": bool(entry.get("text_top_matches"))}
+        return {"profile": profile_id, "count": count, "complete": bool(total) and count >= total,
+                "status": status, "templates": templates}
+
+    def store_template(self, profile_id: str, command_id: str, hidden: Any, meta: dict[str, Any],
+                       commands: dict[str, Any] | None, checkpoint: str | None) -> int:
+        """명령 하나의 문장 템플릿을 저장한다(같은 문장이 있으면 바꾼다). 다른 문장의 템플릿은 그대로 둔다.
+
+        등록이 없으면 만들고, stale(인식 가중치가 바뀜)이면 이전 템플릿을 모두 지우고 새로 시작한다.
+
+        Args:
+            profile_id: 등록 이름.
+            command_id: 이 목록의 명령 ID.
+            hidden: 은닉 특징 (T, 256).
+            meta: {start_ms, end_ms, text_top, text_top_matches}.
+            commands: list_commands() 결과. None이면 만들 때 받은 목록.
+            checkpoint: 지금 인식 가중치 SHA-256.
+
+        Returns:
+            저장 뒤 템플릿 수 (지금 목록 기준).
+
+        Raises:
+            ProfileError(하위 클래스 포함), ValueError: 이름·명령·특징이 틀렸거나 쓰지 못했을 때.
+        """
+        validate_profile_id(profile_id)
+        commands = commands if commands is not None else self.commands
+        if commands is None or command_id not in commands["ids"]:
+            raise ValueError(f"내 목록에 없는 명령: {command_id!r}")
+        text = commands["texts"][command_id]
+        key = text_key(text)
+        hidden = check_hidden(hidden)
+        top = meta.get("text_top")
+        top_text = commands["texts"].get(top) if isinstance(top, str) else None
+        with _lock_for(self.root, profile_id):
+            path, data, _count, status = self._snapshot(profile_id, commands, checkpoint)
+            now = _now()
+            try:
+                if path is None:
+                    path = self.root / profile_id
+                    path.mkdir(parents=True, exist_ok=True)
+                if data is None or status == STATUS_STALE:
+                    if data is not None:
+                        logger.warning("내 목록 %s 등록 %s: 인식 가중치가 등록 때와 달라 이전 템플릿을 지우고 새로 시작합니다",
+                                       self.list_id, profile_id)
+                        for name in os.listdir(path):
+                            if name.lower().endswith(".npz"):
+                                os.remove(path / name)
+                    data = {"schema": LIST_PROFILE_SCHEMA, "profile": profile_id, "list_id": self.list_id,
+                            "created": now, "updated": now, "checkpoint_sha256": checkpoint, "feature": FEATURE_NAME,
+                            "distance": DISTANCE_NAME, "template_mode": TEMPLATE_MODE, "templates": {}}
+                _atomic_write(path / self._file_name(key), _npz_bytes(hidden))
+                data["templates"][key] = {
+                    "text": " ".join(unicodedata.normalize("NFC", text).split()), "command": command_id,
+                    "created": now, "frames": int(hidden.shape[0]),
+                    "start_ms": meta.get("start_ms"), "end_ms": meta.get("end_ms"),
+                    "text_top": top, "text_top_text": top_text, "text_top_matches": bool(meta.get("text_top_matches"))}
+                data["updated"] = now
+                _atomic_write(path / PROFILE_FILE,
+                              json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"))
+            except OSError as exc:
+                raise ProfileError(MSG_STORAGE, f"내 목록 등록 저장 실패: {exc}") from exc
+            count = self._count(path, data, commands)
+        logger.info("내 목록 등록 저장: %s %s %s (%d/%d)", self.list_id, profile_id, command_id, count,
+                    len(commands["ids"]))
+        return count
+
+    def templates_for_match(self, profile_id: str, commands: dict[str, Any] | None,
+                            checkpoint: str | None) -> tuple[str, int, dict[str, Any]]:
+        """(상태, 템플릿 수, 명령ID → 템플릿 배열). 지금 목록 명령의 문장 템플릿만 읽는다(상태 ok일 때만).
+
+        Raises:
+            ProfileError / ValueError: 등록 파일을 읽지 못했을 때.
+        """
+        validate_profile_id(profile_id)
+        commands = commands if commands is not None else self.commands
+        with _lock_for(self.root, profile_id):
+            path, _data, count, status = self._snapshot(profile_id, commands, checkpoint)
+            if status != STATUS_OK or path is None or commands is None:
+                return status, count, {}
+            arrays = {cid: load_hidden_npz(path / self._file_name(text_key(commands["texts"][cid])))
+                      for cid in commands["ids"]}
+        return status, count, arrays
+
+
 _WRITABLE_CACHE: dict[str, tuple[float, bool]] = {}
 _WRITABLE_TTL_SEC = 30.0
 
@@ -561,7 +863,7 @@ def store_result(store: ProfileStore, profile_id: str, command_id: str, reason: 
     out: dict[str, Any] = {"mode": "store", "profile": profile_id, "command": command_id, "stored": False,
                            "reason": None, "text_top": text_top, "text_top_matches": text_top == command_id,
                            "count": 0, "complete": False}
-    commands = current_commands()
+    commands = store.command_list()  # 기본 등록은 current_commands(), 내 목록은 그 목록
     total = len(commands["ids"]) if commands else 0
     try:
         if reason is None and not isinstance(phrase, dict):
@@ -603,7 +905,7 @@ def match_result(store: ProfileStore, profile_id: str, reason: str | None, phras
                            "distances": None, "max_distance": max_distance, "within": False, "agree": False,
                            "accepted": False}
     try:
-        commands = current_commands()
+        commands = store.command_list()  # 기본 등록은 current_commands(), 내 목록은 그 목록
         status, count, arrays = store.templates_for_match(profile_id, commands, checkpoint)
         out["count"] = count
         if status != STATUS_OK:

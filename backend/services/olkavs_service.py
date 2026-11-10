@@ -19,6 +19,9 @@ services/olkavs_worker.py 를 두 가상환경에서 서브프로세스로 띄�
   ward phrase에는 판정 기준값 rule을 더하고, /health ward_phrases에는 thresholds·enroll을 더한다(문장 묶음 결과는 그대로).
 - 내 입 모양 등록(병실): ward 녹화에 enroll_profile이 있으면 같은 순전파의 은닉 특징을 받아 등록 템플릿으로 저장하거나
   등록 템플릿과 거리로 비교해 results[0].enroll을 더한다(services/ward_profiles.py, ward_templates.py).
+- 내 목록(병실, services/ward_lists.py): ward 녹화에 command_list(녹화 요청 때 검사를 통과한 저장 목록)가 있으면 후보를 그 목록의
+  [{id, text}]로 바꾸고 phrase에 list {id, sha256}를 더한다. 기준값·디코더·판정은 기본 목록과 같다. 등록은 그 목록의 이름공간
+  (ward_profiles.ListProfileStore)을 쓴다. command_list가 없으면 이 기능 이전과 같다(phrase에 list 키가 없다).
 - 결과 표시 규약(6단계): 입술 미검출 구간 FAIL_TEXT, 말하지 않은 구간 NO_SPEECH_TEXT(인식하지 않음),
   빈 출력 또는 confidence < config.OLKAVS_MIN_CONFIDENCE 이면 UNREC_TEXT(후자는 모델 문장을 candidate로 보존).
 """
@@ -425,6 +428,32 @@ def _check_enroll_args(phrase_set: str, enroll_profile: str | None, enroll_comma
     return True
 
 
+def _check_command_list(phrase_set: str, command_list: dict[str, Any] | None) -> dict[str, Any] | None:
+    """내 목록 인자 확인. 없으면 None, 있으면 {id, sha256, phrases:[{id, text}], commands(list_commands 결과)}.
+
+    Raises:
+        ValueError: ward가 아닌 묶음의 내 목록, 형식이 틀린 목록(ID 규칙·명령 2개 미만·SHA-256 없음 포함).
+    """
+    if command_list is None:
+        return None
+    if phrase_set != config.PHRASE_SET_WARD:
+        raise ValueError("내 목록은 ward 묶음에서만 쓸 수 있습니다")
+    from services import ward_profiles
+
+    try:
+        list_id = command_list["id"]
+        if not ward_profiles.is_valid_profile_id(list_id):
+            raise ValueError("규칙에 맞지 않는 목록 ID")
+        sha = command_list["sha256"]
+        if not (isinstance(sha, str) and len(sha) == 64):
+            raise ValueError("목록 SHA-256이 없습니다")
+        commands = ward_profiles.list_commands(command_list)
+        phrases = [{"id": cid, "text": commands["texts"][cid]} for cid in commands["ids"]]
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"내 목록 형식이 틀렸습니다: {type(exc).__name__}") from exc
+    return {"id": list_id, "sha256": sha, "phrases": phrases, "commands": commands}
+
+
 def _remove_quietly(path: str) -> None:
     """임시 파일을 지운다 (없으면 무시, 실패는 서버 로그)."""
     try:
@@ -452,10 +481,12 @@ def _take_hidden(path: str, out: dict[str, Any]) -> Any:
 
 
 def _enroll_result(profile: str, command: str | None, segments: list[dict[str, Any]], first: dict[str, Any],
-                   hidden: Any, checkpoint: str | None, ward_rule: dict[str, Any] | None) -> dict[str, Any]:
+                   hidden: Any, checkpoint: str | None, ward_rule: dict[str, Any] | None,
+                   custom: dict[str, Any] | None = None) -> dict[str, Any]:
     """results[0].enroll: enroll_command가 있으면 저장 모드, 없으면 판정 모드 (services/ward_profiles.py).
 
-    예상 밖 오류도 녹화 결과를 막지 않도록 reason/status 'error'로 바꾼다.
+    custom(_check_command_list 결과)이 있으면 그 내 목록의 등록 이름공간을 쓴다. 저장은 목록 잠금 안에서 하고, 그사이 목록이
+    지워졌으면 저장하지 않는다(reason 'error'). 예상 밖 오류도 녹화 결과를 막지 않도록 reason/status 'error'로 바꾼다.
     """
     from services import ward_profiles as wp
 
@@ -463,11 +494,23 @@ def _enroll_result(profile: str, command: str | None, segments: list[dict[str, A
     reason = wp.segments_reason(segments)
     max_distance = (ward_rule or {}).get("enroll_max_distance")
     try:
-        store = wp.get_store()
-        if command is not None:
-            meta = {"start_ms": first.get("start_ms"), "end_ms": first.get("end_ms")}
+        if custom is None:
+            store = wp.get_store()
+            if command is not None:
+                meta = {"start_ms": first.get("start_ms"), "end_ms": first.get("end_ms")}
+                return wp.store_result(store, profile, command, reason, phrase, hidden, meta, checkpoint)
+            return wp.match_result(store, profile, reason, phrase, hidden, checkpoint, max_distance)
+        from services import ward_lists
+
+        store = wp.ListProfileStore(custom["id"], custom["commands"])
+        if command is None:
+            return wp.match_result(store, profile, reason, phrase, hidden, checkpoint, max_distance)
+        meta = {"start_ms": first.get("start_ms"), "end_ms": first.get("end_ms")}
+        with ward_lists.get_store().guard(custom["id"]) as present:
+            if not present:
+                logger.warning("내 목록 %s가 그사이 지워져 등록을 저장하지 않습니다", custom["id"])
+                return wp.store_result(store, profile, command, wp.REASON_ERROR, phrase, hidden, meta, checkpoint)
             return wp.store_result(store, profile, command, reason, phrase, hidden, meta, checkpoint)
-        return wp.match_result(store, profile, reason, phrase, hidden, checkpoint, max_distance)
     except Exception as exc:  # noqa: BLE001 - 등록 처리 실패가 녹화 결과를 막지 않는다
         logger.exception("등록 처리 중 예기치 않은 오류: %s", type(exc).__name__)
         if command is not None:
@@ -480,11 +523,12 @@ def _enroll_result(profile: str, command: str | None, segments: list[dict[str, A
 
 
 def ward_status() -> dict[str, Any]:
-    """/health ward_phrases: 목록 상태 + 판정 기준값(thresholds) + 등록(enroll {enabled, profile_dir_writable}).
+    """/health ward_phrases: 목록 상태 + 판정 기준값(thresholds) + 등록(enroll {enabled, profile_dir_writable})
+    + 내 목록(custom_lists {enabled, dir_writable, count}).
 
     ward_phrase_status()의 키는 그대로 두고 더하기만 한다. 경로는 넣지 않는다.
     """
-    from services import ward_profiles
+    from services import ward_lists, ward_profiles
 
     status: dict[str, Any] = dict(ward_phrase_status())
     try:
@@ -493,6 +537,7 @@ def ward_status() -> dict[str, Any]:
         logger.exception("ward 기준값 조회 실패")
         status["thresholds"] = None
     status["enroll"] = {"enabled": True, "profile_dir_writable": ward_profiles.profile_dir_writable()}
+    status["custom_lists"] = ward_lists.health_status()
     return status
 
 
@@ -582,7 +627,8 @@ class OlkavsService:
                          utterance: bool = False,
                          phrase_set: str = config.PHRASE_SET_DEFAULT,
                          enroll_profile: str | None = None,
-                         enroll_command: str | None = None) -> list[dict[str, Any]]:
+                         enroll_command: str | None = None,
+                         command_list: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """영상 → [{start_ms, end_ms, text, confidence, raw_score[, candidate][, phrase]}] (시간 순서).
 
         - 얼굴(입술) 미검출 구간은 FAIL_TEXT, 빈 인식 결과는 UNREC_TEXT(점수 없음)로 표시한다.
@@ -604,13 +650,17 @@ class OlkavsService:
           순전파의 은닉 특징을 받고, 읽은 즉시 임시 파일을 지운다. results[0]에 enroll을 더한다. enroll_command가 있으면 그 명령의
           템플릿으로 저장(store), 없으면 등록 템플릿과 거리 판정(match). 등록 처리는 대기열 차례를 넘긴 뒤 하며, 실패해도
           녹화 인식 결과는 그대로 돌려준다(services/ward_profiles.py).
+        - command_list(ward 전용, '내 목록'): 녹화 요청 때 검사를 통과한 저장 목록(services/ward_lists.py 형식). 후보는 그 목록의
+          [{id, text}]이고 기준값·디코더는 ward와 같다. phrase에 list {id, sha256}를 더한다. 등록은 그 목록의 이름공간을 쓴다.
+          없으면 phrase에 list 키가 없다(이 기능 이전과 같다).
 
         Raises:
-            ValueError: 화이트리스트에 없는 phrase_set, ward가 아닌 묶음의 등록 인자, 규칙에 맞지 않는 등록 이름,
-                등록 이름 없는 enroll_command (워커를 쓰기 전에 거부한다).
+            ValueError: 화이트리스트에 없는 phrase_set, ward가 아닌 묶음의 등록 인자·내 목록, 규칙에 맞지 않는 등록 이름,
+                등록 이름 없는 enroll_command, 형식이 틀린 내 목록 (워커를 쓰기 전에 거부한다).
         """
         set_config = config.phrase_set_config(phrase_set)
         enrolling = _check_enroll_args(phrase_set, enroll_profile, enroll_command)
+        custom = _check_command_list(phrase_set, command_list)
         ward_rule = config.ward_rule() if phrase_set == config.PHRASE_SET_WARD else None
         hidden: Any = None  # 등록용 은닉 특징 (T, 256): 창 하나·후보가 있는 ward 등록 녹화에서만 받는다
         segments: list[dict[str, Any]] = []
@@ -677,7 +727,10 @@ class OlkavsService:
             min_confidence = float(config.OLKAVS_MIN_CONFIDENCE)
             # 지정 문장은 온전히 관측된 한 발화용이다. 여러 창으로 나뉜 긴 녹화, 일부가 검출 실패인 녹화, 업로드에는 쓰지 않는다.
             single = len(segments) == 1 and segments[0].get("status") == "ok" and bool(segments[0].get("npz"))
-            phrases = load_phrases(set_config.file) if utterance and single else []
+            if custom is not None:
+                phrases = [dict(p) for p in custom["phrases"]] if utterance and single else []
+            else:
+                phrases = load_phrases(set_config.file) if utterance and single else []
             min_margin = float(set_config.min_margin)
             min_score = float(set_config.min_score)
             report(_ROI_SHARE)
@@ -726,6 +779,9 @@ class OlkavsService:
                         item["phrase"] = {**phrase, "accepted": accepted, "set": phrase_set}
                         if ward_rule is not None:
                             item["phrase"]["rule"] = dict(ward_rule)  # 화면이 같은 기준으로 판정표를 적용한다
+                        if custom is not None:
+                            # 화면이 지금 불러 둔 목록과 같은 목록·내용의 결과인지 확인한다
+                            item["phrase"]["list"] = {"id": custom["id"], "sha256": custom["sha256"]}
                 results.append(item)
                 report(_ROI_SHARE + (100.0 - _ROI_SHARE) * (i + 1) / len(segments))
             checkpoint = (self.infer.info or {}).get("checkpoint_sha256")
@@ -734,7 +790,7 @@ class OlkavsService:
         if enrolling and results:
             check_abort()  # 시간 초과로 끝난 Job은 등록을 저장하지 않는다
             results[0]["enroll"] = _enroll_result(enroll_profile, enroll_command, segments, results[0], hidden,
-                                                  checkpoint, ward_rule)
+                                                  checkpoint, ward_rule, custom)
         return results
 
 
