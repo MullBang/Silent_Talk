@@ -12,7 +12,7 @@
 import {
   CANCEL_COMMAND_ID, INITIAL_ROOM, TEMPERATURE_ACTIONS, TEMPERATURE_HINT, applyRoomAction, commandById, roomActionTiming,
 } from './wardCommands.js';
-import { NO_PHRASE_REASON_TEXT, classifyWardResults } from './wardResult.js';
+import { NO_PHRASE_REASON_TEXT, classifyWardResults, decideWard } from './wardResult.js';
 import { normalizeSettings } from './wardSettings.js';
 
 /** 이 간격(ms)보다 짧게 이어진 누름은 하나로 친다 (마지막으로 받아들인 누름 기준). 키 반복(repeat)은 항상 무시. */
@@ -89,7 +89,14 @@ export const WARD_TEXT = Object.freeze({
   closedNote: '환자가 선택을 닫음',
   timeoutNote: '환자 선택 없음',
   emergencyChosenNote: (text) => `환자 선택: ${text} (긴급 카드를 따로 보냄)`,
+  enrollChosen: '내 입 모양 등록으로 골랐어요',
+  enrollAlarm: '내 입 모양 등록과 긴급 명령이 비슷해요',
+  enrollBusy: '진행 중인 녹화·확인·선택이 끝난 뒤 등록 화면을 열 수 있어요',
+  enrollAlarmOpen: '확인하지 않은 긴급 알림이 있어요. 간호사 화면에서 확인한 뒤 등록 화면을 열 수 있어요',
 });
+
+/** 카드의 enroll 표시: 'chosen' = 등록한 입 모양으로 고름, 'alarm' = 등록한 입 모양 때문에만 긴급 가능성이 됨. */
+export const CARD_ENROLL_TAGS = Object.freeze(['chosen', 'alarm']);
 
 /** 화면 단계 이름 (간호사 화면에 함께 보인다). */
 export const PHASE_LABELS = Object.freeze({
@@ -162,6 +169,7 @@ function addCard(s, at, fields, effects) {
     updatedAt: at,
     acked: false,
     ackedAt: null,
+    enroll: null,
     ...fields,
   };
   effects.push({ type: 'SEND_CARD', card });
@@ -201,10 +209,10 @@ function toIdle(s, screen) {
 // 보내기
 // ---------------------------------------------------------------------------
 
-/** 일반 요청 카드를 보낸다 (확인 카운트다운이 끝났거나 스캐닝으로 직접 고름). */
-function sendRequest(s, at, command, source, effects) {
+/** 일반 요청 카드를 보낸다 (확인 카운트다운이 끝났거나 스캐닝으로 직접 고름). enroll은 등록 표시(CARD_ENROLL_TAGS 또는 null). */
+function sendRequest(s, at, command, source, effects, enroll = null) {
   const { s: s1, card } = addCard(s, at, {
-    kind: 'request', commandId: command.id, text: command.display, hint: hintFor(command), source,
+    kind: 'request', commandId: command.id, text: command.display, hint: hintFor(command), source, enroll,
   }, effects);
   return toIdle(applySendAction({ ...s1, lastNormalCardId: card.id }, command),
     { kind: 'sent', commandId: command.id, cardId: card.id });
@@ -259,8 +267,8 @@ function startRecording(s, at, effects) {
   };
 }
 
-/** 고른 일반 명령: 확인 카운트다운. */
-function startConfirm(s, at, command, effects) {
+/** 고른 일반 명령: 확인 카운트다운. enroll='chosen'이면 등록한 입 모양으로 고른 것(카드에 표시). */
+function startConfirm(s, at, command, effects, enroll = null) {
   effects.push({ type: 'SPEAK', text: command.display });
   return {
     ...s,
@@ -268,7 +276,7 @@ function startConfirm(s, at, command, effects) {
     recording: null,
     analysis: null,
     scan: null,
-    confirm: { commandId: command.id, startedAt: at, endsAt: at + s.settings.confirmSeconds * 1000 },
+    confirm: { commandId: command.id, startedAt: at, endsAt: at + s.settings.confirmSeconds * 1000, enroll },
     screen: { kind: 'confirm', commandId: command.id },
   };
 }
@@ -278,7 +286,7 @@ function finishConfirm(s, at, effects) {
   const command = commandById(s.index, s.confirm?.commandId);
   if (!command) return toIdle(s, { kind: 'welcome' });
   if (command.id === CANCEL_COMMAND_ID) return requestCancelLast(s, at, effects);
-  return sendRequest(s, at, command, 'lip', effects);
+  return sendRequest(s, at, command, 'lip', effects, s.confirm?.enroll || null);
 }
 
 /** 스캐닝 상태를 만든다. */
@@ -406,10 +414,22 @@ function endScanTimeout(s, at, effects) {
 // 결과 처리 (9.3 판정 규칙)
 // ---------------------------------------------------------------------------
 
+/** '긴급 가능성, 확인 필요' 카드를 바로 보낸다. 환자 화면은 대기로 돌아가 후보를 보여 준다. */
+function sendPossible(s, at, commands, enroll, effects) {
+  const candidates = commands.map(candidateOf);
+  const { s: s1, card } = addCard(s, at, {
+    kind: 'emergency_possible', text: WARD_TEXT.emergencyPossibleCard, candidates, enroll,
+  }, effects);
+  return toIdle(s1, { kind: 'emergency_possible', cardId: card.id, candidates, enroll });
+}
+
 /**
- * 분석 결과를 처리한다.
- * - 고름 + 일반 → 확인 카운트다운 / 고름 + 긴급 → 빨간 카드 즉시
- * - 고르지 못함 + 1·2등에 긴급 → '긴급 가능성, 확인 필요' 즉시 / 고르지 못함 일반 → 후보 스캐닝 + '확인 필요'
+ * 분석 결과를 처리한다 (판정표는 wardResult.js decideWard = metrics.py decide).
+ * - 글자로 고름 + 일반 → 확인 카운트다운 / 글자로 고름 + 긴급 → 빨간 카드 즉시
+ * - 등록으로 고름 + 일반 → 확인 카운트다운 / 등록으로 고름 + 긴급, 또는 일반이지만 글자 2등이 긴급
+ *   → '긴급 가능성' 즉시(고른 명령이 후보 맨 앞)
+ * - 고르지 못함 + (1·2등에 긴급 또는 거리 안의 등록 1등이 긴급) → '긴급 가능성, 확인 필요' 즉시
+ * - 고르지 못함 일반 → 후보 스캐닝 + '확인 필요'
  * - 지정 문장 결과 없음 → 분류 스캐닝 + 사유 / 발화 없음·검출 실패 → 1회 환자 화면만, 연속 2회부터 간호사실에도
  */
 function handleOutcome(s, at, outcome, effects) {
@@ -424,19 +444,18 @@ function handleOutcome(s, at, outcome, effects) {
   }
   const s0 = { ...s, noSpeechStreak: 0 };
   if (outcome.kind === 'phrase') {
-    const { command, runnerUp, accepted } = outcome;
-    if (accepted) {
-      return command.emergency ? sendEmergency(s0, at, command, 'lip', effects) : startConfirm(s0, at, command, effects);
+    const d = decideWard(outcome);
+    const enrollTag = d.via === 'enroll' ? 'chosen' : (d.enrollAlarm ? 'alarm' : null);
+    switch (d.outcome) {
+      case 'emergency':
+        return sendEmergency(s0, at, d.chosen, 'lip', effects);
+      case 'request':
+        return startConfirm(s0, at, d.chosen, effects, enrollTag);
+      case 'emergency_possible':
+        return sendPossible(s0, at, d.candidates, enrollTag, effects);
+      default:
+        return startCandidateScan(s0, at, outcome.command, outcome.runnerUp, effects);
     }
-    if (command.emergency || runnerUp?.emergency) {
-      const candidates = [candidateOf(command)];
-      if (runnerUp) candidates.push(candidateOf(runnerUp));
-      const { s: s1, card } = addCard(s0, at, {
-        kind: 'emergency_possible', text: WARD_TEXT.emergencyPossibleCard, candidates,
-      }, effects);
-      return toIdle(s1, { kind: 'emergency_possible', cardId: card.id, candidates });
-    }
-    return startCandidateScan(s0, at, command, runnerUp, effects);
   }
   return startCategoryScan(s0, at, outcome.reason || 'empty', { detail: outcome.detail || null });
 }
@@ -633,6 +652,23 @@ export function latestOpenAlarm(s) {
 }
 
 /**
+ * 등록 화면(#enroll)을 지금 열면 안 되는 이유. 열어도 되면 null.
+ * 환자 화면을 떠나면 확인 카운트다운·스캐닝 선택·분석 대기가 사라지고, 확인하지 않은 긴급 표시도 다시 열 때 사라진다.
+ * @param {object} s 상태.
+ * @returns {string|null}
+ */
+export function enrollOpenBlockReason(s) {
+  try {
+    if (!s) return null;
+    if (s.phase !== 'idle') return WARD_TEXT.enrollBusy;
+    if (latestOpenAlarm(s)) return WARD_TEXT.enrollAlarmOpen;
+    return null;
+  } catch {
+    return WARD_TEXT.enrollBusy;
+  }
+}
+
+/**
  * 상태를 환자 화면 표시 값으로 바꾼다.
  * @param {object} s 상태.
  * @param {number} now 현재 시각(ms).
@@ -658,7 +694,10 @@ export function wardView(s, now) {
       const c = cmd(s.confirm.commandId);
       // 화면의 시각(now)이 결과 처리 시각보다 조금 늦게 갱신돼도 설정보다 큰 숫자(예: 7초)를 보이지 않게 한다.
       const sec = Math.max(0, Math.min(s.settings.confirmSeconds, Math.ceil((s.confirm.endsAt - t) / 1000)));
-      return { ...view, tone: 'confirm', headline: c?.display || '', sub: WARD_TEXT.confirmSub(sec) };
+      return {
+        ...view, tone: 'confirm', headline: c?.display || '', sub: WARD_TEXT.confirmSub(sec),
+        reason: s.confirm.enroll === 'chosen' ? WARD_TEXT.enrollChosen : null,
+      };
     }
     if (s.phase === 'scan' && s.scan) {
       const sc = s.scan;
@@ -688,7 +727,11 @@ export function wardView(s, now) {
       case 'emergency_call':
         return { ...view, tone: 'emergency', label: '[긴급]', headline: WARD_TEXT.emergencyCall, sub: card?.acked ? WARD_TEXT.acked : WARD_TEXT.emergencyCallSub };
       case 'emergency_possible':
-        return { ...view, tone: 'possible', label: '[긴급 가능성]', headline: WARD_TEXT.emergencyPossible, sub: card?.acked ? WARD_TEXT.acked : null, candidates: sc.candidates || [] };
+        return {
+          ...view, tone: 'possible', label: '[긴급 가능성]', headline: WARD_TEXT.emergencyPossible, sub: card?.acked ? WARD_TEXT.acked : null,
+          candidates: sc.candidates || [],
+          reason: sc.enroll === 'chosen' ? WARD_TEXT.enrollChosen : (sc.enroll === 'alarm' ? WARD_TEXT.enrollAlarm : null),
+        };
       case 'cancelled':
         return { ...view, tone: 'neutral', headline: WARD_TEXT.cancelled, sub: WARD_TEXT.cancelledSub };
       case 'no_speech':

@@ -1,4 +1,4 @@
-// wardSettings.js — 환자 화면 설정(녹화 길이·확인 시간·병실 번호·음성 읽기·밤 무음)과 저장 순수 함수 (node --test로 검사).
+// wardSettings.js — 환자 화면 설정(녹화 길이·확인 시간·병실 번호·음성 읽기·밤 무음·내 입 모양 등록 이름)과 저장 순수 함수 (node --test로 검사).
 // 브라우저 저장소는 사생활 보호 모드·차단으로 없거나 예외를 던질 수 있어 모든 읽기·쓰기를 try/catch로 감싼다.
 
 export const RECORD_SECONDS_OPTIONS = Object.freeze([4, 5, 6, 8]);
@@ -11,6 +11,8 @@ export const DEFAULT_ROOM = '305';
 export const NIGHT_START_HOUR = 22;
 export const NIGHT_END_HOUR = 6;
 export const SETTINGS_STORAGE_KEY = 'silent-talk-ward-settings-v1';
+/** 내 입 모양 등록 이름 (서버 프로필 ID 규칙과 같다: 영문·숫자·_·-, 1~32자). */
+export const ENROLL_PROFILE_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 
 export const DEFAULT_SETTINGS = Object.freeze({
   recordSeconds: DEFAULT_RECORD_SECONDS,
@@ -18,7 +20,32 @@ export const DEFAULT_SETTINGS = Object.freeze({
   room: DEFAULT_ROOM,
   tts: false, // 다인실 사생활을 위해 기본으로 끈다.
   nightMute: true,
+  enrollProfile: '', // 내 입 모양 등록 이름. ''이면 등록을 쓰지 않는다.
 });
+
+/**
+ * 등록 이름이 서버 규칙에 맞는지.
+ * @param {any} value
+ * @returns {boolean}
+ */
+export function isValidProfileId(value) {
+  return typeof value === 'string' && ENROLL_PROFILE_PATTERN.test(value);
+}
+
+/**
+ * 등록 이름을 다듬는다 (앞뒤 공백 제거). 문자열이 아니거나 규칙에 맞지 않으면 ''(등록 안 씀).
+ * @param {any} value
+ * @returns {string}
+ */
+export function normalizeProfileId(value) {
+  try {
+    if (typeof value !== 'string') return '';
+    const id = value.trim();
+    return isValidProfileId(id) ? id : '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * 병실 번호를 화면·카드용으로 다듬는다 (한글·영문·숫자·하이픈, 최대 10자). 비면 기본값.
@@ -33,7 +60,7 @@ export function normalizeRoom(value) {
 /**
  * 설정 값을 허용 범위로 맞춘다. 모르는 값은 기본값으로 바꾼다.
  * @param {object|null|undefined} raw
- * @returns {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean}}
+ * @returns {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, enrollProfile:string}}
  */
 export function normalizeSettings(raw) {
   try {
@@ -47,6 +74,7 @@ export function normalizeSettings(raw) {
       room: src.room === undefined ? DEFAULT_ROOM : normalizeRoom(src.room),
       tts: src.tts === true,
       nightMute: src.nightMute !== false,
+      enrollProfile: normalizeProfileId(src.enrollProfile),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

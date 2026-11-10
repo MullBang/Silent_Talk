@@ -15,7 +15,7 @@ import { PHASE_LABELS } from '../ward/wardMachine';
 import { safeLocalStorage } from '../ward/wardSettings';
 import { ALARM_REPEAT_MS, createBeeper } from '../ward/wardSound';
 import {
-  ackNurseCard, cardHeadline, cardLabel, clearAcked, dropRoom, hasOpenAlarm, hhmm, isAlarmKind, isOverdue, loadNurseCards,
+  ackNurseCard, cardEnrollNote, cardHeadline, cardLabel, clearAcked, dropRoom, hasOpenAlarm, hhmm, isAlarmKind, isOverdue, loadNurseCards,
   loadNursePrefs, noteRoomState, pruneRooms, saveNurseCards, saveNursePrefs, sortNewestFirst, upsertNurseCard,
   NURSE_STORAGE_KEY,
 } from '../ward/wardStore';
@@ -228,6 +228,7 @@ export default function NursePage() {
               const headline = cardHeadline(card);
               const style = cardStyle(card, overdue);
               const estimateColor = card.acked || card.kind === 'check' ? WARD_COLORS.estimate : style.color;
+              const enrollNote = cardEnrollNote(card);
               return (
                 <li key={card.id} data-card-id={card.id} data-kind={card.kind} className="rounded-xl border-4 px-4 py-3" style={style}>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -272,6 +273,7 @@ export default function NursePage() {
                   )}
                   {card.note && !card.cancelRequested && <p className="mt-1 text-lg font-semibold">{card.note}</p>}
                   {card.source === 'scan' && card.kind !== 'check' && <p className="mt-1 text-lg">환자가 스캐닝으로 직접 고름</p>}
+                  {enrollNote && <p data-enroll-note={card.enroll} className="mt-1 text-lg font-semibold">{enrollNote}</p>}
                   {overdue && <p className="mt-1 text-lg font-black">60초 넘게 확인하지 않았습니다</p>}
                 </li>
               );

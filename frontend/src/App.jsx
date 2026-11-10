@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 
 import CapturePage from './pages/CapturePage';
+import EnrollPage from './pages/EnrollPage';
 import NursePage from './pages/NursePage';
 import RecordPage from './pages/RecordPage';
 import ResultPage from './pages/ResultPage';
@@ -12,8 +13,9 @@ import WardPage from './pages/WardPage';
 import WebcamPage from './pages/WebcamPage';
 
 // URL 해시로 바로 여는 화면. #capture: 파일럿 촬영, #record: 녹화→분석,
-// #ward: 병실 무음 도우미 환자 화면(#ward?practice=1 연습 모드), #nurse: 간호사실 화면.
-const HASH_VIEWS = { '#capture': 'capture', '#record': 'record', '#ward': 'ward', '#nurse': 'nurse' };
+// #ward: 병실 무음 도우미 환자 화면(#ward?practice=1 연습 모드), #nurse: 간호사실 화면,
+// #enroll: 내 입 모양 등록 화면(#enroll?profile=이름, 병실 화면 설정에서 연다).
+const HASH_VIEWS = { '#capture': 'capture', '#record': 'record', '#ward': 'ward', '#nurse': 'nurse', '#enroll': 'enroll' };
 
 /** 현재 URL 해시에 해당하는 화면 (없으면 업로드). 해시 뒤의 '?옵션'은 화면 이름에서 뺀다. */
 function viewFromHash() {
@@ -41,7 +43,7 @@ function syncHash(hash) {
  * @returns {JSX.Element}
  */
 export default function App() {
-  // 'upload' | 'result' | 'webcam' | 'capture' | 'record' | 'ward' | 'nurse'
+  // 'upload' | 'result' | 'webcam' | 'capture' | 'record' | 'ward' | 'nurse' | 'enroll'
   const [view, setView] = useState(viewFromHash);
   const [payload, setPayload] = useState(null); // { sessionId, fileName, results, warnings, model, origin }
 
@@ -79,6 +81,8 @@ export default function App() {
     screen = <WardPage />;
   } else if (view === 'nurse') {
     screen = <NursePage />;
+  } else if (view === 'enroll') {
+    screen = <EnrollPage />;
   } else if (view === 'capture') {
     screen = <CapturePage onBack={goUpload} />;
   } else if (view === 'record') {

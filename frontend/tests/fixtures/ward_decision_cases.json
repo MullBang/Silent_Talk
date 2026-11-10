@@ -1,0 +1,2813 @@
+{
+ "schema": "ward-decision-cases-v1",
+ "generator": "frontend/tests/fixtures/make_ward_decision_cases.py",
+ "decide": "scripts/ward_tools/metrics.py decide (require_agreement=True, possible_ranks=2)",
+ "commands_sha256": "b24aed889b95fef5d5e328a191908800fb1cc6b94e3a08defbae333c262a60e5",
+ "emergency_ids": [
+  "W02",
+  "W03",
+  "W04",
+  "W10"
+ ],
+ "constants": {
+  "min_margin": 0.5,
+  "min_score": -3.4,
+  "enroll_max_distance": 0.27,
+  "possible_min_score": -3.6
+ },
+ "cases": [
+  {
+   "name": "text_pass_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W02",
+      "text": "숨쉬기가 갑자기 답답해요",
+      "score": -1.0,
+      "margin": 1.2,
+      "runner_up_id": "W05",
+      "accepted": true,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency",
+    "chosen_id": "W02",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_pass_request",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -1.0,
+      "margin": 1.2,
+      "runner_up_id": "W06",
+      "accepted": true,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W05",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_pass_request_enroll_emergency_ignored",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -1.0,
+      "margin": 1.2,
+      "runner_up_id": "W06",
+      "accepted": true,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W03",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W03": 0.1
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W05",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_pass_emergency_with_enroll_agree",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W04",
+      "text": "가래가 차서 숨이 막혀요",
+      "score": -2.0,
+      "margin": 0.9,
+      "runner_up_id": "W02",
+      "accepted": true,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W04",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W04": 0.1
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency",
+    "chosen_id": "W04",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W03",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W03": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W03",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_emergency_runner_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W10",
+      "text": "구역질이 나서 토할 것 같아요",
+      "score": -3.8,
+      "margin": 0.1,
+      "runner_up_id": "W02",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W10",
+      "distance": 0.27,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.32,
+      "distances": {
+       "W10": 0.27
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W10",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W11",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W11": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W11",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_low_score",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W14",
+      "text": "등받이를 조금만 올려 줘요",
+      "score": -3.9,
+      "margin": 0.6,
+      "runner_up_id": "W12",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W14",
+      "distance": 0.05,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.1,
+      "distances": {
+       "W14": 0.05
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W14",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_runner_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.5,
+      "margin": 0.1,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W05",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W05": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W05",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_runner_emergency_near_text_rule",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W08",
+      "text": "너무 추워서 이불 덮어 줄래",
+      "score": -2.982,
+      "margin": 0.434,
+      "runner_up_id": "W03",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W08",
+      "distance": 0.136,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.186,
+      "distances": {
+       "W08": 0.136
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W08",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_runner_emergency_floor_above",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W08",
+      "text": "너무 추워서 이불 덮어 줄래",
+      "score": -3.3,
+      "margin": 0.2,
+      "runner_up_id": "W03",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W08",
+      "distance": 0.15,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.2,
+      "distances": {
+       "W08": 0.15
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W08",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_runner_emergency_floor_equal",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W09",
+      "text": "땀이 나고 몸이 더워요",
+      "score": -3.35,
+      "margin": 0.25,
+      "runner_up_id": "W10",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W09",
+      "distance": 0.15,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.2,
+      "distances": {
+       "W09": 0.15
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W09",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_request_runner_emergency_floor_below",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W08",
+      "text": "너무 추워서 이불 덮어 줄래",
+      "score": -3.3,
+      "margin": 0.4,
+      "runner_up_id": "W03",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W08",
+      "distance": 0.15,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.2,
+      "distances": {
+       "W08": 0.15
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W08",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_accepted_cancel_w20",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W20",
+      "text": "방금 말한 건 취소할게요",
+      "score": -3.2,
+      "margin": 0.3,
+      "runner_up_id": "W12",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W20",
+      "distance": 0.15,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.2,
+      "distances": {
+       "W20": 0.15
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W20",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "conflict_not_chosen",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W13",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W13": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "conflict_enroll_alarm",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W10",
+      "distance": 0.25,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.3,
+      "distances": {
+       "W10": 0.25
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": true
+   }
+  },
+  {
+   "name": "conflict_enroll_alarm_and_text_alarm",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W11",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W10",
+      "distance": 0.25,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.3,
+      "distances": {
+       "W10": 0.25
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "conflict_enroll_alarm_same_as_runner",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W02",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W02",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W02": 0.1
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_outside_distance",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W11",
+      "distance": 0.4,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.45,
+      "distances": {
+       "W11": 0.4
+      },
+      "max_distance": 0.27,
+      "within": false,
+      "agree": true,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_outside_distance_emergency_top",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W02",
+      "distance": 0.3,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.35,
+      "distances": {
+       "W02": 0.3
+      },
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_distance_off",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": null
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W11",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W11": 0.1
+      },
+      "max_distance": null,
+      "within": false,
+      "agree": true,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_distance_off_emergency_top",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": null
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W03",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W03": 0.1
+      },
+      "max_distance": null,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_alarm_top_no_floor",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_alarm_runner_no_floor",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "text_alarm_runner_very_low_no_floor",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -5.0,
+      "margin": 2.0,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "not_chosen_plain",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_top_above",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.5,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_top_below",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.7,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_top_equal",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.6,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_runner_above",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.3,
+      "margin": 0.25,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_runner_below",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.3,
+      "margin": 0.35,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_runner_boundary_arith",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.4,
+      "margin": 0.2,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_runner_boundary_arith2",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.3,
+      "margin": 0.3,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_top_just_below_runner_below",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W02",
+      "text": "숨쉬기가 갑자기 답답해요",
+      "score": -3.62,
+      "margin": 0.05,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_both_below",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W02",
+      "text": "숨쉬기가 갑자기 답답해요",
+      "score": -3.7,
+      "margin": 0.3,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_top_below_enroll_alarm",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.7,
+      "margin": 0.2,
+      "runner_up_id": "W11",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W10",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W10": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": true
+   }
+  },
+  {
+   "name": "floor_enroll_alarm_only",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W02",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W02": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": true
+   }
+  },
+  {
+   "name": "floor_top_below_enroll_accepted",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.2,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W03",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W03": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": "W03",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "floor_text_pass_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W02",
+      "text": "숨쉬기가 갑자기 답답해요",
+      "score": -3.0,
+      "margin": 1.0,
+      "runner_up_id": "W05",
+      "accepted": true,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": -3.6,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency",
+    "chosen_id": "W02",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "old_server_text_alarm_runner",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W04",
+      "accepted": false,
+      "set": "ward"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "old_server_text_alarm_low",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W10",
+      "text": "구역질이 나서 토할 것 같아요",
+      "score": -6.0,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "old_server_request",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W05",
+      "text": "목이 말라 물 한 모금만",
+      "score": -1.0,
+      "margin": 1.2,
+      "runner_up_id": "W06",
+      "accepted": true,
+      "set": "ward"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W05",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "old_server_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W04",
+      "text": "가래가 차서 숨이 막혀요",
+      "score": -1.0,
+      "margin": 1.2,
+      "runner_up_id": "W06",
+      "accepted": true,
+      "set": "ward"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency",
+    "chosen_id": "W04",
+    "via": "text",
+    "text_pass": true,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "old_server_not_chosen",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward"
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_incomplete",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "incomplete",
+      "count": 12,
+      "top_id": null,
+      "distance": null,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_stale",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "stale",
+      "count": 20,
+      "top_id": null,
+      "distance": null,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_missing",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "missing",
+      "count": 0,
+      "top_id": null,
+      "distance": null,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_error",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "error",
+      "count": 20,
+      "top_id": null,
+      "distance": null,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "enroll_no_phrase_status",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "no_phrase",
+      "count": 20,
+      "top_id": null,
+      "distance": null,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": false,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "bad_stale_but_within",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "stale",
+      "count": 20,
+      "top_id": "W11",
+      "distance": 0.1,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "bad_stale_but_within_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "stale",
+      "count": 20,
+      "top_id": "W02",
+      "distance": 0.1,
+      "runner_up_id": null,
+      "runner_up_distance": null,
+      "distances": {},
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "bad_accepted_but_other_top",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W13",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W13": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": true,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "bad_unknown_enroll_top",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "A01",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W11": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": false,
+      "accepted": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "store_mode_ignored",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.0,
+      "margin": 0.2,
+      "runner_up_id": "W13",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "store",
+      "profile": "demo01",
+      "command": "W11",
+      "stored": true,
+      "reason": null,
+      "text_top": "W11",
+      "text_top_matches": true,
+      "count": 5,
+      "complete": false
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "not_chosen",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "runner_same_as_top",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W03",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "runner_unknown_top_emergency",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "A01",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "emergency_possible",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "runner_unknown_enroll_accepted",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W11",
+      "text": "방이 어두우니까 불 좀 켜 줘",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "A01",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W11",
+      "distance": 0.2,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.25,
+      "distances": {
+       "W11": 0.2
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "request",
+    "chosen_id": "W11",
+    "via": "enroll",
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "multi_window_with_enroll",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "가",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     },
+     "enroll": {
+      "mode": "match",
+      "profile": "demo01",
+      "status": "ok",
+      "count": 20,
+      "top_id": "W03",
+      "distance": 0.1,
+      "runner_up_id": "W12",
+      "runner_up_distance": 0.15,
+      "distances": {
+       "W03": 0.1
+      },
+      "max_distance": 0.27,
+      "within": true,
+      "agree": true,
+      "accepted": true
+     }
+    },
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "나",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "no_result",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "partial_detection",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "가",
+     "confidence": null,
+     "raw_score": null
+    },
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[검출 실패 구간]",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "no_result",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "no_phrase_unaligned",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "가",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "no_result",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "other_set_sentences",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "W03",
+      "text": "몸이 너무 아파서 못 참겠어요",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "sentences",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "no_result",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "unknown_top_id",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "x",
+     "confidence": 0.8,
+     "raw_score": -1.0,
+     "phrase": {
+      "id": "A01",
+      "text": "목록 밖 문장",
+      "score": -3.9,
+      "margin": 0.1,
+      "runner_up_id": "W05",
+      "accepted": false,
+      "set": "ward",
+      "rule": {
+       "min_margin": 0.5,
+       "min_score": -3.4,
+       "possible_min_score": null,
+       "enroll_max_distance": 0.27
+      }
+     }
+    }
+   ],
+   "expected": {
+    "outcome": "no_result",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "no_speech",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[발화 없음]",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "no_speech",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "no_speech_two_windows",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[발화 없음]",
+     "confidence": null,
+     "raw_score": null
+    },
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[발화 없음]",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "no_speech",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "lip_fail",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[검출 실패 구간]",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "lip_fail",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  },
+  {
+   "name": "lip_fail_mixed",
+   "results": [
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[발화 없음]",
+     "confidence": null,
+     "raw_score": null
+    },
+    {
+     "start_ms": 0,
+     "end_ms": 5000,
+     "text": "[검출 실패 구간]",
+     "confidence": null,
+     "raw_score": null
+    }
+   ],
+   "expected": {
+    "outcome": "lip_fail",
+    "chosen_id": null,
+    "via": null,
+    "text_pass": false,
+    "conflict": false,
+    "enroll_alarm": false
+   }
+  }
+ ]
+}

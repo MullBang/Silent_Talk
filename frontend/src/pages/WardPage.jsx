@@ -1,24 +1,26 @@
 // WardPage.jsx — 병실 무음 도우미 환자 화면 (#ward). 시연용 연구 시제품이며 실제 환자에게 검증하지 않았다.
-// 스위치(아무 키·화면 누름) 한 번 → 시작음과 테두리 깜빡임으로 N초 녹화(카운트다운 없음) → POST /api/record(phrase_set='ward')
-// → 약 300ms 폴링 → 상태도(ward/wardMachine.js)가 결과를 처리한다. 고를지 말지는 서버 phrase.accepted만 믿는다.
+// 스위치(아무 키·화면 누름) 한 번 → 시작음과 테두리 깜빡임으로 N초 녹화(카운트다운 없음) → POST /api/record(phrase_set='ward',
+// 설정에 내 입 모양 등록 이름이 있으면 enroll_profile도) → 약 300ms 폴링 → 상태도(ward/wardMachine.js)가 결과를 처리한다.
+// 고를지 말지는 서버 phrase.accepted와 등록 비교 결과(enroll.accepted·within)만 믿는다(판정표는 ward/wardResult.js).
 // 간호사 화면(#nurse)과는 같은 주소의 BroadcastChannel로 카드·확인·스위치 입력·병실 상태를 주고받는다.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getResult, uploadRecording } from '../api/client';
+import { getWardProfile } from '../api/client';
 import useRecorder from '../hooks/useRecorder';
 import { blurAfterPointerClick } from '../record/pointerFocus';
-import { recordUploadErrorMessage, validateRecording } from '../record/recordFlow';
 import COMMANDS from '../ward/commands.json';
 import PracticePanel from '../ward/PracticePanel';
 import RoomPanel from '../ward/RoomPanel';
 import { AlertIcon, CheckIcon } from '../ward/WardIcons';
 import WardSettingsPanel from '../ward/WardSettingsPanel';
 import { ROOM_HEARTBEAT_MS, openWardChannel } from '../ward/wardChannel';
-import { WARD_PHRASE_SET, buildCommandIndex } from '../ward/wardCommands';
+import { buildCommandIndex } from '../ward/wardCommands';
+import { enrollHash, enrollStatusLine, parseProfileInfo } from '../ward/wardEnroll';
 import { keyIsSwitch, pointerIsSwitch } from '../ward/wardInput';
-import { PHASE_LABELS, WARD_TEXT, createWardState, stepWard, wardView } from '../ward/wardMachine';
-import { pollWardResult } from '../ward/wardPoll';
+import {
+  PHASE_LABELS, WARD_TEXT, createWardState, enrollOpenBlockReason, stepWard, wardView,
+} from '../ward/wardMachine';
 import { practiceResults } from '../ward/wardPractice';
 import {
   isNightTime, isPracticeMode, loadSettings, safeLocalStorage, saveSettings, speechAllowed,
@@ -26,6 +28,7 @@ import {
 import { createBeeper } from '../ward/wardSound';
 import { NO_VOICE_TEXT, pickKoreanLocalVoice, speakText } from '../ward/wardSpeech';
 import { TONE_STYLES, WARD_COLORS, WARD_KEYFRAMES } from '../ward/wardTheme';
+import { analyzeWardRecording } from '../ward/wardUpload';
 
 const INDEX = buildCommandIndex(COMMANDS);
 const CAMERA = { width: 1280, height: 720, frameRate: 30 };
@@ -78,6 +81,7 @@ export default function WardPage() {
   const [voice, setVoice] = useState(null);
   const [practiceCommand, setPracticeCommand] = useState('W05');
   const [channelOk, setChannelOk] = useState(true);
+  const [enrollState, setEnrollState] = useState({ profile: '', info: null, loadError: false });
 
   const beeperRef = useRef(null);
   if (!beeperRef.current) beeperRef.current = createBeeper();
@@ -107,22 +111,15 @@ export default function WardPage() {
     const stale = () => !mountedRef.current || machineRef.current.run !== run;
     if (stale()) return; // 연습 결과 주입 등으로 무효가 된 녹화는 보내지 않는다
     dispatch({ type: 'RECORDING_DONE', run });
-    const check = validateRecording(blob, meta?.durationMs);
-    if (!check.ok) {
-      dispatch({ type: 'RECORD_FAILED', run, message: check.message });
-      return;
-    }
-    try {
-      const data = await uploadRecording(blob, mime, undefined, { phraseSet: WARD_PHRASE_SET });
-      if (stale()) return;
-      if (!data?.session_id) throw new Error('missing session_id');
-      const outcome = await pollWardResult({ fetchResult: () => getResult(data.session_id), isCancelled: stale });
-      if (outcome.kind === 'done') dispatch({ type: 'RESULT', run, results: outcome.results });
-      else if (outcome.kind === 'error') dispatch({ type: 'ANALYSIS_ERROR', run, message: outcome.message });
-      else if (outcome.kind === 'timeout') dispatch({ type: 'ANALYSIS_ERROR', run, reason: 'timeout' });
-    } catch (err) {
-      if (!stale()) dispatch({ type: 'ANALYSIS_ERROR', run, message: recordUploadErrorMessage(err) });
-    }
+    // 등록 이름이 있으면 enroll_profile을 함께 보낸다(등록이 20/20이 아니면 서버가 거리를 계산하지 않아 오늘과 같은 판정이다).
+    const outcome = await analyzeWardRecording({
+      blob, mime, durationMs: meta?.durationMs, enrollProfile: machineRef.current.settings.enrollProfile, isCancelled: stale,
+    });
+    if (outcome.kind === 'invalid') dispatch({ type: 'RECORD_FAILED', run, message: outcome.message });
+    else if (stale()) return;
+    else if (outcome.kind === 'done') dispatch({ type: 'RESULT', run, results: outcome.results });
+    else if (outcome.kind === 'error') dispatch({ type: 'ANALYSIS_ERROR', run, message: outcome.message });
+    else if (outcome.kind === 'timeout') dispatch({ type: 'ANALYSIS_ERROR', run, reason: 'timeout' });
   }, [dispatch]);
 
   const rec = useRecorder({ maxSeconds: machine.settings.recordSeconds, video: CAMERA, onResult: handleRecorded });
@@ -222,6 +219,8 @@ export default function WardPage() {
       clearInterval(heartbeat);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('pageshow', onPageShow);
+      // 해시 이동(등록 화면 등)으로 이 화면이 내려갈 때는 pagehide가 없으므로 여기서도 병실 줄을 지우라고 알린다.
+      ch.post('ROOM_CLOSED', { windowId: machineRef.current.sessionKey });
       ch.close();
       channelRef.current = null;
     };
@@ -285,6 +284,35 @@ export default function WardPage() {
 
   const closeSettings = useCallback(() => setShowSettings(false), []);
 
+  /**
+   * 내 입 모양 등록 화면으로 (등록 이름·연습 모드를 주소에 넣는다). 이 화면을 떠나면 카메라는 useRecorder가 닫는다.
+   * 진행 중인 녹화·확인·선택이나 확인하지 않은 긴급 알림이 있으면 열지 않는다(화면을 떠나면 그 상태가 사라진다).
+   */
+  const openEnroll = useCallback((profile) => {
+    if (enrollOpenBlockReason(machineRef.current)) return;
+    setShowSettings(false);
+    try {
+      globalThis.location.hash = enrollHash(profile, { practice });
+    } catch {
+      /* 주소를 바꾸지 못하면 그대로 둔다 */
+    }
+  }, [practice]);
+
+  // 설정의 등록 이름이 바뀌거나 설정 창을 닫으면 등록 상태(20/20·다시 등록 필요)를 서버에서 다시 읽는다.
+  const enrollProfile = machine.settings.enrollProfile;
+  useEffect(() => {
+    if (!enrollProfile) {
+      setEnrollState({ profile: '', info: null, loadError: false });
+      return undefined;
+    }
+    let alive = true;
+    setEnrollState((prev) => (prev.profile === enrollProfile ? prev : { profile: enrollProfile, info: null, loadError: false }));
+    getWardProfile(enrollProfile)
+      .then((data) => { if (alive) setEnrollState({ profile: enrollProfile, info: parseProfileInfo(data, INDEX, enrollProfile), loadError: false }); })
+      .catch(() => { if (alive) setEnrollState({ profile: enrollProfile, info: null, loadError: true }); });
+    return () => { alive = false; };
+  }, [enrollProfile, showSettings]);
+
   const inject = useCallback((scenarioId) => {
     const r = recRef.current;
     if (r.status === 'recording') r.stop(); // 결과는 실행 번호가 바뀌어 무시된다
@@ -296,6 +324,8 @@ export default function WardPage() {
   const emergencyTone = view.tone === 'emergency' || view.tone === 'possible';
   const settings = machine.settings;
   const nightMuted = settings.tts && settings.nightMute && isNightTime(new Date(now));
+  const enrollLine = enrollStatusLine(enrollProfile, enrollState.profile === enrollProfile ? enrollState.info : null,
+    { loadError: enrollState.profile === enrollProfile && enrollState.loadError });
 
   return (
     <div className="min-h-screen select-none" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
@@ -372,6 +402,17 @@ export default function WardPage() {
             녹화 {settings.recordSeconds}초 · 확인 {settings.confirmSeconds}초
             {settings.tts ? ` · 음성 읽기 켬${voice ? '' : ` (${NO_VOICE_TEXT})`}${nightMuted ? ' · 밤 무음 중' : ''}` : ' · 음성 읽기 끔'}
           </p>
+          {enrollLine && (
+            <p
+              data-enroll-status={enrollLine.tone}
+              className="rounded-md px-2 py-1 text-base font-semibold"
+              style={enrollLine.tone === 'warn'
+                ? { background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }
+                : { color: enrollLine.tone === 'ok' ? WARD_COLORS.ink : WARD_COLORS.inkSoft }}
+            >
+              {enrollLine.text}
+            </p>
+          )}
         </section>
 
         {/* 결과 (화면 높이 1/10 이상 글씨) */}
@@ -431,7 +472,14 @@ export default function WardPage() {
       </div>
 
       {showSettings && (
-        <WardSettingsPanel settings={settings} onChange={changeSettings} onClose={closeSettings} voice={voice} />
+        <WardSettingsPanel
+          settings={settings}
+          onChange={changeSettings}
+          onClose={closeSettings}
+          voice={voice}
+          onOpenEnroll={openEnroll}
+          enrollBlocked={enrollOpenBlockReason(machine)}
+        />
       )}
     </div>
   );

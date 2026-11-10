@@ -13,7 +13,8 @@ export const MAX_NURSE_CARDS = 200;
 export const OVERDUE_MS = 60000;
 
 /** 카드 내용 중 환자 창이 바꿀 수 있는 필드. 종류(kind)·병실·처음 시각은 바꾸지 않는다. */
-const CONTENT_FIELDS = ['text', 'commandId', 'candidates', 'reason', 'hint', 'note', 'cancelRequested', 'selectedId', 'source', 'updatedAt'];
+const CONTENT_FIELDS = ['text', 'commandId', 'candidates', 'reason', 'hint', 'note', 'cancelRequested', 'selectedId', 'source', 'enroll',
+  'updatedAt'];
 
 /**
  * 경보 카드(반복음)인지.
@@ -211,6 +212,27 @@ export function cardHeadline(card) {
       return '확인 필요';
     default:
       return card?.text || '';
+  }
+}
+
+/** 간호사 카드의 내 입 모양 등록 표시 문구 (card.enroll). */
+export const ENROLL_NOTE_TEXT = Object.freeze({
+  chosen: '등록한 입 모양으로 고름',
+  alarm: '등록한 입 모양이 긴급 명령과 비슷해서 알림',
+});
+
+/**
+ * 카드가 내 입 모양 등록으로 골랐거나(등록 거리) 등록 때문에 긴급 가능성이 됐으면 그 짧은 설명, 아니면 null.
+ * 환자가 스캐닝으로 직접 고른 카드는 등록 표시를 하지 않는다.
+ * @param {object} card
+ * @returns {string|null}
+ */
+export function cardEnrollNote(card) {
+  try {
+    if (!card || card.selectedId) return null;
+    return ENROLL_NOTE_TEXT[card.enroll] || null;
+  } catch {
+    return null;
   }
 }
 

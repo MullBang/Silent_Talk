@@ -100,7 +100,11 @@ test('UploadPage 소스 계약: startInfer 응답 뒤에 INFERRING(폴러 마운
   assert.match(poller, /errorMessageFrom\(error, POLL_ERROR\)/);
   assert.doesNotMatch(poller, /error\.message/);
   const client = src('../src/api/client.js');
-  assert.equal((client.match(/throw clientCheckError\(/g) || []).length, 3, '업로드 1차 검증 문구는 isClientCheck');
+  const uploadStart = client.indexOf('export async function uploadVideo(');
+  const uploadFn = client.slice(uploadStart, client.indexOf('\nexport ', uploadStart + 1));
+  assert.equal((uploadFn.match(/throw clientCheckError\(/g) || []).length, 3, '업로드 1차 검증 문구는 isClientCheck');
+  // 녹화 등록 필드·등록 이름 주소 검사도 isClientCheck 문구로 거절한다(서버로 보내지 않음).
+  assert.match(client, /if \(enrollProblem\) throw clientCheckError\(enrollProblem\)/);
 });
 
 test('cameraOpenErrorMessage: 오류 이름별 고정 한국어, 모르는 오류는 null', () => {
