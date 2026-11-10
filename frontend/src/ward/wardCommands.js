@@ -1,10 +1,22 @@
 // wardCommands.js — 병실 명령 목록(commands.json) 조회와 가상 병실 동작 순수 함수 (node --test로 검사, JSX·DOM 없음).
 // commands.json은 동결 파일이다. 여기서는 읽기만 하고, 화면·카드에는 존댓말 display를 쓴다(text는 인식용).
+// 사용자가 만든 '내 목록'(서버 GET /api/ward/lists/{id})도 같은 모양의 색인으로 만든다(buildCustomCommandIndex).
+// 내 목록 명령은 가상 병실을 움직이지 않는다(action 'custom'). 취소 명령만 기본 목록 W20과 같은 'cancel_last'다.
 
 /** 서버 지정 문장 묶음 ID (POST /api/record phrase_set). */
 export const WARD_PHRASE_SET = 'ward';
-/** "방금 말한 건 취소할게요": 마지막 일반 카드에 취소 요청을 덧붙인다. */
+/** "방금 말한 건 취소할게요": 마지막 일반 카드에 취소 요청을 덧붙인다 (기본 목록의 취소 명령 ID). */
 export const CANCEL_COMMAND_ID = 'W20';
+/** 취소 명령의 동작 이름. 상태도는 ID가 아니라 이 동작으로 취소 명령을 알아본다. */
+export const CANCEL_ACTION = 'cancel_last';
+/** 내 목록의 일반 명령 동작 (가상 병실·체온 안내 없음). */
+export const CUSTOM_ACTION = 'custom';
+/** 내 목록 명령 ID (서버가 저장할 때 U01, U02, … 순서로 붙인다). */
+export const CUSTOM_COMMAND_ID_PATTERN = /^U\d{2}$/;
+/** 내 목록 ID (서버 규칙과 같다). */
+export const COMMAND_LIST_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+/** 긴급 분류 ID (긴급 명령은 반드시 이 분류다). */
+export const EMERGENCY_CATEGORY = 'emergency';
 /** 체온 확인을 권하는 카드 문구 (W08 추워요·W09 더워요). */
 export const TEMPERATURE_HINT = '체온 확인 권장';
 /** 카드에 '체온 확인 권장'을 붙이는 동작. */
@@ -31,9 +43,11 @@ export const POSITIONS = Object.freeze(['바로 누움', '왼쪽으로 누움', 
 
 /**
  * commands.json을 조회용 색인으로 만든다. 형식이 틀린 항목이 있으면 오류를 던진다(동결 파일 손상 감지).
+ * 기본 목록 색인은 customList가 null이고, cancelId는 취소 동작(cancel_last) 명령의 ID다(기본 목록은 W20).
  * @param {{categories: Array<{id:string,label:string}>, fixed: Array<{id:string,text:string,display:string,
  *   category:string,emergency:boolean,action:string}>}} json
- * @returns {{list: Array<object>, byId: Map<string, object>, categories: Array<{id:string,label:string,commands:Array<object>}>}}
+ * @returns {{list: Array<object>, byId: Map<string, object>, categories: Array<{id:string,label:string,commands:Array<object>}>,
+ *   cancelId: string|null, customList: null}}
  */
 export function buildCommandIndex(json) {
   try {
@@ -53,10 +67,96 @@ export function buildCommandIndex(json) {
       label: String(cat.label),
       commands: Object.freeze(list.filter((c) => c.category === cat.id)),
     }));
-    return Object.freeze({ list: Object.freeze(list), byId, categories: Object.freeze(cats) });
+    const cancels = list.filter((c) => c.action === CANCEL_ACTION);
+    return Object.freeze({
+      list: Object.freeze(list), byId, categories: Object.freeze(cats), cancelId: cancels.length === 1 ? cancels[0].id : null,
+      customList: null,
+    });
   } catch (err) {
     throw new Error(`병실 명령 목록을 읽지 못했습니다: ${err.message}`);
   }
+}
+
+/**
+ * 서버의 내 목록(GET /api/ward/lists/{id})을 기본 목록과 같은 모양의 색인으로 만든다.
+ * 분류 이름은 기본 목록(commands.json)의 분류를 쓰고, 명령이 하나도 없는 분류는 스캐닝에서 빼려고 넣지 않는다.
+ * 일반 명령의 action은 'custom'(가상 병실을 움직이지 않음), 취소 명령은 'cancel_last'다.
+ * 형식이 틀리면 오류를 던진다(호출하는 쪽이 오류를 보이고 기본 목록으로 바꾸지 않는다).
+ * @param {{id:string, title:string, sha256:string, commands: Array<{id:string, text:string, display:string, category:string,
+ *   emergency:boolean, cancel:boolean}>}} list 서버 응답.
+ * @param {{categories: Array<{id:string,label:string}>}} base 분류 이름을 가져올 기본 목록(commands.json).
+ * @returns {{list: Array<object>, byId: Map<string, object>, categories: Array<object>, cancelId: string|null,
+ *   customList: {id:string, title:string, sha256:string, count:number}}}
+ */
+export function buildCustomCommandIndex(list, base) {
+  try {
+    if (!list || typeof list !== 'object') throw new Error('목록이 비어 있습니다');
+    if (typeof list.id !== 'string' || !COMMAND_LIST_ID_PATTERN.test(list.id)) throw new Error('목록 ID 형식 오류');
+    if (typeof list.title !== 'string' || !list.title.trim()) throw new Error('목록 이름이 없습니다');
+    if (typeof list.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(list.sha256)) throw new Error('목록 지문(sha256) 형식 오류');
+    const baseCats = Array.isArray(base?.categories) ? base.categories : [];
+    const catIds = new Set(baseCats.map((c) => String(c.id)));
+    const raw = Array.isArray(list.commands) ? list.commands : [];
+    const commands = raw.map((c) => {
+      const ok = c && typeof c.id === 'string' && CUSTOM_COMMAND_ID_PATTERN.test(c.id)
+        && typeof c.text === 'string' && c.text.trim() && typeof c.display === 'string' && c.display.trim()
+        && typeof c.category === 'string' && catIds.has(c.category) && typeof c.emergency === 'boolean'
+        && c.emergency === (c.category === EMERGENCY_CATEGORY) && (c.cancel === undefined || typeof c.cancel === 'boolean')
+        && !(c.cancel === true && c.emergency);
+      if (!ok) throw new Error(`명령 형식 오류: ${JSON.stringify(c)}`);
+      return Object.freeze({
+        id: c.id, text: c.text, display: c.display, category: c.category, emergency: c.emergency,
+        action: c.cancel === true ? CANCEL_ACTION : CUSTOM_ACTION,
+      });
+    });
+    if (commands.length < 2) throw new Error('명령이 2개 미만입니다');
+    const byId = new Map(commands.map((c) => [c.id, c]));
+    if (byId.size !== commands.length) throw new Error('명령 ID가 겹칩니다');
+    const cancels = commands.filter((c) => c.action === CANCEL_ACTION);
+    if (cancels.length > 1) throw new Error('취소 명령이 둘 이상입니다');
+    const cats = baseCats
+      .map((cat) => Object.freeze({
+        id: String(cat.id),
+        label: String(cat.label),
+        commands: Object.freeze(commands.filter((c) => c.category === cat.id)),
+      }))
+      .filter((cat) => cat.commands.length > 0);
+    return Object.freeze({
+      list: Object.freeze(commands),
+      byId,
+      categories: Object.freeze(cats),
+      cancelId: cancels.length ? cancels[0].id : null,
+      customList: Object.freeze({ id: list.id, title: list.title.trim(), sha256: list.sha256, count: commands.length }),
+    });
+  } catch (err) {
+    throw new Error(`내 목록을 읽지 못했습니다: ${err.message}`);
+  }
+}
+
+/**
+ * 명령이 하나도 없는 색인 (내 목록을 불러오는 중이거나 불러오지 못했을 때). 기본 목록으로 바꾸지 않으려고 쓴다.
+ * @param {string} listId 쓰려던 내 목록 ID.
+ * @param {string} [title]
+ * @returns {{list: Array<object>, byId: Map<string, object>, categories: Array<object>, cancelId: null,
+ *   customList: {id:string, title:string, sha256:null, count:0}}}
+ */
+export function emptyListIndex(listId, title = '') {
+  return Object.freeze({
+    list: Object.freeze([]),
+    byId: new Map(),
+    categories: Object.freeze([]),
+    cancelId: null,
+    customList: Object.freeze({ id: String(listId || ''), title: String(title || ''), sha256: null, count: 0 }),
+  });
+}
+
+/**
+ * 취소 명령("방금 말한 건 취소")인지. 기본 목록에서는 W20만 해당한다.
+ * @param {{action?: string}|null|undefined} command
+ * @returns {boolean}
+ */
+export function isCancelCommand(command) {
+  return !!command && command.action === CANCEL_ACTION;
 }
 
 /**

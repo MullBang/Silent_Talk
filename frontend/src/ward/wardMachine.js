@@ -8,9 +8,15 @@
 //   {type:'SEND_CARD', card} / {type:'UPDATE_CARD', card}  간호사실로 카드 보내기·갱신
 //   {type:'SPEAK', text}  음성 읽기(설정·밤 무음은 화면이 판단)
 //   {type:'LOG', message}  예상하지 못한 오류 (상태는 바꾸지 않음)
+//
+// 명령 목록: 상태의 index가 지금 쓰는 목록이다(기본 목록 또는 내 목록, SET_INDEX로 바꾼다). 내 목록을 실제로 불러와 쓰는
+// 동안 만든 카드에는 list {id, title, sha256}(목록 판)을 붙인다. 스위치 3번 긴급 호출 카드와 불러오는 중·실패 때의 카드에는
+// 붙이지 않는다. 내 목록을 불러오는 중이거나 불러오지 못하면 lipBlock을 두어 입 읽기 녹화를 시작하지 않는다
+// (기본 목록으로 몰래 바꾸지 않는다). 스위치 3번 긴급 호출은 그대로 된다.
+// baseIndex는 기본 목록 색인이다. 목록을 바꾼 뒤 간호사가 기본 목록 카드(W07 자세·W14 등받이)를 확인해도 가상 침대가 움직이게 한다.
 
 import {
-  CANCEL_COMMAND_ID, INITIAL_ROOM, TEMPERATURE_ACTIONS, TEMPERATURE_HINT, applyRoomAction, commandById, roomActionTiming,
+  INITIAL_ROOM, TEMPERATURE_ACTIONS, TEMPERATURE_HINT, applyRoomAction, commandById, isCancelCommand, roomActionTiming,
 } from './wardCommands.js';
 import { NO_PHRASE_REASON_TEXT, classifyWardResults, decideWard } from './wardResult.js';
 import { normalizeSettings } from './wardSettings.js';
@@ -93,7 +99,28 @@ export const WARD_TEXT = Object.freeze({
   enrollAlarm: '내 입 모양 등록과 긴급 명령이 비슷해요',
   enrollBusy: '진행 중인 녹화·확인·선택이 끝난 뒤 등록 화면을 열 수 있어요',
   enrollAlarmOpen: '확인하지 않은 긴급 알림이 있어요. 간호사 화면에서 확인한 뒤 등록 화면을 열 수 있어요',
+  listsBusy: '진행 중인 녹화·확인·선택이 끝난 뒤 목록 관리 화면을 열 수 있어요',
+  listsAlarmOpen: '확인하지 않은 긴급 알림이 있어요. 간호사 화면에서 확인한 뒤 목록 관리 화면을 열 수 있어요',
+  listSwitchBusy: '진행 중인 녹화·확인·선택이 끝난 뒤 명령 목록을 바꿀 수 있어요',
+  listLoading: '내 목록을 불러오는 중이에요',
+  listBlocked: '입 읽기 녹화를 쓸 수 없어요',
+  listBlockedSub: '스위치 3번 = 긴급 호출은 됩니다 · 설정에서 명령 목록을 확인해 주세요',
 });
+
+/** 입 읽기 녹화를 막는 사유 (lipBlock.reason). */
+export const LIP_BLOCK_REASONS = Object.freeze(['loading', 'error']);
+
+/**
+ * lipBlock 값을 다듬는다. null·undefined면 막지 않음(null). 모르는 사유는 'error'로 본다(목록 문제를 놓치지 않게).
+ * @param {any} raw {reason:'loading'|'error', message?:string} 또는 null.
+ * @returns {{reason:string, message:string}|null}
+ */
+export function normalizeLipBlock(raw) {
+  if (raw === null || raw === undefined) return null;
+  const reason = LIP_BLOCK_REASONS.includes(raw?.reason) ? raw.reason : 'error';
+  const message = typeof raw?.message === 'string' ? raw.message : '';
+  return { reason, message };
+}
 
 /** 카드의 enroll 표시: 'chosen' = 등록한 입 모양으로 고름, 'alarm' = 등록한 입 모양 때문에만 긴급 가능성이 됨. */
 export const CARD_ENROLL_TAGS = Object.freeze(['chosen', 'alarm']);
@@ -105,13 +132,20 @@ export const PHASE_LABELS = Object.freeze({
 
 /**
  * 처음 상태를 만든다.
- * @param {{index: object, settings?: object, sessionKey?: string, room?: object}} opts
- *   index는 buildCommandIndex 결과, sessionKey는 카드 ID 앞부분(창마다 다르게).
+ * @param {{index: object, baseIndex?: object|null, settings?: object, sessionKey?: string, room?: object,
+ *   lipBlock?: object|null}} opts
+ *   index는 buildCommandIndex(또는 buildCustomCommandIndex·emptyListIndex) 결과, sessionKey는 카드 ID 앞부분(창마다 다르게).
+ *   baseIndex는 기본 목록 색인(buildCommandIndex(commands.json)). 없으면 index가 기본 목록일 때 그것을 쓴다.
+ *   lipBlock은 내 목록을 불러오는 중·실패일 때 입 읽기 녹화를 막는 사유(기본 목록은 null).
  * @returns {object}
  */
-export function createWardState({ index, settings, sessionKey = 'w', room = INITIAL_ROOM } = {}) {
+export function createWardState({
+  index, baseIndex = null, settings, sessionKey = 'w', room = INITIAL_ROOM, lipBlock = null,
+} = {}) {
   return {
     index,
+    baseIndex: isBaseIndex(baseIndex) ? baseIndex : (isBaseIndex(index) ? index : null),
+    lipBlock: normalizeLipBlock(lipBlock),
     settings: normalizeSettings(settings),
     sessionKey: String(sessionKey),
     phase: 'idle', // idle | recording | analyzing | confirm | scan
@@ -148,9 +182,29 @@ function keepCard(s, card) {
   return { ...s, cards, cardOrder: order };
 }
 
-/** 새 카드를 만들어 보낸다. */
+/** 기본 목록 색인인지 (명령 조회용 Map이 있고 내 목록 표시가 없음). */
+function isBaseIndex(index) {
+  return !!index && typeof index === 'object' && index.byId instanceof Map && !index.customList;
+}
+
+/**
+ * 카드에 붙일 목록 표시 {id, title, sha256}. 기본 목록이면 null.
+ * 내 목록을 실제로 불러왔을 때(목록 판 sha256이 있을 때)만 붙인다: 불러오는 중·실패한 동안의 카드는 그 목록의 문장에서 온 것이
+ * 아니다. 스위치 3번 긴급 호출(emergency_call)은 목록과 상관없는 호출이라 붙이지 않는다.
+ * @param {object} s
+ * @param {string} kind 카드 종류.
+ * @returns {{id:string, title:string, sha256:string}|null}
+ */
+function cardListTag(s, kind) {
+  if (kind === 'emergency_call') return null;
+  const meta = s.index?.customList;
+  return meta && meta.id && meta.sha256 ? { id: meta.id, title: meta.title || meta.id, sha256: meta.sha256 } : null;
+}
+
+/** 새 카드를 만들어 보낸다. 내 목록을 쓰는 중이면 list {id, title, sha256}을 붙인다(기본 목록 카드는 예전 모양 그대로). */
 function addCard(s, at, fields, effects) {
   const seq = s.seq + 1;
+  const list = cardListTag(s, fields.kind);
   const card = {
     id: `${s.sessionKey}-${seq}`,
     rev: 1,
@@ -170,6 +224,7 @@ function addCard(s, at, fields, effects) {
     acked: false,
     ackedAt: null,
     enroll: null,
+    ...(list ? { list } : {}),
     ...fields,
   };
   effects.push({ type: 'SEND_CARD', card });
@@ -237,7 +292,7 @@ function sendEmergencyCall(s, at, effects) {
   return toIdle(s1, screen);
 }
 
-/** W20: 마지막 일반 카드를 지우지 않고 "환자가 취소 요청함"을 덧붙인다. 긴급 카드에는 쓰지 않는다. */
+/** 취소 명령(기본 W20·내 목록의 취소 명령): 마지막 일반 카드를 지우지 않고 "환자가 취소 요청함"을 덧붙인다. 긴급 카드에는 쓰지 않는다. */
 function requestCancelLast(s, at, effects) {
   const target = s.lastNormalCardId ? s.cards[s.lastNormalCardId] : null;
   if (!target || target.kind === 'emergency' || target.kind === 'emergency_call' || target.kind === 'emergency_possible') {
@@ -251,8 +306,9 @@ function requestCancelLast(s, at, effects) {
 // 녹화·확인·스캐닝
 // ---------------------------------------------------------------------------
 
-/** 녹화 시작 (카운트다운 없음, 시작음·테두리 깜빡임은 화면이 한다). */
+/** 녹화 시작 (카운트다운 없음, 시작음·테두리 깜빡임은 화면이 한다). 내 목록을 쓸 수 없으면 시작하지 않고 안내만 한다. */
 function startRecording(s, at, effects) {
+  if (s.lipBlock) return toIdle(s, { kind: 'lip_blocked' });
   const run = s.run + 1;
   const seconds = s.settings.recordSeconds;
   effects.push({ type: 'START_RECORDING', run, seconds });
@@ -281,11 +337,11 @@ function startConfirm(s, at, command, effects, enroll = null) {
   };
 }
 
-/** 카운트다운이 끝나면 보낸다 (W20이면 취소 요청). */
+/** 카운트다운이 끝나면 보낸다 (취소 명령이면 취소 요청). */
 function finishConfirm(s, at, effects) {
   const command = commandById(s.index, s.confirm?.commandId);
   if (!command) return toIdle(s, { kind: 'welcome' });
-  if (command.id === CANCEL_COMMAND_ID) return requestCancelLast(s, at, effects);
+  if (isCancelCommand(command)) return requestCancelLast(s, at, effects);
   return sendRequest(s, at, command, 'lip', effects, s.confirm?.enroll || null);
 }
 
@@ -349,14 +405,14 @@ function chooseCommand(s, at, commandId, cardId, effects) {
   }
   effects.push({ type: 'SPEAK', text: command.display });
   if (!cardId) {
-    if (command.id === CANCEL_COMMAND_ID) return requestCancelLast(s, at, effects);
+    if (isCancelCommand(command)) return requestCancelLast(s, at, effects);
     return sendRequest(s, at, command, 'scan', effects);
   }
   // '확인 필요' 카드를 새로 만들지 않고 그 카드를 갱신한다.
   const s1 = changeCard(s, at, cardId, {
     selectedId: command.id, commandId: command.id, text: command.display, hint: hintFor(command), note: WARD_TEXT.selectedNote,
   }, effects);
-  if (command.id === CANCEL_COMMAND_ID) return requestCancelLast(s1, at, effects);
+  if (isCancelCommand(command)) return requestCancelLast(s1, at, effects);
   return toIdle(applySendAction({ ...s1, lastNormalCardId: cardId }, command),
     { kind: 'sent', commandId: command.id, cardId });
 }
@@ -433,6 +489,8 @@ function sendPossible(s, at, commands, enroll, effects) {
  * - 지정 문장 결과 없음 → 분류 스캐닝 + 사유 / 발화 없음·검출 실패 → 1회 환자 화면만, 연속 2회부터 간호사실에도
  */
 function handleOutcome(s, at, outcome, effects) {
+  // 내 목록을 쓸 수 없는 동안에는 어떤 결과도 명령으로 해석하지 않는다(고를 명령 목록이 없다).
+  if (s.lipBlock) return toIdle(s, { kind: 'lip_blocked' });
   if (outcome.kind === 'no_speech') {
     const streak = s.noSpeechStreak + 1;
     let s1 = { ...s, noSpeechStreak: streak };
@@ -526,10 +584,23 @@ function handlePress(state, at, repeat, effects) {
   }
 }
 
-/** 카드가 가리키는 명령 (확인 필요 카드는 환자가 고른 것만). */
+/**
+ * 카드가 가리키는 명령 (확인 필요 카드는 환자가 고른 것만). 카드를 만든 목록에서 찾는다:
+ * 기본 목록 카드(list 없음)는 기본 목록 색인(baseIndex)에서, 내 목록 카드는 지금 쓰는 내 목록이 같은 판(id·sha256)일 때만 찾는다.
+ * 그래서 기본 목록에서 보낸 W14(등받이)를 내 목록으로 바꾼 뒤 확인해도 가상 침대가 움직이고, 고친 내 목록의 같은 U 번호를
+ * 옛 카드의 명령으로 잘못 읽지 않는다.
+ */
 function cardCommand(s, card) {
   if (card.kind === 'check' && !card.selectedId) return null;
-  return commandById(s.index, card.selectedId || card.commandId);
+  const id = card.selectedId || card.commandId;
+  const list = card.list;
+  if (list !== undefined && list !== null) {
+    const meta = s.index?.customList;
+    const same = !!meta && !!list && meta.id === list.id && !!meta.sha256 && meta.sha256 === list.sha256;
+    return same ? commandById(s.index, id) : null;
+  }
+  const base = s.index?.customList ? s.baseIndex : s.index;
+  return base ? commandById(base, id) : null;
 }
 
 /**
@@ -567,9 +638,39 @@ function handleAck(state, at, cardIds, room) {
   return s;
 }
 
-/** 지금 흐름을 모두 멈추고 이전 녹화 결과를 무효로 한다 (연습 모드 결과 주입). */
+/** 지금 흐름을 모두 멈추고 이전 녹화 결과를 무효로 한다 (연습 모드 결과 주입·명령 목록 바꿈). */
 function resetFlow(s) {
   return { ...s, run: s.run + 1, phase: 'idle', recording: null, analysis: null, confirm: null, scan: null };
+}
+
+/** 두 lipBlock이 같은지. */
+function sameLipBlock(a, b) {
+  if (!a || !b) return a === b;
+  return a.reason === b.reason && a.message === b.message;
+}
+
+/**
+ * 명령 목록(색인)을 바꾼다. 진행 중인 녹화·확인·선택은 멈추고 늦게 온 결과는 무시한다(다른 목록 문장으로 잘못 보내지 않게).
+ * 보낸 카드·가상 병실·긴급 알림은 그대로 둔다. 바뀐 것이 없으면 같은 상태. 같은 목록·같은 판에서 이름만 바뀌었으면
+ * 흐름을 그대로 두고 색인만 바꾼다(명령은 sha256이 같으니 그대로다).
+ * @param {object} s
+ * @param {object} index 새 색인 (byId가 Map이 아니면 지금 색인 유지).
+ * @param {object|null} lipBlockRaw
+ * @returns {object}
+ */
+function setIndex(s, index, lipBlockRaw) {
+  const next = index && typeof index === 'object' && index.byId instanceof Map ? index : s.index;
+  const lipBlock = normalizeLipBlock(lipBlockRaw);
+  if (next === s.index && sameLipBlock(lipBlock, s.lipBlock)) return s;
+  const baseIndex = isBaseIndex(next) ? next : s.baseIndex;
+  // 같은 목록의 같은 판(명령이 그대로, 이름만 바뀜): 흐름을 멈추지 않고 색인(띠·카드에 쓰는 이름)만 바꾼다.
+  const a = s.index?.customList;
+  const b = next.customList;
+  if (next !== s.index && a && b && a.id === b.id && a.sha256 && a.sha256 === b.sha256 && sameLipBlock(lipBlock, s.lipBlock)) {
+    return { ...s, index: next, baseIndex };
+  }
+  const keepScreen = s.phase === 'idle' && s.screen?.kind !== 'lip_blocked';
+  return { ...resetFlow(s), index: next, baseIndex, lipBlock, screen: keepScreen ? s.screen : { kind: 'welcome' } };
 }
 
 /**
@@ -578,6 +679,7 @@ function resetFlow(s) {
  * @param {{type:string, at:number, [key:string]: any}} event
  *   PRESS{repeat?} · TICK · RECORDING_DONE{run} · RECORD_FAILED{run, message} · RESULT{run, results}
  *   · ANALYSIS_ERROR{run, message, reason?} · SIMULATE{results} · NURSE_ACK{cardIds, room?} · SETTINGS{settings}
+ *   · SET_INDEX{index, lipBlock?} (명령 목록 바꿈·내 목록 불러오기 결과)
  * @returns {{state: object, effects: Array<object>}} 바뀐 것이 없으면 state는 같은 객체다.
  */
 export function stepWard(state, event) {
@@ -619,6 +721,9 @@ export function stepWard(state, event) {
         break;
       case 'SETTINGS':
         s = { ...s, settings: normalizeSettings({ ...s.settings, ...(event.settings || {}) }) };
+        break;
+      case 'SET_INDEX':
+        s = setIndex(s, event.index, event.lipBlock ?? null);
         break;
       default:
         break;
@@ -666,6 +771,49 @@ export function enrollOpenBlockReason(s) {
   } catch {
     return WARD_TEXT.enrollBusy;
   }
+}
+
+/**
+ * 목록 관리 화면(#lists)을 지금 열면 안 되는 이유. 열어도 되면 null (등록 화면과 같은 조건).
+ * @param {object} s 상태.
+ * @returns {string|null}
+ */
+export function listsOpenBlockReason(s) {
+  try {
+    if (!s) return null;
+    if (s.phase !== 'idle') return WARD_TEXT.listsBusy;
+    if (latestOpenAlarm(s)) return WARD_TEXT.listsAlarmOpen;
+    return null;
+  } catch {
+    return WARD_TEXT.listsBusy;
+  }
+}
+
+/**
+ * 설정에서 명령 목록을 지금 바꾸면 안 되는 이유 (진행 중인 녹화·확인·선택이 있으면). 바꿔도 되면 null.
+ * @param {object} s 상태.
+ * @returns {string|null}
+ */
+export function listSwitchBlockReason(s) {
+  try {
+    return s && s.phase !== 'idle' ? WARD_TEXT.listSwitchBusy : null;
+  } catch {
+    return WARD_TEXT.listSwitchBusy;
+  }
+}
+
+/**
+ * 입 읽기 녹화를 쓸 수 없을 때(내 목록 불러오는 중·실패) 표시.
+ * @param {object} view 기본 표시 값.
+ * @param {{reason:string, message:string}} lipBlock
+ * @returns {object}
+ */
+function lipBlockedView(view, lipBlock) {
+  if (lipBlock.reason === 'loading') {
+    return { ...view, tone: 'neutral', headline: WARD_TEXT.listLoading, sub: WARD_TEXT.listBlockedSub };
+  }
+  const sub = lipBlock.message ? `${lipBlock.message} · ${WARD_TEXT.listBlockedSub}` : WARD_TEXT.listBlockedSub;
+  return { ...view, tone: 'warning', headline: WARD_TEXT.listBlocked, sub };
 }
 
 /**
@@ -742,9 +890,12 @@ export function wardView(s, now) {
         return { ...view, tone: 'neutral', headline: WARD_TEXT.scanTimeout, sub: sc.nurse ? WARD_TEXT.scanTimeoutNurse : WARD_TEXT.scanTimeoutSub };
       case 'closed':
         return { ...view, tone: 'neutral', headline: WARD_TEXT.closed, sub: WARD_TEXT.cancelledSub };
+      case 'lip_blocked':
+        return lipBlockedView(view, s.lipBlock || { reason: 'error', message: '' });
       case 'error':
         return { ...view, tone: 'warning', headline: WARD_TEXT.errorHeadline, sub: sc.message || null };
       default:
+        if (s.lipBlock) return lipBlockedView(view, s.lipBlock);
         return { ...view, headline: WARD_TEXT.welcome, sub: WARD_TEXT.welcomeSub(s.settings.recordSeconds) };
     }
   } catch {

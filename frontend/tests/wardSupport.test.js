@@ -114,7 +114,9 @@ test('설정: 범위 맞추기·기본값·밤 무음·저장소 예외', () => 
   const store = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) };
   assert.equal(saveSettings(store, { recordSeconds: 8, room: '412', tts: true }), true);
   assert.ok(data.has(SETTINGS_STORAGE_KEY));
-  assert.deepEqual(loadSettings(store), { recordSeconds: 8, confirmSeconds: 6, room: '412', tts: true, nightMute: true, enrollProfile: '' });
+  assert.deepEqual(loadSettings(store), {
+    recordSeconds: 8, confirmSeconds: 6, room: '412', tts: true, nightMute: true, enrollProfile: '', commandList: '', enrollProfileByList: {},
+  });
   // 내 입 모양 등록 이름: 기본 ''(등록 안 씀), 서버 규칙(영문·숫자·_·- 1~32자)에 맞지 않으면 ''.
   assert.equal(DEFAULT_SETTINGS.enrollProfile, '');
   assert.equal(normalizeSettings({ enrollProfile: ' bed305 ' }).enrollProfile, 'bed305');
@@ -332,10 +334,11 @@ test('호출 쪽 계약: 녹화 화면은 묶음 없이, 병실 화면은 ward�
   assert.match(record, /uploadRecording\(blob, mime, \(p\) =>/, '녹화 화면은 phrase_set 없이 호출(문장 모드 그대로)');
   const ward = src('../src/pages/WardPage.jsx');
   const upload = src('../src/ward/wardUpload.js');
-  // 병실 화면·등록 화면은 같은 올리기 함수를 쓴다: phrase_set='ward' + (설정한 경우) 등록 이름.
-  assert.match(upload, /upload\(blob, mime, undefined, wardRecordOptions\(\{ enrollProfile, enrollCommand \}\)\)/);
+  // 병실 화면·등록 화면은 같은 올리기 함수를 쓴다: phrase_set='ward' + (설정한 경우) 등록 이름 + (내 목록이면) 목록 ID.
+  assert.match(upload, /upload\(blob, mime, undefined, wardRecordOptions\(\{\s*enrollProfile, enrollCommand, commandList, commandListSha256,\s*\}\)\)/);
   assert.match(upload, /const options = \{ phraseSet: WARD_PHRASE_SET \}/);
-  assert.match(ward, /analyzeWardRecording\(\{\s*blob, mime, durationMs: meta\?\.durationMs, enrollProfile: machineRef\.current\.settings\.enrollProfile/);
+  // 등록 이름은 목록마다 따로다: 기본 목록('')이면 예전과 같은 settings.enrollProfile이다(enrollProfileFor).
+  assert.match(ward, /analyzeWardRecording\(\{\s*blob, mime, durationMs: meta\?\.durationMs, enrollProfile: enrollProfileFor\(machineRef\.current\.settings, commandList\)/);
   assert.doesNotMatch(ward, /enrollCommand/, '병실 화면은 등록(저장)하지 않고 비교만 한다');
   assert.doesNotMatch(ward, /emergency.*accepted.*margin|OLKAVS_PHRASE_MIN|possible_min_score|enroll_max_distance/, '화면 파일이 기준값을 다시 판정하지 않는다');
   const enroll = src('../src/pages/EnrollPage.jsx');

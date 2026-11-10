@@ -3,10 +3,15 @@
 // 설정에 내 입 모양 등록 이름이 있으면 enroll_profile도) → 약 300ms 폴링 → 상태도(ward/wardMachine.js)가 결과를 처리한다.
 // 고를지 말지는 서버 phrase.accepted와 등록 비교 결과(enroll.accepted·within)만 믿는다(판정표는 ward/wardResult.js).
 // 간호사 화면(#nurse)과는 같은 주소의 BroadcastChannel로 카드·확인·스위치 입력·병실 상태를 주고받는다.
+// 명령 목록: 설정의 commandList가 비어 있으면 기본 목록(commands.json)을 쓰고 요청도 예전과 같다. 내 목록이면 서버에서 불러와
+// 그 문장들로 판정하고(command_list를 함께 보냄), 결과는 목록 ID·지문이 같을 때만 쓴다. 불러오지 못하면 입 읽기 녹화를 막고
+// (기본 목록으로 몰래 바꾸지 않음) 스위치 3번 긴급 호출과 설정은 그대로 둔다. 연습 모드는 늘 기본 목록이다.
+// 다른 탭(목록 관리·등록)이 명령 목록·등록 이름을 바꾸면 저장소 알림(storage)·창으로 돌아올 때(focus) 다시 읽는다.
+// 녹화·확인·선택 중이면 끝난 뒤에 바꾼다. 이 화면에서 설정을 바꿔 저장할 때도 다른 탭이 바꾼 그 값들을 지우지 않는다.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getWardProfile } from '../api/client';
+import { getWardList, wardProfileApi } from '../api/client';
 import useRecorder from '../hooks/useRecorder';
 import { blurAfterPointerClick } from '../record/pointerFocus';
 import COMMANDS from '../ward/commands.json';
@@ -15,15 +20,19 @@ import RoomPanel from '../ward/RoomPanel';
 import { AlertIcon, CheckIcon } from '../ward/WardIcons';
 import WardSettingsPanel from '../ward/WardSettingsPanel';
 import { ROOM_HEARTBEAT_MS, openWardChannel } from '../ward/wardChannel';
-import { buildCommandIndex } from '../ward/wardCommands';
+import { buildCommandIndex, emptyListIndex } from '../ward/wardCommands';
 import { enrollHash, enrollStatusLine, parseProfileInfo } from '../ward/wardEnroll';
 import { keyIsSwitch, pointerIsSwitch } from '../ward/wardInput';
 import {
-  PHASE_LABELS, WARD_TEXT, createWardState, enrollOpenBlockReason, stepWard, wardView,
+  LISTS_TEXT, listBannerText, listLoadErrorMessage, listLoadOutcome, resultsFromOtherListVersion,
+} from '../ward/wardLists';
+import {
+  PHASE_LABELS, WARD_TEXT, createWardState, enrollOpenBlockReason, listSwitchBlockReason, listsOpenBlockReason, stepWard, wardView,
 } from '../ward/wardMachine';
 import { practiceResults } from '../ward/wardPractice';
 import {
-  isNightTime, isPracticeMode, loadSettings, safeLocalStorage, saveSettings, speechAllowed,
+  SETTINGS_STORAGE_KEY, enrollProfileFor, isNightTime, isPracticeMode, loadSettings, readStoredSettings, safeLocalStorage,
+  saveSettings, sharedSettingsPatch, speechAllowed,
 } from '../ward/wardSettings';
 import { createBeeper } from '../ward/wardSound';
 import { NO_VOICE_TEXT, pickKoreanLocalVoice, speakText } from '../ward/wardSpeech';
@@ -70,7 +79,16 @@ export default function WardPage() {
   const practice = useMemo(() => isPracticeMode(globalThis.location), []);
   const machineRef = useRef(null);
   if (!machineRef.current) {
-    machineRef.current = createWardState({ index: INDEX, settings: loadSettings(storage), sessionKey: newSessionKey() });
+    const saved = loadSettings(storage);
+    // 내 목록을 고른 경우: 불러올 때까지 명령 없는 색인으로 시작하고 입 읽기 녹화를 막는다(기본 목록으로 시작하지 않음).
+    const startList = practice ? '' : saved.commandList;
+    machineRef.current = createWardState({
+      index: startList ? emptyListIndex(startList) : INDEX,
+      baseIndex: INDEX,
+      lipBlock: startList ? { reason: 'loading', message: '' } : null,
+      settings: saved,
+      sessionKey: newSessionKey(),
+    });
   }
   const [machine, setMachine] = useState(machineRef.current);
   const [now, setNow] = useState(() => Date.now());
@@ -81,7 +99,10 @@ export default function WardPage() {
   const [voice, setVoice] = useState(null);
   const [practiceCommand, setPracticeCommand] = useState('W05');
   const [channelOk, setChannelOk] = useState(true);
-  const [enrollState, setEnrollState] = useState({ profile: '', info: null, loadError: false });
+  const [enrollState, setEnrollState] = useState({ key: '', info: null, loadError: false });
+  // 내 목록 상태 (기본 목록이면 null): {listId, state:'loading'|'ready'|'error', title, count, message}
+  const [listStatus, setListStatus] = useState(null);
+  const [listReload, setListReload] = useState(0);
 
   const beeperRef = useRef(null);
   if (!beeperRef.current) beeperRef.current = createBeeper();
@@ -111,13 +132,21 @@ export default function WardPage() {
     const stale = () => !mountedRef.current || machineRef.current.run !== run;
     if (stale()) return; // 연습 결과 주입 등으로 무효가 된 녹화는 보내지 않는다
     dispatch({ type: 'RECORDING_DONE', run });
-    // 등록 이름이 있으면 enroll_profile을 함께 보낸다(등록이 20/20이 아니면 서버가 거리를 계산하지 않아 오늘과 같은 판정이다).
+    // 내 목록을 쓰면 command_list(목록 ID)를 보낸다. 기본 목록이면 보내지 않아 요청이 예전과 같다.
+    // 등록 이름이 있으면 enroll_profile을 함께 보낸다(목록의 명령을 다 찍지 않았으면 서버가 거리를 계산하지 않아 오늘과 같은 판정이다).
+    const usedList = machineRef.current.index.customList;
+    const commandList = usedList?.id || '';
     const outcome = await analyzeWardRecording({
-      blob, mime, durationMs: meta?.durationMs, enrollProfile: machineRef.current.settings.enrollProfile, isCancelled: stale,
+      blob, mime, durationMs: meta?.durationMs, enrollProfile: enrollProfileFor(machineRef.current.settings, commandList), commandList,
+      isCancelled: stale,
     });
     if (outcome.kind === 'invalid') dispatch({ type: 'RECORD_FAILED', run, message: outcome.message });
     else if (stale()) return;
-    else if (outcome.kind === 'done') dispatch({ type: 'RESULT', run, results: outcome.results });
+    else if (outcome.kind === 'done') {
+      dispatch({ type: 'RESULT', run, results: outcome.results });
+      // 서버의 목록이 그사이 바뀌었으면(지문이 다름) 결과는 쓰지 않았으니 목록을 다시 불러온다.
+      if (resultsFromOtherListVersion(outcome.results, usedList)) setListReload((n) => n + 1);
+    }
     else if (outcome.kind === 'error') dispatch({ type: 'ANALYSIS_ERROR', run, message: outcome.message });
     else if (outcome.kind === 'timeout') dispatch({ type: 'ANALYSIS_ERROR', run, reason: 'timeout' });
   }, [dispatch]);
@@ -277,10 +306,55 @@ export default function WardPage() {
     return () => synth.removeEventListener?.('voiceschanged', update);
   }, []);
 
-  const changeSettings = useCallback((patch) => {
+  // 다른 탭이 바꾼 명령 목록·등록 이름을 아직 쓰지 못했는지 (녹화·확인·선택 중이었음). 대기로 돌아오면 쓴다.
+  const pendingSyncRef = useRef(false);
+
+  /** 저장소의 명령 목록·등록 이름(다른 탭이 바꿨을 수 있음)을 읽어 이 화면에 쓴다. 대기 중이 아니면 끝난 뒤에 쓴다. */
+  const syncSharedSettings = useCallback(() => {
+    const patch = sharedSettingsPatch(machineRef.current.settings, readStoredSettings(storage));
+    if (!patch) {
+      pendingSyncRef.current = false;
+      return;
+    }
+    if (machineRef.current.phase !== 'idle') {
+      pendingSyncRef.current = true;
+      return;
+    }
+    pendingSyncRef.current = false;
     dispatch({ type: 'SETTINGS', settings: patch });
-    saveSettings(storage, machineRef.current.settings);
   }, [dispatch, storage]);
+
+  /**
+   * 설정 창의 변경을 쓰고 저장한다. 다른 탭이 저장소에 바꿔 둔 명령 목록·등록 이름은 지우지 않는다(대기 중이면 함께 쓰고,
+   * 아니면 저장만 지키고 끝난 뒤에 쓴다).
+   */
+  const changeSettings = useCallback((patch) => {
+    const shared = { ...(sharedSettingsPatch(machineRef.current.settings, readStoredSettings(storage)) || {}) };
+    for (const key of Object.keys(patch || {})) delete shared[key];
+    const idle = machineRef.current.phase === 'idle';
+    dispatch({ type: 'SETTINGS', settings: idle ? { ...shared, ...patch } : patch });
+    saveSettings(storage, { ...machineRef.current.settings, ...shared });
+    if (!idle && Object.keys(shared).length) pendingSyncRef.current = true;
+  }, [dispatch, storage]);
+
+  // 다른 탭이 설정을 저장하면(storage 알림) 또는 이 창으로 돌아오면 명령 목록·등록 이름을 다시 읽는다.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === null || e.key === SETTINGS_STORAGE_KEY) syncSharedSettings();
+    };
+    const onFocus = () => syncSharedSettings();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [syncSharedSettings]);
+
+  // 녹화·확인·선택이 끝나 대기로 돌아오면 미뤄 둔 설정을 쓴다.
+  useEffect(() => {
+    if (machine.phase === 'idle' && pendingSyncRef.current) syncSharedSettings();
+  }, [machine.phase, syncSharedSettings]);
 
   const closeSettings = useCallback(() => setShowSettings(false), []);
 
@@ -298,20 +372,106 @@ export default function WardPage() {
     }
   }, [practice]);
 
-  // 설정의 등록 이름이 바뀌거나 설정 창을 닫으면 등록 상태(20/20·다시 등록 필요)를 서버에서 다시 읽는다.
-  const enrollProfile = machine.settings.enrollProfile;
+  /** 목록 관리 화면(#lists)으로. 등록 화면과 같은 조건(대기 중·확인 안 된 긴급 알림 없음)에서만 연다. */
+  const openLists = useCallback(() => {
+    if (listsOpenBlockReason(machineRef.current)) return;
+    setShowSettings(false);
+    try {
+      globalThis.location.hash = practice ? '#lists?practice=1' : '#lists';
+    } catch {
+      /* 주소를 바꾸지 못하면 그대로 둔다 */
+    }
+  }, [practice]);
+
+  // 지금 쓰는 명령 목록: 연습 모드는 늘 기본 목록(''), 아니면 설정의 commandList.
+  const activeList = practice ? '' : machine.settings.commandList;
+
+  // 내 목록 불러오기. 처음 불러올 때는 입 읽기 녹화를 막고, 실패하면 막은 채로 오류를 보인다(기본 목록으로 바꾸지 않음).
+  // 설정 창을 열고 닫을 때·창으로 돌아올 때·결과의 목록 지문이 다를 때 다시 불러와, 목록이 바뀌었으면 새 목록으로 바꾼다.
   useEffect(() => {
-    if (!enrollProfile) {
-      setEnrollState({ profile: '', info: null, loadError: false });
+    const stopRecording = () => {
+      const r = recRef.current;
+      if (r.status === 'recording') r.stop(); // 결과는 실행 번호가 바뀌어 무시된다
+    };
+    if (!activeList) {
+      setListStatus(null);
+      if (machineRef.current.index !== INDEX) {
+        stopRecording();
+        dispatch({ type: 'SET_INDEX', index: INDEX, lipBlock: null });
+      }
       return undefined;
     }
     let alive = true;
-    setEnrollState((prev) => (prev.profile === enrollProfile ? prev : { profile: enrollProfile, info: null, loadError: false }));
-    getWardProfile(enrollProfile)
-      .then((data) => { if (alive) setEnrollState({ profile: enrollProfile, info: parseProfileInfo(data, INDEX, enrollProfile), loadError: false }); })
-      .catch(() => { if (alive) setEnrollState({ profile: enrollProfile, info: null, loadError: true }); });
+    const before = machineRef.current.index.customList;
+    const loadedBefore = !!before && before.id === activeList && !!before.sha256 && !machineRef.current.lipBlock;
+    const block = (message, title) => {
+      stopRecording();
+      dispatch({ type: 'SET_INDEX', index: emptyListIndex(activeList, title), lipBlock: { reason: 'error', message } });
+      setListStatus({ listId: activeList, state: 'error', title, count: 0, message });
+    };
+    if (!loadedBefore) {
+      if (!before || before.id !== activeList || !machineRef.current.lipBlock) {
+        stopRecording();
+        dispatch({ type: 'SET_INDEX', index: emptyListIndex(activeList), lipBlock: { reason: 'loading', message: '' } });
+      }
+      setListStatus((prev) => (prev?.listId === activeList && prev.state === 'error' ? prev
+        : { listId: activeList, state: 'loading', title: activeList, count: 0, message: '' }));
+    }
+    getWardList(activeList)
+      .then((data) => {
+        if (!alive) return;
+        const out = listLoadOutcome(data, activeList, COMMANDS);
+        if (!out.ok) {
+          block(out.message, out.title);
+          return;
+        }
+        const now = machineRef.current.index.customList;
+        const loaded = out.index.customList;
+        // 같은 판(명령 그대로)이면 녹화를 멈추지 않는다. 이름만 바뀌었으면 띠·카드 이름만 바꾼다(상태도가 흐름을 그대로 둔다).
+        const sameCommands = !!now && now.id === activeList && now.sha256 === loaded.sha256 && !machineRef.current.lipBlock;
+        if (!sameCommands) {
+          stopRecording();
+          dispatch({ type: 'SET_INDEX', index: out.index, lipBlock: null });
+        } else if (now.title !== loaded.title) {
+          dispatch({ type: 'SET_INDEX', index: out.index, lipBlock: null });
+        }
+        setListStatus({ listId: activeList, state: 'ready', title: out.title, count: out.index.list.length, message: '' });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        // 이미 불러온 목록을 다시 읽다가 연결만 끊긴 경우는 그대로 둔다(서버가 없으면 분석도 오류로 끝난다).
+        if (loadedBefore && !err?.response) return;
+        block(listLoadErrorMessage(err), machineRef.current.index.customList?.title || activeList);
+      });
     return () => { alive = false; };
-  }, [enrollProfile, showSettings]);
+  }, [activeList, listReload, showSettings, dispatch]);
+
+  // 다른 창(목록 관리 등)에서 돌아오면 내 목록을 다시 확인한다.
+  useEffect(() => {
+    if (!activeList) return undefined;
+    const onFocus = () => setListReload((n) => n + 1);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [activeList]);
+
+  // 설정의 등록 이름이 바뀌거나 설정 창을 닫으면 등록 상태(n/n·다시 등록 필요)를 서버에서 다시 읽는다. 등록은 목록마다 따로다.
+  const enrollProfile = enrollProfileFor(machine.settings, activeList);
+  const profileApi = useMemo(() => wardProfileApi(activeList), [activeList]);
+  const enrollKey = `${activeList}|${enrollProfile}`;
+  const listReady = !machine.lipBlock;
+  const machineIndex = machine.index;
+  useEffect(() => {
+    if (!enrollProfile || !listReady) {
+      setEnrollState({ key: '', info: null, loadError: false });
+      return undefined;
+    }
+    let alive = true;
+    setEnrollState((prev) => (prev.key === enrollKey ? prev : { key: enrollKey, info: null, loadError: false }));
+    profileApi.getWardProfile(enrollProfile)
+      .then((data) => { if (alive) setEnrollState({ key: enrollKey, info: parseProfileInfo(data, machineIndex, enrollProfile), loadError: false }); })
+      .catch(() => { if (alive) setEnrollState({ key: enrollKey, info: null, loadError: true }); });
+    return () => { alive = false; };
+  }, [enrollProfile, enrollKey, profileApi, listReady, machineIndex, showSettings]);
 
   const inject = useCallback((scenarioId) => {
     const r = recRef.current;
@@ -324,8 +484,12 @@ export default function WardPage() {
   const emergencyTone = view.tone === 'emergency' || view.tone === 'possible';
   const settings = machine.settings;
   const nightMuted = settings.tts && settings.nightMute && isNightTime(new Date(now));
-  const enrollLine = enrollStatusLine(enrollProfile, enrollState.profile === enrollProfile ? enrollState.info : null,
-    { loadError: enrollState.profile === enrollProfile && enrollState.loadError });
+  const enrollLine = listReady
+    ? enrollStatusLine(enrollProfile, enrollState.key === enrollKey ? enrollState.info : null,
+      { loadError: enrollState.key === enrollKey && enrollState.loadError })
+    : null;
+  const banner = listReady ? listBannerText(machine.index.customList) : null;
+  const pickedList = machine.settings.commandList;
 
   return (
     <div className="min-h-screen select-none" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
@@ -381,6 +545,21 @@ export default function WardPage() {
       {!channelOk && (
         <p role="alert" className="px-4 py-2 font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
           이 브라우저는 간호사 화면과 연결할 수 없습니다 (BroadcastChannel 없음)
+        </p>
+      )}
+      {banner && (
+        <p data-list-banner={machine.index.customList?.id} className="px-4 py-2 text-xl font-bold" style={{ background: WARD_COLORS.possibleBg, color: WARD_COLORS.possibleInk }}>
+          {banner}
+        </p>
+      )}
+      {activeList && listStatus?.state === 'error' && (
+        <p role="alert" data-list-error className="flex flex-wrap items-center gap-2 px-4 py-2 text-xl font-bold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+          <AlertIcon /> {LISTS_TEXT.cannotUse(listStatus.title, listStatus.message)} · 입 읽기 녹화를 쓸 수 없어요 (스위치 3번 = 긴급 호출은 됩니다)
+        </p>
+      )}
+      {practice && pickedList && (
+        <p data-practice-list-note className="px-4 py-2 text-base font-semibold" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+          {LISTS_TEXT.practiceDefaultOnly} (설정에서 고른 내 목록은 연습 모드 밖 병실 화면에서 써요)
         </p>
       )}
 
@@ -491,6 +670,13 @@ export default function WardPage() {
           voice={voice}
           onOpenEnroll={openEnroll}
           enrollBlocked={enrollOpenBlockReason(machine)}
+          activeList={activeList}
+          practice={practice}
+          index={machine.index}
+          listStatus={activeList ? listStatus : null}
+          listSwitchBlocked={listSwitchBlockReason(machine)}
+          onOpenLists={openLists}
+          listsBlocked={listsOpenBlockReason(machine)}
         />
       )}
     </div>

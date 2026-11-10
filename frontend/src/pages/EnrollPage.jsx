@@ -1,12 +1,16 @@
 // EnrollPage.jsx — 내 입 모양 등록 화면 (#enroll, 병실 화면 설정에서 연다). 시연용 연구 시제품이며 실제 환자에게 검증하지 않았다.
-// 등록 이름을 고르고 병실 명령 20개를 하나씩 소리 내어 한 번 말해 찍는다. 녹화는 병실 화면과 같은 5초 자동 정지이고,
-// POST /api/record(phrase_set='ward', enroll_profile, enroll_command)로 보내 서버 등록 폴더에 저장한다(결과는 폴링).
-// 상태도는 ward/wardEnroll.js(순수 함수)다. 이 화면에서 20개를 모두 찍고 '확인 필요'가 없으면 설정의 등록 이름을 이 이름으로
-// 바꾼다. 이미 끝난 등록을 열었거나 '확인 필요'가 있으면 [병실 화면에서 이 등록 쓰기]를 눌러야 바꾼다.
+// 등록 이름을 고르고 지금 쓰는 명령 목록(기본 목록 20개 또는 내 목록)의 명령을 하나씩 소리 내어 한 번 말해 찍는다. 녹화는 병실 화면과
+// 같은 5초 자동 정지이고, POST /api/record(phrase_set='ward', enroll_profile, enroll_command, 내 목록이면 command_list)로 보내
+// 서버 등록 폴더(목록마다 따로)에 저장한다(결과는 폴링).
+// 상태도는 ward/wardEnroll.js(순수 함수)다. 이 화면에서 목록의 명령을 모두 찍고 '확인 필요'가 없으면 설정의 등록 이름(그 목록 몫)을
+// 이 이름으로 바꾼다. 이미 끝난 등록을 열었거나 '확인 필요'가 있으면 [병실 화면에서 이 등록 쓰기]를 눌러야 바꾼다.
+// 등록할 목록은 병실 화면이 쓰는 목록(설정의 commandList, 연습 모드는 기본 목록)이다. 내 목록을 불러오지 못하면 등록하지 않는다
+// (기본 목록으로 바꾸지 않는다). 내 목록 등록 요청에는 불러온 목록 판(command_list_sha256)을 함께 보낸다: 다른 탭에서 목록을
+// 고쳤으면 서버가 저장하지 않고 거절하고, 이 화면은 목록을 다시 불러온다. 창으로 돌아올 때도 목록이 바뀌었는지 다시 확인한다.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { deleteWardProfile, getWardProfile, getWardProfiles } from '../api/client';
+import { getWardList, wardProfileApi } from '../api/client';
 import { errorMessageFrom } from '../api/pollOutcome';
 import useRecorder from '../hooks/useRecorder';
 import { blurAfterPointerClick } from '../record/pointerFocus';
@@ -14,11 +18,12 @@ import COMMANDS from '../ward/commands.json';
 import { AlertIcon, CheckIcon } from '../ward/WardIcons';
 import { buildCommandIndex, commandById } from '../ward/wardCommands';
 import {
-  ENROLL_RECORD_SECONDS, ENROLL_START_COOLDOWN_MS, ENROLL_TEXT, canStartEnrollRecording, commandRows, createEnrollState,
-  enrollHash, enrollStatusLine, isPracticeMode, profileChoices, profileFromHash, shouldAutoUseProfile, stepEnroll,
-  uncertainCommands, wardReturnHash,
+  ENROLL_RECORD_SECONDS, ENROLL_START_COOLDOWN_MS, ENROLL_TEXT, STORE_LIST_CHANGED, canStartEnrollRecording, commandRows,
+  createEnrollState, enrollHash, enrollStatusLine, isPracticeMode, profileChoices, profileFromHash, shouldAutoUseProfile,
+  stepEnroll, storeOutcome, uncertainCommands, wardReturnHash,
 } from '../ward/wardEnroll';
-import { loadSettings, safeLocalStorage, saveSettings } from '../ward/wardSettings';
+import { LISTS_TEXT, listLoadErrorMessage, listLoadOutcome } from '../ward/wardLists';
+import { enrollProfileFor, enrollProfilePatch, loadSettings, safeLocalStorage, saveSettings } from '../ward/wardSettings';
 import { createBeeper } from '../ward/wardSound';
 import { WARD_COLORS } from '../ward/wardTheme';
 import { analyzeWardRecording } from '../ward/wardUpload';
@@ -76,25 +81,140 @@ function buttonStyle(kind) {
 }
 
 /**
- * 내 입 모양 등록 화면.
+ * 목록 관리 화면으로 (연습 모드로 왔으면 연습 모드 표시를 함께).
+ * @param {boolean} practice
+ */
+function goLists(practice) {
+  try {
+    globalThis.location.hash = practice ? '#lists?practice=1' : '#lists';
+  } catch {
+    /* 주소를 바꾸지 못하면 그대로 둔다 */
+  }
+}
+
+/**
+ * 내 목록을 불러오는 중이거나 불러오지 못했을 때의 화면 (등록하지 않는다).
+ * @param {{state: {state:string, message?:string, title?:string}, listId: string, practice: boolean}} props
+ * @returns {JSX.Element}
+ */
+function ListGate({ state, listId, practice }) {
+  const failed = state.state === 'error';
+  return (
+    <div className="min-h-screen" style={{ background: WARD_COLORS.paper, color: WARD_COLORS.ink }}>
+      <header className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ background: WARD_COLORS.bannerBg, color: WARD_COLORS.paper }}>
+        <h1 className="text-2xl font-bold">{ENROLL_TEXT.title}</h1>
+        <p className="text-base font-semibold" style={{ color: WARD_COLORS.bannerInk }}>{PROTOTYPE_TEXT}</p>
+      </header>
+      <main className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
+        {failed ? (
+          <div role="alert" data-enroll-list-error className="rounded-lg px-4 py-3" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
+            <p className="flex items-center gap-2 text-2xl font-bold"><AlertIcon /> 내 목록 ‘{state.title || listId}’: {state.message}</p>
+            <p className="mt-2 text-lg">{ENROLL_TEXT.listLoadFailed}</p>
+          </div>
+        ) : (
+          <p className="text-2xl font-semibold">{LISTS_TEXT.loading}</p>
+        )}
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={goWard} className="rounded-xl border-4 px-6 py-3 text-2xl font-bold" style={buttonStyle('primary')}>
+            {ENROLL_TEXT.backToWard}
+          </button>
+          <button type="button" onClick={() => goLists(practice)} className="rounded-xl border-4 px-6 py-3 text-2xl font-bold" style={buttonStyle('secondary')}>
+            {ENROLL_TEXT.manageLists}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * 내 입 모양 등록 화면. 지금 쓰는 명령 목록을 정한 뒤(내 목록이면 서버에서 불러온 뒤) 등록 화면을 연다.
  * @returns {JSX.Element}
  */
 export default function EnrollPage() {
   const storage = useMemo(() => safeLocalStorage(), []);
   const practice = useMemo(() => isPracticeMode(globalThis.location), []);
+  // 등록할 목록: 병실 화면이 쓰는 목록(설정의 commandList). 연습 모드는 병실 화면처럼 기본 목록이다.
+  const listId = useMemo(() => (practice ? '' : loadSettings(storage).commandList), [practice, storage]);
+  const [loaded, setLoaded] = useState(() => (listId ? { state: 'loading' } : { state: 'ready', index: INDEX, notice: null }));
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
+  const [reload, setReload] = useState(0);
+
+  // 내 목록 불러오기. 다시 불러온 목록이 같은 판(sha256)이면 등록 화면을 그대로 두고, 판이 바뀌었으면 새 목록으로 화면을 다시 연다.
+  useEffect(() => {
+    if (!listId) return undefined;
+    let alive = true;
+    getWardList(listId)
+      .then((data) => {
+        if (!alive) return;
+        const out = listLoadOutcome(data, listId, COMMANDS);
+        if (!out.ok) {
+          setLoaded({ state: 'error', message: out.message, title: out.title });
+          return;
+        }
+        const prev = loadedRef.current;
+        const prevSha = prev.state === 'ready' ? prev.index.customList?.sha256 : null;
+        if (prevSha && prevSha === out.index.customList.sha256) return;
+        setLoaded({ state: 'ready', index: out.index, notice: prevSha ? ENROLL_TEXT.listReloaded : null });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        // 이미 불러온 목록을 다시 확인하다 연결만 끊긴 경우는 그대로 둔다(저장 요청은 서버가 판을 다시 확인한다).
+        if (loadedRef.current.state === 'ready' && !err?.response) return;
+        setLoaded({ state: 'error', message: listLoadErrorMessage(err), title: listId });
+      });
+    return () => { alive = false; };
+  }, [listId, reload]);
+
+  // 다른 창(목록 관리 등)에서 돌아오면 목록이 바뀌었는지 다시 확인한다.
+  useEffect(() => {
+    if (!listId) return undefined;
+    const onFocus = () => setReload((n) => n + 1);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [listId]);
+
+  const reloadList = useCallback(() => setReload((n) => n + 1), []);
+
+  if (loaded.state !== 'ready') return <ListGate state={loaded} listId={listId} practice={practice} />;
+  return (
+    <EnrollScreen
+      key={loaded.index.customList?.sha256 || 'default'}
+      index={loaded.index}
+      listId={listId}
+      storage={storage}
+      practice={practice}
+      initialNotice={loaded.notice || null}
+      onListChanged={reloadList}
+    />
+  );
+}
+
+/**
+ * 등록 화면 본체 (목록 하나의 한 판에 묶임. 목록 판이 바뀌면 부모가 새로 연다).
+ * @param {{index: object, listId: string, storage: Storage|null, practice: boolean, initialNotice?: string|null,
+ *   onListChanged?: () => void}} props
+ *   index는 등록할 목록의 명령 색인, listId는 ''(기본 목록) 또는 내 목록 ID. onListChanged는 서버가 '목록이 바뀜'을 알렸을 때
+ *   목록을 다시 불러오게 한다.
+ * @returns {JSX.Element}
+ */
+function EnrollScreen({ index, listId, storage, practice, initialNotice = null, onListChanged = () => {} }) {
+  const api = useMemo(() => wardProfileApi(listId), [listId]);
+  const listName = index.customList ? `내 목록 ‘${index.customList.title}’` : LISTS_TEXT.defaultName;
   const stateRef = useRef(null);
   if (!stateRef.current) {
-    stateRef.current = createEnrollState({ index: INDEX, profile: profileFromHash(globalThis.location?.hash) });
+    stateRef.current = createEnrollState({ index, profile: profileFromHash(globalThis.location?.hash) });
   }
   const [state, setState] = useState(stateRef.current);
-  const [profileDraft, setProfileDraft] = useState(() => state.profile || loadSettings(storage).enrollProfile || '');
+  const [profileDraft, setProfileDraft] = useState(() => state.profile || enrollProfileFor(loadSettings(storage), listId) || '');
   const [choices, setChoices] = useState([]);
   const [coolingDown, setCoolingDown] = useState(false);
   const coolRef = useRef(false);
   coolRef.current = coolingDown;
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [notice, setNotice] = useState(null);
-  const [inUseProfile, setInUseProfile] = useState(() => loadSettings(storage).enrollProfile || '');
+  const [notice, setNotice] = useState(initialNotice);
+  const [inUseProfile, setInUseProfile] = useState(() => enrollProfileFor(loadSettings(storage), listId) || '');
   const mountedRef = useRef(true);
   const loadSeqRef = useRef(0);
   const coolTimerRef = useRef(null);
@@ -115,10 +235,10 @@ export default function EnrollPage() {
     loadSeqRef.current += 1;
     const seq = loadSeqRef.current;
     const current = () => mountedRef.current && seq === loadSeqRef.current;
-    getWardProfile(profile)
+    api.getWardProfile(profile)
       .then((data) => { if (current()) dispatch({ type: 'PROFILE_LOADED', data }); })
       .catch((err) => { if (current()) dispatch({ type: 'PROFILE_FAILED', message: errorMessageFrom(err, '') }); });
-  }, [dispatch]);
+  }, [api, dispatch]);
 
   /** 결과를 받은 직후 잠깐 스페이스바 시작을 막는다. */
   const startCooldown = useCallback(() => {
@@ -133,21 +253,27 @@ export default function EnrollPage() {
     if (!mountedRef.current || s.phase !== 'recording' || !s.recordingId) return;
     const profile = s.profile;
     dispatch({ type: 'RECORD_DONE' });
+    // 내 목록이면 불러온 판(sha256)을 함께 보낸다: 그사이 다른 탭에서 목록을 고쳤으면 서버가 저장하지 않고 거절한다.
     const outcome = await analyzeWardRecording({
-      blob, mime, durationMs: meta?.durationMs, enrollProfile: profile, enrollCommand: s.recordingId,
-      isCancelled: () => !mountedRef.current,
+      blob, mime, durationMs: meta?.durationMs, enrollProfile: profile, enrollCommand: s.recordingId, commandList: listId,
+      commandListSha256: listId ? (index.customList?.sha256 || '') : '', isCancelled: () => !mountedRef.current,
     });
     if (!mountedRef.current) return;
     if (outcome.kind === 'invalid') dispatch({ type: 'RECORD_FAILED', message: outcome.message });
     else if (outcome.kind === 'done') {
+      const listChanged = storeOutcome(outcome.results, s.recordingId, index).reason === STORE_LIST_CHANGED;
       dispatch({ type: 'STORE_RESULT', results: outcome.results });
       loadProfile(profile);
+      if (listChanged) onListChanged();
+    } else if (outcome.kind === 'error' && outcome.listChanged) {
+      dispatch({ type: 'ANALYSIS_ERROR', message: ENROLL_TEXT.listChanged });
+      onListChanged(); // 저장하지 않았다. 새 목록으로 화면을 다시 연다
     } else if (outcome.kind === 'error' || outcome.kind === 'timeout') {
       dispatch({ type: 'ANALYSIS_ERROR', message: outcome.kind === 'timeout' ? ENROLL_TEXT.timeout : outcome.message });
       loadProfile(profile); // 서버가 늦게라도 저장했을 수 있으니 목록을 서버 상태로 맞춘다
     }
     startCooldown();
-  }, [dispatch, loadProfile, startCooldown]);
+  }, [dispatch, index, listId, loadProfile, onListChanged, startCooldown]);
 
   const rec = useRecorder({ maxSeconds: ENROLL_RECORD_SECONDS, video: CAMERA, onResult: handleRecorded });
   const recRef = useRef(rec);
@@ -183,11 +309,11 @@ export default function EnrollPage() {
   useEffect(() => {
     if (state.phase !== 'choose') return undefined;
     let alive = true;
-    getWardProfiles()
+    api.getWardProfiles()
       .then((data) => { if (alive) setChoices(profileChoices(data, '')); })
       .catch(() => { if (alive) setChoices([]); });
     return () => { alive = false; };
-  }, [state.phase]);
+  }, [api, state.phase]);
 
   // 주소의 등록 이름을 직접 바꾸면 그 이름으로 다시 연다.
   useEffect(() => {
@@ -199,13 +325,17 @@ export default function EnrollPage() {
     return () => window.removeEventListener('hashchange', onHash);
   }, [dispatch]);
 
-  /** 병실 화면 설정의 등록 이름을 이 등록으로 바꾼다. */
+  /** 병실 화면 설정의 등록 이름(이 목록 몫)을 이 등록으로 바꾼다. 기본 목록은 예전과 같은 enrollProfile이다. */
   const applyProfile = useCallback((profile) => {
     if (!profile) return;
     const current = loadSettings(storage);
-    if (current.enrollProfile !== profile) saveSettings(storage, { ...current, enrollProfile: profile });
+    if (!listId) {
+      if (current.enrollProfile !== profile) saveSettings(storage, { ...current, enrollProfile: profile });
+    } else if (enrollProfileFor(current, listId) !== profile) {
+      saveSettings(storage, { ...current, ...enrollProfilePatch(current, listId, profile) });
+    }
     setInUseProfile(profile);
-  }, [storage]);
+  }, [listId, storage]);
 
   // 이 화면에서 20개를 모두 찍었고(명령 목록·모델 그대로) '확인 필요'가 없으면 병실 화면이 이 등록을 쓰도록 설정을 바꾼다.
   // 이미 끝난 등록을 열어 보기만 했거나 '확인 필요'가 있으면 끝 화면의 버튼을 눌러야 바꾼다.
@@ -255,7 +385,7 @@ export default function EnrollPage() {
     if (!globalThis.confirm?.(ENROLL_TEXT.deleteConfirm(profile))) return;
     setDeleteBusy(true);
     try {
-      await deleteWardProfile(profile);
+      await api.deleteWardProfile(profile);
       setNotice(`등록 “${profile}”를 지웠어요. 처음부터 다시 찍어 주세요`);
       dispatch({ type: 'CHOOSE', profile }); // 같은 이름으로 다시 불러온다(빈 등록)
     } catch (err) {
@@ -263,11 +393,11 @@ export default function EnrollPage() {
     } finally {
       if (mountedRef.current) setDeleteBusy(false);
     }
-  }, [deleteBusy, dispatch]);
+  }, [api, deleteBusy, dispatch]);
 
-  const command = commandById(INDEX, state.currentId);
-  const rows = commandRows(INDEX, state.info, state.currentId);
-  const total = INDEX.list.length;
+  const command = commandById(index, state.currentId);
+  const rows = commandRows(index, state.info, state.currentId);
+  const total = index.list.length;
   const count = state.info?.count ?? 0;
   const line = state.info ? enrollStatusLine(state.profile, state.info) : null;
   const busy = state.phase === 'recording' || state.phase === 'analyzing';
@@ -276,7 +406,7 @@ export default function EnrollPage() {
   const remaining = Math.max(0, Math.ceil((ENROLL_RECORD_SECONDS * 1000 - (rec.elapsedMs || 0)) / 1000));
   const last = state.last && state.last.commandId === state.currentId ? state.last
     : (state.last && state.last.kind === 'stored' && state.last.matches ? state.last : null);
-  const uncertain = uncertainCommands(INDEX, state.info);
+  const uncertain = uncertainCommands(index, state.info);
   const inUse = inUseProfile === state.profile;
   const stale = state.info?.status === 'stale';
 
@@ -313,6 +443,9 @@ export default function EnrollPage() {
       {state.phase === 'choose' && (
         <main className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
           <p className="text-xl">{ENROLL_TEXT.intro}</p>
+          <p data-enroll-list={listId || 'default'} className="text-lg font-semibold">
+            {ENROLL_TEXT.listLine(listName, total)}{index.customList ? ` · ${LISTS_TEXT.untested}` : ''}
+          </p>
           <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{ENROLL_TEXT.privacy}</p>
           <form
             className="flex flex-wrap items-end gap-3"
@@ -381,6 +514,7 @@ export default function EnrollPage() {
               </div>
             )}
             <p className="text-2xl font-bold">{state.profile} · {ENROLL_TEXT.progress(count, total)}</p>
+            <p className="text-base" style={{ color: WARD_COLORS.inkSoft }}>{listName}{index.customList ? ` · ${LISTS_TEXT.untested}` : ''}</p>
             {line && line.tone === 'warn' && state.info?.status === 'stale' && (
               <div role="alert" className="rounded-lg px-3 py-2" style={{ background: WARD_COLORS.warnBg, color: WARD_COLORS.warnInk }}>
                 <p className="flex items-center gap-2 text-lg font-bold"><AlertIcon /> {ENROLL_TEXT.stale}</p>

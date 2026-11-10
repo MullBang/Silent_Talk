@@ -18,6 +18,25 @@
 import { DETECTION_FAILED_TEXT, NO_SPEECH_TEXT } from '../results/markers.js';
 import { WARD_PHRASE_SET, commandById } from './wardCommands.js';
 
+/**
+ * 결과의 phrase.list가 지금 색인의 목록과 맞는지.
+ * - 기본 목록 색인(customList 없음): phrase.list가 없어야 한다(서버는 command_list 없는 요청에 list를 붙이지 않는다).
+ * - 내 목록 색인: phrase.list.id와 sha256이 불러온 목록과 같아야 한다(목록을 고친 뒤 온 결과는 쓰지 않는다).
+ * @param {any} phraseList 서버 phrase.list.
+ * @param {{id:string, sha256:string|null}|null|undefined} customList 색인의 customList.
+ * @returns {boolean}
+ */
+export function phraseListMatches(phraseList, customList) {
+  try {
+    if (!customList) return phraseList === undefined || phraseList === null;
+    if (!phraseList || typeof phraseList !== 'object') return false;
+    return typeof customList.sha256 === 'string' && customList.sha256.length > 0
+      && phraseList.id === customList.id && phraseList.sha256 === customList.sha256;
+  } catch {
+    return false;
+  }
+}
+
 /** 지정 문장 결과가 없을 때의 사유 → 환자 화면 문구. */
 export const NO_PHRASE_REASON_TEXT = Object.freeze({
   empty: '분석 결과가 비어 있어요',
@@ -115,7 +134,7 @@ export function parseEnrollMatch(raw, index, phraseId) {
  * - 결과 한 건 + 병실 묶음 phrase → {kind:'phrase', accepted, command, runnerUp, score, margin, rule, floor, enroll}.
  *   accepted는 phrase.accepted === true일 때만. rule·enroll이 없으면(옛 서버) null이고 floor도 null이다.
  * - 전부 [발화 없음] 또는 [검출 실패 구간] → {kind:'no_speech'} (입 움직임이 안 보임).
- * - 여러 창·일부 검출 실패·정렬 불가(짧음)·다른 묶음·모르는 ID → {kind:'no_phrase', reason}.
+ * - 여러 창·일부 검출 실패·정렬 불가(짧음)·다른 묶음·모르는 ID·다른 목록(목록 ID·지문이 다름) → {kind:'no_phrase', reason}.
  *
  * @param {Array<object>|null|undefined} results 서버 results.
  * @param {{byId: Map<string, object>}} index buildCommandIndex 결과.
@@ -139,6 +158,8 @@ export function classifyWardResults(results, index) {
     if (!phrase || typeof phrase !== 'object' || typeof phrase.id !== 'string') return { kind: 'no_phrase', reason: 'unaligned' };
     // 묶음 표시는 반드시 'ward'여야 한다. 표시가 없는 옛 서버 결과나 문장 모드 결과는 병실 명령으로 해석하지 않는다.
     if (phrase.set !== WARD_PHRASE_SET) return { kind: 'no_phrase', reason: 'other_set' };
+    // 내 목록은 목록 ID와 지문이 지금 불러온 목록과 같을 때만 쓴다. 기본 목록 결과에는 list가 없어야 한다.
+    if (!phraseListMatches(phrase.list, index?.customList)) return { kind: 'no_phrase', reason: 'other_set' };
     const command = commandById(index, phrase.id);
     if (!command) return { kind: 'no_phrase', reason: 'other_set' };
     const runnerUp = commandById(index, phrase.runner_up_id);

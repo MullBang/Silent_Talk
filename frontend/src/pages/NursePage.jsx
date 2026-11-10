@@ -3,6 +3,7 @@
 // 긴급 카드는 [확인]까지 반복음, 일반 카드는 한 번 울린다. 브라우저 자동 재생 정책 때문에 [소리 켜기]를 한 번 눌러야 한다.
 // 이 창에 들어온 스위치(키) 입력은 환자 창으로 넘긴다 (발표 중 간호사 창에 포커스가 있어도 스위치가 동작하게).
 // 단, 목록을 넘겨 보는 이동 키(화살표·Page·Home·End)는 넘기지 않는다.
+// 환자 화면이 '내 목록'을 쓰는 동안 온 카드에는 작은 표시 "내 목록: <이름>"을 붙인다(성능을 측정하지 않은 목록).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -15,7 +16,7 @@ import { PHASE_LABELS } from '../ward/wardMachine';
 import { safeLocalStorage } from '../ward/wardSettings';
 import { ALARM_REPEAT_MS, createBeeper } from '../ward/wardSound';
 import {
-  ackNurseCard, cardEnrollNote, cardHeadline, cardLabel, clearAcked, dropRoom, hasOpenAlarm, hhmm, isAlarmKind, isOverdue, loadNurseCards,
+  ackNurseCard, cardEnrollNote, cardHeadline, cardLabel, cardListNote, clearAcked, dropRoom, hasOpenAlarm, hhmm, isAlarmKind, isOverdue, loadNurseCards,
   loadNursePrefs, noteRoomState, pruneRooms, saveNurseCards, saveNursePrefs, sortNewestFirst, upsertNurseCard,
   NURSE_STORAGE_KEY,
 } from '../ward/wardStore';
@@ -229,6 +230,7 @@ export default function NursePage() {
               const style = cardStyle(card, overdue);
               const estimateColor = card.acked || card.kind === 'check' ? WARD_COLORS.estimate : style.color;
               const enrollNote = cardEnrollNote(card);
+              const listNote = cardListNote(card);
               return (
                 <li key={card.id} data-card-id={card.id} data-kind={card.kind} className="rounded-xl border-4 px-4 py-3" style={style}>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -245,6 +247,15 @@ export default function NursePage() {
                       </span>
                     )}
                     {card.count > 1 && <span className="text-2xl font-black">×{card.count}</span>}
+                    {listNote && (
+                      <span
+                        data-list-tag={card.list?.id}
+                        className="rounded-md border-2 px-2 py-0.5 text-base font-semibold"
+                        style={{ borderColor: 'currentColor' }}
+                      >
+                        {listNote}
+                      </span>
+                    )}
                     <span className="text-xl">{hhmm(card.firstAt)}{card.count > 1 || card.lastAt !== card.firstAt ? ` · 최근 ${hhmm(card.lastAt)}` : ''}</span>
                     {alarm && !card.acked && <span className="text-lg font-bold">반복음</span>}
                     <span data-no-switch className="ml-auto" onClick={blurAfterPointerClick}>

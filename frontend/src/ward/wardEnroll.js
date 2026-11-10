@@ -1,7 +1,8 @@
 // wardEnroll.js — 내 입 모양 등록 화면(#enroll)의 순수 함수와 상태도 (node --test로 검사, JSX·DOM·시계 없음).
-// 등록은 환자마다 명령 20개를 소리 내어 한 번씩 찍어 서버(POST /api/record, phrase_set='ward', enroll_profile·enroll_command)에
-// 저장하는 일이다. 저장한 입 모양(인식 모델의 숨은 특징)은 서버의 등록 폴더에만 남고 화면·저장소에는 남기지 않는다.
-// 병실 화면은 20개를 모두 찍고 명령 목록·모델이 그대로일 때(status 'ok')만 등록 거리를 판정에 쓴다.
+// 등록은 환자마다 지금 쓰는 명령 목록(기본 목록 20개 또는 내 목록)의 명령을 소리 내어 한 번씩 찍어 서버(POST /api/record,
+// phrase_set='ward', enroll_profile·enroll_command, 내 목록이면 command_list)에 저장하는 일이다. 저장한 입 모양(인식 모델의
+// 숨은 특징)은 서버의 등록 폴더(목록마다 따로)에만 남고 화면·저장소에는 남기지 않는다.
+// 병실 화면은 목록의 명령을 모두 찍고 명령 목록·모델이 그대로일 때(status 'ok')만 등록 거리를 판정에 쓴다.
 
 import { commandById } from './wardCommands.js';
 import { ENROLL_PROFILE_PATTERN, isPracticeMode, isValidProfileId, normalizeProfileId } from './wardSettings.js';
@@ -14,12 +15,17 @@ export const ENROLL_START_COOLDOWN_MS = 1000;
 export const PROFILE_STATUSES = Object.freeze(['ok', 'missing', 'incomplete', 'stale']);
 /** 저장하지 못한 사유 (서버 enroll.reason, store 모드). */
 export const STORE_REASONS = Object.freeze(['multi_window', 'partial_detection', 'no_speech', 'no_phrase', 'no_features', 'error']);
+/** 화면이 불러온 내 목록과 다른 판으로 저장 결과가 온 경우 (storeOutcome reason). 목록을 다시 불러와 다시 찍는다. */
+export const STORE_LIST_CHANGED = 'list_changed';
 
 export { ENROLL_PROFILE_PATTERN, isValidProfileId, normalizeProfileId };
 
 export const ENROLL_TEXT = Object.freeze({
   title: '내 입 모양 등록',
-  intro: '명령 20개를 한 번씩 찍어 두면, 병실 화면이 글자만으로 고르지 못할 때 내 입 모양과 비교해서 고를 수 있어요.',
+  intro: '목록의 명령을 한 번씩 찍어 두면, 병실 화면이 글자만으로 고르지 못할 때 내 입 모양과 비교해서 고를 수 있어요.',
+  listLine: (name, total) => `등록할 목록: ${name} (명령 ${total}개)`,
+  listLoadFailed: '이 목록으로는 등록할 수 없어요. 목록 관리에서 목록을 확인해 주세요',
+  manageLists: '내 목록 관리',
   privacy: '등록 이름은 실명 대신 별명으로 정해 주세요 (영문·숫자·_·-, 32자까지, 예: bed305).',
   profileLabel: '등록 이름',
   start: '등록 시작',
@@ -59,6 +65,8 @@ export const ENROLL_TEXT = Object.freeze({
   badProfile: '등록 이름은 영문·숫자·_·- 1~32자로 적어 주세요',
   timeout: '서버가 아직 처리 중일 수 있어요. 잠시 뒤 목록을 확인하고, 아직이면 다시 찍어 주세요',
   staleNoRecord: '이 등록은 다시 찍을 수 없어요. 먼저 “이 등록 지우고 처음부터”를 눌러 주세요',
+  listChanged: '목록이 바뀌었어요. 목록을 다시 불러온 뒤 지금 화면의 문장으로 다시 찍어 주세요',
+  listReloaded: '다른 곳에서 목록이 바뀌어 다시 불러왔어요. 바뀐 문장만 다시 찍으면 돼요',
 });
 
 /** 저장하지 못한 사유 → 안내 문구. */
@@ -160,7 +168,7 @@ export function parseProfileInfo(data, index, profile = '') {
 }
 
 /**
- * 등록을 병실 판정에 쓸 수 있는지 (20/20, 명령 목록·모델 그대로).
+ * 등록을 병실 판정에 쓸 수 있는지 (목록의 명령을 모두 찍음, 명령 목록·모델 그대로).
  * @param {{complete:boolean, status:string}|null|undefined} info
  * @returns {boolean}
  */
@@ -194,7 +202,9 @@ export function nextMissingId(index, done, afterId = null) {
  * 등록 저장 결과(results[0].enroll, store 모드)를 읽는다.
  * @param {Array<object>|null|undefined} results 서버 results.
  * @param {string} commandId 찍은 명령.
- * @param {{byId: Map<string, object>}} [index] 명령 색인 (인식 문장이 다를 때 그 명령 문장을 보이려고 쓴다).
+ * @param {{byId: Map<string, object>, customList?: {id:string, sha256:string|null}|null}} [index] 명령 색인 (인식 문장이 다를 때
+ *   그 명령 문장을 보이려고 쓴다). 내 목록 색인이면 결과의 phrase.list가 같은 목록·같은 판인지도 본다: 다르면
+ *   {kind:'failed', reason:'list_changed'}(화면에 보인 문장과 저장된 문장이 다를 수 있다, 다시 불러와 다시 찍는다).
  * @returns {{kind:'stored'|'failed'|'unsupported', commandId:string, reason:string|null, textTop:string|null,
  *   matches:boolean, count:number|null, complete:boolean|null, message:string}}
  */
@@ -202,6 +212,13 @@ export function storeOutcome(results, commandId, index = null) {
   const base = { commandId, reason: null, textTop: null, matches: false, count: null, complete: null };
   try {
     const first = Array.isArray(results) ? results.find((x) => x && typeof x === 'object') : null;
+    const meta = index?.customList;
+    if (meta && meta.id) {
+      const list = first?.phrase?.list;
+      if (!list || list.id !== meta.id || !meta.sha256 || list.sha256 !== meta.sha256) {
+        return { ...base, kind: 'failed', reason: STORE_LIST_CHANGED, message: ENROLL_TEXT.listChanged };
+      }
+    }
     const e = first?.enroll;
     if (!e || typeof e !== 'object' || e.mode !== 'store') {
       return { ...base, kind: 'unsupported', message: ENROLL_TEXT.unsupported };
@@ -296,7 +313,7 @@ export function uncertainCommands(index, info) {
 
 /**
  * 끝 화면에서 병실 화면 설정의 등록 이름을 저절로 이 등록으로 바꿀지.
- * 이번 화면에서 실제로 찍어(저장) 20/20을 마쳤고 '확인 필요'가 없을 때만이다. 이미 끝난 등록을 열어 보기만 했거나
+ * 이번 화면에서 실제로 찍어(저장) 목록의 명령을 모두 마쳤고 '확인 필요'가 없을 때만이다. 이미 끝난 등록을 열어 보기만 했거나
  * '확인 필요'가 있으면 사람이 [병실 화면에서 이 등록 쓰기]·[그래도 이 등록 쓰기]를 눌러야 바꾼다.
  * @param {{phase:string, storedHere?:boolean, info:object|null, index:object}} state
  * @returns {boolean}

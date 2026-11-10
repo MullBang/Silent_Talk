@@ -12,7 +12,7 @@ export const MAX_NURSE_CARDS = 200;
 /** 이 시간 동안 확인하지 않은 카드는 강조한다. */
 export const OVERDUE_MS = 60000;
 
-/** 카드 내용 중 환자 창이 바꿀 수 있는 필드. 종류(kind)·병실·처음 시각은 바꾸지 않는다. */
+/** 카드 내용 중 환자 창이 바꿀 수 있는 필드. 종류(kind)·병실·처음 시각·목록(list)은 바꾸지 않는다. */
 const CONTENT_FIELDS = ['text', 'commandId', 'candidates', 'reason', 'hint', 'note', 'cancelRequested', 'selectedId', 'source', 'enroll',
   'updatedAt'];
 
@@ -25,18 +25,58 @@ export function isAlarmKind(kind) {
   return ALARM_KINDS.includes(kind);
 }
 
+/** 목록 판(sha256) 형식. */
+const LIST_SHA_RE = /^[0-9a-f]{64}$/i;
+
+/**
+ * 내 목록에서 온 카드의 목록 표시 {id, title, sha256}. 기본 목록 카드(list 없음)·형식이 틀린 값은 null.
+ * sha256은 카드를 만들 때 쓴 목록 판이다(없거나 형식이 틀리면 null).
+ * @param {object} card
+ * @returns {{id:string, title:string, sha256:string|null}|null}
+ */
+export function cardListTag(card) {
+  try {
+    const list = card?.list;
+    if (!list || typeof list !== 'object' || typeof list.id !== 'string' || !list.id) return null;
+    const title = typeof list.title === 'string' && list.title.trim() ? list.title.trim() : list.id;
+    const sha256 = typeof list.sha256 === 'string' && LIST_SHA_RE.test(list.sha256) ? list.sha256.toLowerCase() : null;
+    return { id: list.id, title, sha256 };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 간호사 카드의 작은 목록 표시 문구 ("내 목록: 재활 병동"). 기본 목록 카드는 null.
+ * @param {object} card
+ * @returns {string|null}
+ */
+export function cardListNote(card) {
+  const tag = cardListTag(card);
+  return tag ? `내 목록: ${tag.title}` : null;
+}
+
 /**
  * 합칠 수 있는 카드의 열쇠. 후보가 있는 '확인 필요'·'긴급 가능성'처럼 환자 선택으로 바뀌는 카드는 합치지 않는다.
+ * 내 목록 카드는 열쇠 끝에 목록 ID와 목록 판(sha256)을 붙인다: 내 목록 U05는 기본 목록 W05·다른 내 목록의 U05와 합치지 않고,
+ * 같은 목록이라도 고친 뒤(판이 다름)의 U05와는 합치지 않는다(서버가 저장할 때 줄 순서대로 U 번호를 다시 붙여 같은 번호가
+ * 다른 문장이 될 수 있다. 합치면 옛 문장만 보이고 새 요청 내용이 사라진다). 판이 없거나 형식이 틀린 list면 합치지 않는다(null).
+ * 기본 목록 카드(list 없음)의 열쇠는 예전과 같다.
  * @param {object} card
  * @returns {string|null}
  */
 export function mergeKey(card) {
   if (!card) return null;
+  let base = null;
   if (card.kind === 'request' || card.kind === 'emergency' || card.kind === 'emergency_call') {
-    return `${card.room}|${card.kind}|${card.commandId || ''}`;
+    base = `${card.room}|${card.kind}|${card.commandId || ''}`;
+  } else if (card.kind === 'check' && card.reason === 'no_mouth') {
+    base = `${card.room}|check|no_mouth`;
   }
-  if (card.kind === 'check' && card.reason === 'no_mouth') return `${card.room}|check|no_mouth`;
-  return null;
+  if (base === null || card.list === undefined || card.list === null) return base;
+  const tag = cardListTag(card);
+  if (!tag || !tag.sha256) return null;
+  return `${base}|list:${tag.id}@${tag.sha256}`;
 }
 
 /** 오래된 카드부터 버린다 (확인한 카드 먼저). */

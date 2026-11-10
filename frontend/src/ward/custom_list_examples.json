@@ -1,0 +1,20 @@
+{
+  "schema": "ward-custom-list-examples-v1",
+  "examples": [
+    {
+      "title": "재활 병동",
+      "commands": [
+        { "text": "가슴이 쥐어짜듯 아파요", "display": "가슴이 쥐어짜듯 아파요", "category": "emergency", "emergency": true, "cancel": false },
+        { "text": "한쪽 팔다리에 힘이 빠져요", "display": "한쪽 팔다리에 힘이 빠져요", "category": "emergency", "emergency": true, "cancel": false },
+        { "text": "수술한 곳에서 피가 나요", "display": "수술 부위에서 피가 나요", "category": "emergency", "emergency": true, "cancel": false },
+        { "text": "치료사 선생님 언제 오세요", "display": "치료사 선생님은 언제 오시나요", "category": "call", "emergency": false, "cancel": false },
+        { "text": "보조기 끈을 느슨하게 풀어 줘", "display": "보조기를 느슨하게 풀어 주세요", "category": "care", "emergency": false, "cancel": false },
+        { "text": "입술이 말라서 립밤 발라 줘", "display": "입술에 립밤을 발라 주세요", "category": "care", "emergency": false, "cancel": false },
+        { "text": "음악을 작게 틀어 주시겠어요", "display": "음악을 작게 틀어 주세요", "category": "room", "emergency": false, "cancel": false },
+        { "text": "리모컨을 손에 쥐여 줄래", "display": "리모컨을 손에 쥐여 주세요", "category": "room", "emergency": false, "cancel": false },
+        { "text": "잠깐만 생각해 보고 말할게요", "display": "잠깐 생각해 보고 말할게요", "category": "answer", "emergency": false, "cancel": false },
+        { "text": "아까 고른 건 없던 일로 할래", "display": "아까 고른 요청은 취소할게요", "category": "call", "emergency": false, "cancel": true }
+      ]
+    }
+  ]
+}
