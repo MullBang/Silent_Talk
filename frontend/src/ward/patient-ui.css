@@ -106,3 +106,101 @@
 .patient-phrase-tag.is-emergency{color:#991b1b;border-color:#f3c7c7;}
 .patient-phrase-tag svg{width:13px;height:13px;}
 @media(max-width:600px){.patient-phrases{padding:15px;}.patient-phrase-groups{grid-template-columns:1fr;gap:9px;}.patient-phrase-group li{font-size:18px;}}
+
+/* ---- 2026-11-25 사용감 개선 ---- */
+/* 말할 수 있는 문장: 결과 칸 안(대기·녹화 중). 노트북 화면(1366×768)에서도 스크롤 없이 보이게 촘촘하게. */
+.patient-phrases.is-inline{padding:12px 0 0;border:0;border-top:1px solid #e1e8f1;border-radius:0;background:transparent;}
+.patient-phrases.is-inline .patient-phrases-heading h2{font-size:15px;}
+.patient-phrases.is-inline .patient-phrases-heading p{font-size:13px;margin-top:2px;}
+.patient-phrases.is-inline .patient-phrase-groups{grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:8px;margin-top:9px;}
+.patient-phrases.is-inline .patient-phrase-group{padding:8px 10px;}
+.patient-phrases.is-inline .patient-phrase-group h3{margin-bottom:5px;font-size:12px;}
+.patient-phrases.is-inline .patient-phrase-group ul{gap:4px;}
+.patient-phrases.is-inline .patient-phrase-group li{font-size:16px;line-height:1.32;}
+.patient-result.tone-recording .patient-phrases.is-inline{border-top-color:rgba(255,255,255,.35);}
+.patient-result.tone-warning .patient-phrases.is-inline{border-top-color:rgba(0,0,0,.15);}
+.patient-result.tone-recording .patient-phrases-heading h2 span,.patient-result.tone-recording .patient-phrases-heading p{color:inherit;opacity:.9;}
+/* 결과가 아닌 안내(첫 화면·녹화 중)는 문장 목록과 함께 보이도록 조금 작게. 결과 글씨(화면 높이 1/10)는 그대로. */
+.patient-headline.is-compact{font-size:max(5.5vh,1.8rem);line-height:1.2;}
+/* 카메라 위치 안내 */
+.patient-face-box{position:absolute;border:3px solid #22c55e;border-radius:14px;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.28);transition:left .2s,top .2s,width .2s,height .2s,border-color .2s;}
+.patient-face-box.is-adjust{border-color:#f59e0b;}
+.patient-face-advice{display:flex;gap:7px;align-items:flex-start;font-size:14px;font-weight:750;line-height:1.5;border-radius:9px;padding:7px 10px;word-break:keep-all;}
+.patient-face-advice.is-ok{background:#ecfdf3;color:#14532d;}
+.patient-face-advice.is-adjust{background:#fef3c7;color:#78350f;}
+.patient-face-advice.is-none{background:#eef2f7;color:#334155;}
+.patient-face-inline{display:flex;gap:8px;align-items:center;font-size:16px;font-weight:750;line-height:1.45;background:#fef3c7;color:#78350f;border-radius:10px;padding:8px 12px;word-break:keep-all;}
+/* 크게 보기 (환자 전용 전체 화면): 공통 머리띠·시연 설명·가상 병실·시연 도구를 숨긴다 */
+.ward-app.is-focus .app-bar{display:none;}
+/* 시제품 안내와 연습 모드 시연 도구는 크게 보기에서도 남긴다(가상 병실·카메라 설정 글만 숨김). */
+.patient-page.is-focus .patient-camera-detail,.patient-page.is-focus .patient-room-panel{display:none;}
+.patient-page.is-focus .patient-main{max-width:none;grid-template-columns:260px minmax(0,1fr);padding-top:16px;}
+@media(max-width:1023px){.patient-page.is-focus .patient-main{grid-template-columns:1fr;}}
+/* 어두운 화면 (설정 '화면 밝기'). 긴급·녹화·주의 카드 색은 그대로 쓴다. */
+.ward-app.is-dark{background:#0b1220;color:#e2e8f0;}
+.ward-app.is-dark .app-bar{background:#111a2e;border-color:#24324a;color:#e2e8f0;}
+.ward-app.is-dark .app-brand>div>span{color:#94a3b8;}
+.ward-app.is-dark .app-bar nav button{background:#1b2740;border-color:#33445f;color:#e2e8f0;}
+.ward-app.is-dark .app-current{color:#93c5fd;}
+.patient-page.is-dark{color:#e2e8f0;}
+.patient-page.is-dark .patient-safety{background:#2a2312;color:#fcd34d;border-color:#4a3b14;}
+.patient-page.is-dark .patient-prototype{color:#d6c79a;}
+.patient-page.is-dark .patient-room-badge,.patient-page.is-dark .patient-small-button,.patient-page.is-dark .patient-secondary{background:#1b2740;border-color:#33445f;color:#e2e8f0;}
+.patient-page.is-dark .patient-camera-panel,.patient-page.is-dark .patient-room-panel,.patient-page.is-dark .patient-practice,.patient-page.is-dark .patient-result{background:#131d31;border-color:#2a3a55;color:#f1f5f9;}
+.patient-page.is-dark .patient-camera-hint,.patient-page.is-dark .patient-key-hint,.patient-page.is-dark .patient-reason,.patient-page.is-dark .patient-analysis{color:#cbd5e1;}
+.patient-page.is-dark .patient-camera-detail{color:#94a3b8!important;}
+.patient-page.is-dark .patient-input-choice{background:#0f1729;border-color:#2a3a55;}
+.patient-page.is-dark .patient-input-choice button{color:#cbd5e1;}
+.patient-page.is-dark .patient-input-choice button[aria-pressed=true]{background:#1e3a8a;color:#fff;}
+.patient-page.is-dark .patient-scan-list li{background:#1b2740;border-color:#33445f;color:#f1f5f9;}
+.patient-page.is-dark .patient-scan-list li.is-highlighted{background:#2563eb;border-color:#60a5fa;color:#fff;}
+.patient-page.is-dark .patient-scan-list button:hover{background:#22304d;}
+.patient-page.is-dark .patient-emergency-tag{color:#fca5a5;}
+.patient-page.is-dark .patient-phrases.is-inline{border-top-color:#2a3a55;}
+.patient-page.is-dark .patient-phrase-group{background:#1b2740;border-color:#2a3a55;}
+.patient-page.is-dark .patient-phrase-group h3{color:#93c5fd;}
+.patient-page.is-dark .patient-phrase-group li{color:#f1f5f9;}
+.patient-page.is-dark .patient-phrase-group li.is-emergency .patient-phrase-text{color:#fca5a5;}
+.patient-page.is-dark .patient-phrase-tag{background:#0f1729;border-color:#33445f;color:#cbd5e1;}
+.patient-page.is-dark .patient-phrase-tag.is-emergency{color:#fca5a5;border-color:#7f1d1d;}
+.patient-page.is-dark .patient-phrases-heading h2 span,.patient-page.is-dark .patient-phrases-heading p,.patient-page.is-dark .patient-panel-heading p,.patient-page.is-dark .patient-room-label{color:#94a3b8;}
+.patient-page.is-dark .patient-room-item{background:#1b2740;border-color:#2a3a55;}
+.patient-page.is-dark .patient-room-item.is-on{background:#1e3358;border-color:#3b5b8c;}
+.patient-page.is-dark .patient-room-icon{color:#93c5fd;}
+.patient-page.is-dark .patient-band-info{background:#13233f;color:#bfdbfe;border-color:#1e3a8a;}
+.patient-page.is-dark .patient-enroll-line{color:#94a3b8;}
+.patient-page.is-dark .patient-enroll-line.is-ok{color:#86efac;}
+.patient-page.is-dark .patient-practice summary span:last-child{color:#94a3b8;}
+.patient-page.is-dark .patient-scenarios button,.patient-page.is-dark .patient-practice select{background:#1b2740;border-color:#33445f;color:#e2e8f0;}
+/* 결과 칸 안 문장 목록: 분류 묶음을 신문처럼 여러 단으로 흘려 한 줄에 한 문장이 들어가게 한다(높이를 줄인다). */
+.patient-phrases.is-inline .patient-phrase-groups{display:block;columns:3 230px;column-gap:8px;}
+.patient-phrases.is-inline .patient-phrase-group{break-inside:avoid;display:inline-block;width:100%;margin:0 0 8px;}
+.patient-phrase-icon svg{display:inline-block;vertical-align:-2px;width:15px;height:15px;}
+.patient-phrase-group li .patient-phrase-tag{margin-left:6px;vertical-align:1px;}
+/* (위 규칙 덮어씀) 분류 상자 없이 문장을 고르게 여러 단으로 흘린다: 분류 이름은 작은 제목, 문장 하나는 단 사이에서 쪼개지 않는다. */
+.patient-phrases.is-inline .patient-phrase-groups{columns:3 250px;column-gap:22px;column-rule:1px solid #e1e8f1;}
+.patient-phrases.is-inline .patient-phrase-group{display:block;break-inside:auto;background:transparent;border:0;padding:0;margin:0 0 6px;}
+.patient-phrases.is-inline .patient-phrase-group h3{break-after:avoid;margin:0 0 3px;padding-top:2px;}
+.patient-phrases.is-inline .patient-phrase-group li{break-inside:avoid;}
+.patient-phrases.is-inline .patient-phrases-heading{align-items:center;}
+.patient-phrases.is-inline .patient-phrases-heading>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;}
+.patient-phrases.is-inline .patient-phrases-heading p{margin-top:0;}
+.patient-page.is-dark .patient-phrases.is-inline .patient-phrase-groups{column-rule-color:#2a3a55;}
+.patient-page.is-dark .patient-phrases.is-inline .patient-phrase-group{background:transparent;}
+.patient-result.tone-recording .patient-phrases.is-inline .patient-phrase-group li{color:inherit;}
+.patient-result.tone-recording .patient-phrases.is-inline .patient-phrase-group h3{color:inherit;opacity:.85;}
+.patient-result.tone-recording .patient-phrases.is-inline .patient-phrase-group li.is-emergency .patient-phrase-text{color:#fecaca;}
+.patient-result.tone-recording .patient-phrases.is-inline .patient-phrase-groups{column-rule-color:rgba(255,255,255,.3);}
+.ward-app.is-dark .app-brand svg [stroke]{stroke:#111a2e;}
+/* 얼굴이 안 보일 때 잠깐 남는 상자는 회색 */
+.patient-face-box.is-none{border-color:#94a3b8;}
+.patient-result.tone-warning .patient-phrases.is-inline .patient-phrase-groups{column-rule-color:rgba(0,0,0,.15);}
+/* 어두운 화면이어도 색 카드(주의 노랑·긴급 가능성 노랑·긴급 빨강·녹화 파랑) 안의 글씨는 카드 글자색을 따른다 (밝은 글씨가 노랑 위에 오지 않게). */
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible,.tone-emergency,.tone-recording) :is(.patient-key-hint,.patient-camera-hint,.patient-reason,.patient-analysis,.patient-phrases-heading h2,.patient-phrases-heading h2 span,.patient-phrases-heading p,.patient-phrase-group h3,.patient-phrase-group li){color:inherit;}
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-phrase-group li.is-emergency .patient-phrase-text{color:#991b1b;}
+.patient-page.is-dark .patient-result.tone-recording .patient-phrase-group li.is-emergency .patient-phrase-text{color:#fecaca;}
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-phrase-tag{background:#fff;border-color:#c5d0de;color:#42536c;}
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-phrases.is-inline .patient-phrase-groups{column-rule-color:rgba(0,0,0,.15);}
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-phrases.is-inline{border-top-color:rgba(0,0,0,.15);}
+.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-small-button,.patient-page.is-dark .patient-result:is(.tone-warning,.tone-possible) .patient-secondary{background:#fff;border-color:#bac8dc;color:#243b60;}
+.patient-page.is-dark .patient-enroll-line.is-warn{color:#78350f;}

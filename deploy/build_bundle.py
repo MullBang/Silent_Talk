@@ -46,8 +46,8 @@ BUNDLE_NAME = "SilentTalk"
 ARCHIVE_PATHS = ("backend", "frontend", "scripts", "experiments/olkavs_official", "README.md", "requirements.txt")
 SCRIPTS_DIR = REPO / "scripts"
 """동결 파일 검사(ward_tools)를 가져오는 곳 (개발 PC 저장소)."""
-CODE_DIRS = ("backend", "frontend/src", "scripts")
-"""커밋하지 않은 새 파일이 있으면 묶음을 거부하는 코드 폴더(--allow-dirty로 무시)."""
+CODE_DIRS = ("backend", "frontend/src", "frontend/public", "scripts")
+"""커밋하지 않은 새 파일이 있으면 묶음을 거부하는 코드 폴더(--allow-dirty로 무시). frontend/public은 얼굴 위치 안내 모델처럼 화면이 그대로 쓰는 파일이다."""
 DEPLOY_FILES = ("bundle_common.py", "git_shim.py", "install.py", "launch.py", "check.py", "serve_frontend.py",
                 "run_server.py", "requirements-server.in", "requirements-server-lock.txt")
 ROOT_SCRIPTS = ("설치.bat", "시연_실행.bat", "시연_점검.bat", "시연_중지.bat")

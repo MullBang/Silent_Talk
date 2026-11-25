@@ -70,3 +70,49 @@ export function waitingText(card, now) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}분 ${seconds % 60}초 대기`;
   return `${Math.floor(seconds / 3600)}시간 ${Math.floor((seconds % 3600) / 60)}분 대기`;
 }
+
+/** 간호사 창 기본 제목. */
+export const NURSE_BASE_TITLE = '간호사실 — 병실도우미';
+
+/**
+ * 간호사 창(탭) 제목. 확인하지 않은 카드 수를 앞에 붙이고, 확인 안 한 경보가 있고 다른 창을 보고 있으면
+ * flash 차례마다 경보 문구와 번갈아 보인다 (탭만 보여도 알 수 있게).
+ * @param {{open:number, alarms:number}} summary nurseSummary 결과.
+ * @param {{flash?: boolean}} [opts] flash가 true인 차례에 경보 문구를 보인다.
+ * @returns {string}
+ */
+export function nurseTitle(summary, { flash = false } = {}) {
+  const open = Number(summary?.open) || 0;
+  const alarms = Number(summary?.alarms) || 0;
+  if (alarms > 0 && flash) return `🔴 경보 ${alarms}건 확인 필요 — 간호사실`;
+  return open > 0 ? `(${open}) ${NURSE_BASE_TITLE}` : NURSE_BASE_TITLE;
+}
+
+/**
+ * 새로 오거나 다시 온 카드의 브라우저 알림 내용.
+ * @param {object} card 간호사 카드.
+ * @param {{label: string, headline: string}} text cardLabel·cardHeadline 결과.
+ * @returns {{title: string, body: string, urgent: boolean, tag: string}}
+ */
+export function notificationFor(card, text) {
+  const room = card?.room ? `${card.room}호` : '병실';
+  // 환자가 방금 요청을 취소하면 같은 카드가 갱신되어 온다: 새 요청이 아니라 취소 요청으로 알린다.
+  if (card?.cancelRequested) {
+    return {
+      title: `${room} 취소 요청`,
+      body: `환자가 이 요청을 취소했어요: ${text?.headline || card?.text || '요청'}`,
+      urgent: false,
+      tag: String(card?.id || 'ward-card'),
+    };
+  }
+  const urgent = isAlarmKind(card?.kind);
+  const label = text?.label || '일반 요청';
+  const headline = text?.headline || '';
+  const repeat = Number(card?.count) > 1 ? ` (×${card.count})` : '';
+  return {
+    title: `${urgent ? '🔴 ' : ''}${room} ${label}${repeat}`,
+    body: headline || '간호사 화면에서 확인해 주세요',
+    urgent,
+    tag: String(card?.id || 'ward-card'),
+  };
+}

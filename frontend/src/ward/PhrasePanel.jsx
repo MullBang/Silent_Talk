@@ -10,17 +10,19 @@ import { phraseGroups } from './wardCommands';
 
 /**
  * 말할 수 있는 문장 칸.
- * @param {{index: object, open: boolean, onToggle: () => void}} props
- *   index는 지금 쓰는 명령 색인(연습 모드는 기본 목록), open은 펼침 여부(설정 showPhrases), onToggle은 접기·펼치기.
+ * @param {{index: object, open: boolean, onToggle: () => void, inline?: boolean}} props
+ *   index는 지금 쓰는 명령 색인(연습 모드는 기본 목록), open은 펼침 여부(설정 showPhrases), onToggle은 접기·펼치기,
+ *   inline은 결과 칸 안에 넣을 때(테두리 없이 촘촘하게, 노트북 화면에서도 스크롤 없이 보이게).
  * @returns {JSX.Element|null}
  */
-export default function PhrasePanel({ index, open, onToggle }) {
+export default function PhrasePanel({ index, open, onToggle, inline = false }) {
   const groups = phraseGroups(index);
   if (!groups.length) return null;
   const count = groups.reduce((n, g) => n + g.commands.length, 0);
   const custom = index?.customList;
   return (
-    <section aria-label="말할 수 있는 문장" className={`patient-phrases ${open ? 'is-open' : ''}`} data-phrase-list={custom?.id || 'default'}>
+    // 결과 칸(aria-live)에 넣을 때는 대기 화면으로 돌아올 때마다 25줄을 읽지 않게 이 칸만 알림을 끈다.
+    <section aria-label="말할 수 있는 문장" aria-live={inline ? 'off' : undefined} className={`patient-phrases${open ? ' is-open' : ''}${inline ? ' is-inline' : ''}`} data-phrase-list={custom?.id || 'default'}>
       <div className="patient-phrases-heading">
         <div>
           <h2>말할 수 있는 문장 <span>{custom ? `내 목록 ‘${custom.title}’ · ` : ''}{count}개</span></h2>
@@ -40,9 +42,11 @@ export default function PhrasePanel({ index, open, onToggle }) {
               <ul>
                 {g.commands.map((c) => (
                   <li key={c.id} data-phrase-id={c.id} className={c.emergency ? 'is-emergency' : ''} title={`화면·간호사실에는 “${c.display}”`}>
-                    <span className="patient-phrase-text">{c.text}</span>
-                    {c.emergency && <span className="patient-phrase-tag is-emergency"><AlertIcon /> 긴급</span>}
-                    {c.cancel && <span className="patient-phrase-tag">취소</span>}
+                    {/* 긴급은 색만으로 구분하지 않는다: 같은 줄 맨 앞에 경고 아이콘(읽기: 긴급)을 붙인다. */}
+                    <span className="patient-phrase-text">
+                      {c.emergency && <span className="patient-phrase-icon"><AlertIcon /> </span>}{c.text}
+                      {c.cancel && <span className="patient-phrase-tag">취소</span>}
+                    </span>
                   </li>
                 ))}
               </ul>

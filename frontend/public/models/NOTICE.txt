@@ -1,0 +1,6 @@
+face_detection_short_range.tflite
+
+- 용도: 병실 환자 화면의 카메라 위치 안내(얼굴이 화면 안에 잘 보이는지). 인식·판정에는 쓰지 않는다.
+- 출처: Google MediaPipe 0.10.21 파이썬 패키지의 mediapipe/modules/face_detection/face_detection_short_range.tflite
+  (이 프로젝트의 .venv-olkavs-roi에 설치된 파일을 그대로 복사, 229,714 bytes).
+- 라이선스: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0), Copyright The MediaPipe Authors.

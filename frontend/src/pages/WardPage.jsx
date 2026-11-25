@@ -20,6 +20,7 @@ import PhrasePanel from '../ward/PhrasePanel';
 import RoomPanel from '../ward/RoomPanel';
 import { AlertIcon, CheckIcon } from '../ward/WardIcons';
 import WardSettingsPanel from '../ward/WardSettingsPanel';
+import { PATIENT_MODE_EVENT } from '../ward/WardShell';
 import { ROOM_HEARTBEAT_MS, openWardChannel } from '../ward/wardChannel';
 import { buildCommandIndex, emptyListIndex } from '../ward/wardCommands';
 import { enrollHash, enrollStatusLine, parseProfileInfo } from '../ward/wardEnroll';
@@ -33,9 +34,11 @@ import {
 } from '../ward/wardMachine';
 import { practiceResults } from '../ward/wardPractice';
 import {
-  SETTINGS_STORAGE_KEY, enrollProfileFor, isNightTime, isPracticeMode, loadSettings, readStoredSettings, safeLocalStorage,
+  SETTINGS_STORAGE_KEY, darkScreenActive, enrollProfileFor, isNightTime, isPracticeMode, loadSettings, readStoredSettings, safeLocalStorage,
   saveSettings, sharedSettingsPatch, speechAllowed,
 } from '../ward/wardSettings';
+import { mirroredBoxStyle } from '../ward/faceGuide';
+import useFaceGuide, { previewGeometry } from '../ward/useFaceGuide';
 import { createBeeper } from '../ward/wardSound';
 import { NO_VOICE_TEXT, pickKoreanLocalVoice, speakText } from '../ward/wardSpeech';
 import { TONE_STYLES, WARD_COLORS, WARD_KEYFRAMES } from '../ward/wardTheme';
@@ -43,6 +46,8 @@ import { analyzeWardRecording } from '../ward/wardUpload';
 import '../ward/patient-ui.css';
 
 const INDEX = buildCommandIndex(COMMANDS);
+/** 결과 칸을 긴급 내용에만 쓰는 화면 (문장 목록을 함께 보이지 않는다). */
+const EMERGENCY_SCREENS = Object.freeze(['emergency', 'emergency_call', 'emergency_possible']);
 const CAMERA = { width: 1280, height: 720, frameRate: 30 };
 const TICK_MS = 200;
 const SAFETY_TEXT = '숨이 막히면 호출벨을 먼저 누르세요';
@@ -159,6 +164,13 @@ export default function WardPage() {
   const recRef = useRef(rec);
   recRef.current = rec;
   const { open, videoRef, status: camStatus } = rec;
+  // 카메라 위치 안내 (브라우저 안 얼굴 검출, 인식·판정에는 쓰지 않음). 카메라가 켜져 있을 때만 돈다.
+  const faceGuide = useFaceGuide(videoRef, camStatus === 'ready' || camStatus === 'recording');
+  // 크게 보기(환자 전용 전체 화면). 브라우저 전체 화면은 이 화면이 켰을 때만 함께 끈다.
+  const [focus, setFocus] = useState(false);
+  const focusRef = useRef(false);
+  focusRef.current = focus;
+  const fullscreenByUsRef = useRef(false);
 
   /** 소리(시작음)·음성 읽기는 사용자 조작 안에서 한 번 열어야 한다 (브라우저 자동 재생 정책). */
   const unlockAudio = useCallback(() => {
@@ -509,9 +521,18 @@ export default function WardPage() {
   const displayedHeadline = welcome ? '어떤 도움이 필요하세요?' : view.headline;
   const displayedSub = machine.phase === 'scan'
     ? (direct ? '원하는 항목을 직접 누르세요' : '파란 항목이 원하는 요청일 때 스위치를 누르세요')
-    : welcome ? `${settings.recordSeconds}초 동안 입 모양을 촬영합니다. 준비되면 시작해 주세요.${settings.showPhrases ? ' 말할 문장은 아래 목록에 있어요.' : ''}`
+    : welcome ? `${settings.recordSeconds}초 동안 입 모양을 촬영합니다. 준비되면 시작해 주세요.`
       : machine.phase === 'idle' && machine.screen?.kind === 'sent' && !machine.cards[machine.screen.cardId]?.acked ? '요청 전송 · 간호사 확인 대기' : view.sub;
   const press = (intent) => { unlockAudio(); dispatch({ type: 'PRESS', intent }); };
+  // 말할 수 있는 문장은 결과 칸 안에 둔다 (노트북 화면에서도 스크롤 없이 보이게): 대기·녹화 중에만, 긴급 화면은 빼고.
+  const calmIdleOrRecording = machine.phase === 'recording'
+    || (machine.phase === 'idle' && !EMERGENCY_SCREENS.includes(machine.screen?.kind));
+  const phrasesInCard = !machine.lipBlock && calmIdleOrRecording;
+  // 결과가 아닌 안내 문구(첫 화면·녹화 중)는 문장 목록과 함께 보이도록 조금 작게 쓴다. 결과 글씨는 화면 높이 1/10 규칙 그대로.
+  const compactHeadline = phrasesInCard && settings.showPhrases && (welcome || machine.phase === 'recording');
+  const dark = darkScreenActive(settings, new Date(now));
+  const advice = faceGuide.status === 'ready' ? faceGuide.advice : null;
+  const adviceBox = advice?.box ? mirroredBoxStyle(advice.box, previewGeometry(videoRef.current)) : null;
   const scanHighlight = machine.phase === 'scan' && !direct ? `${scanToken(machine)}:${machine.scan?.index}` : null;
 
   // 스위치 모드에서 강조가 화면 아래로 내려가면 (작은 화면·긴급 띠가 있을 때) 그 항목이 보이게 스크롤한다.
@@ -525,8 +546,63 @@ export default function WardPage() {
     }
   }, [scanHighlight]);
 
+  // 크게 보기와 어두운 화면을 공통 머리띠에도 알린다 (크게 보기에서는 머리띠를 숨긴다).
+  useEffect(() => {
+    const announce = (detail) => window.dispatchEvent(new CustomEvent(PATIENT_MODE_EVENT, { detail }));
+    announce({ focus, dark });
+    return () => announce({ focus: false, dark: false });
+  }, [focus, dark]);
+
+  // 브라우저 전체 화면에서 Esc 등으로 나오면 크게 보기도 끈다.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && fullscreenByUsRef.current) {
+        fullscreenByUsRef.current = false;
+        setFocus(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      // 등록·내 목록 화면으로 넘어가면 이 화면이 켠 브라우저 전체 화면도 끈다.
+      try {
+        if (fullscreenByUsRef.current && document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
+      } catch {
+        /* 전체 화면이 아니면 그대로 */
+      }
+      fullscreenByUsRef.current = false;
+    };
+  }, []);
+
+  const toggleFocus = useCallback(() => {
+    if (focus) {
+      setFocus(false);
+      fullscreenByUsRef.current = false;
+      try {
+        if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
+      } catch {
+        /* 전체 화면이 아니면 그대로 */
+      }
+      return;
+    }
+    setFocus(true);
+    try {
+      const req = document.documentElement.requestFullscreen?.();
+      req?.then?.(() => {
+        fullscreenByUsRef.current = true;
+        // 전체 화면이 켜지기 전에 크게 보기를 다시 껐으면 전체 화면도 끈다.
+        if (!focusRef.current) {
+          fullscreenByUsRef.current = false;
+          document.exitFullscreen?.()?.catch?.(() => {});
+        }
+      })?.catch?.(() => { /* 전체 화면을 못 써도 크게 보기는 켠다 */ });
+    } catch {
+      /* 전체 화면을 못 써도 크게 보기는 켠다 */
+    }
+  }, [focus]);
+
   return (
-    <div className="patient-page select-none">
+    <div className={`patient-page select-none${focus ? ' is-focus' : ''}${dark ? ' is-dark' : ''}`}>
       <style>{WARD_KEYFRAMES}</style>
       {/* 녹화 중 테두리 깜빡임은 녹화 파랑(긴급 빨강은 긴급에만 쓴다) */}
       {view.flash && (
@@ -554,6 +630,9 @@ export default function WardPage() {
               시작음 켜기
             </button>
           )}
+          <button type="button" onClick={toggleFocus} className="patient-small-button" aria-pressed={focus} data-focus-toggle>
+            {focus ? '크게 보기 끄기' : '크게 보기'}
+          </button>
           <button
             type="button"
             onClick={() => setShowSettings(true)}
@@ -601,6 +680,7 @@ export default function WardPage() {
           <div className="patient-section-title"><span>카메라 미리보기</span><span className={`patient-dot ${camStatus === 'ready' || camStatus === 'recording' ? 'is-ready' : ''}`} /> </div>
           <div className="patient-preview" style={{ background: WARD_COLORS.ink }}>
             <video ref={videoRef} className="h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} playsInline muted />
+            {adviceBox && <span aria-hidden="true" className={`patient-face-box is-${advice.tone}`} style={adviceBox} />}
             {camStatus !== 'ready' && camStatus !== 'recording' && (
               <div className="patient-preview-msg" style={{ color: WARD_COLORS.paper }}>
                 {cameraText(rec)}
@@ -614,7 +694,13 @@ export default function WardPage() {
               </button>
             </div>
           )}
-          <p className="patient-camera-hint">얼굴과 입이 화면 가운데에 보이도록 맞춰 주세요.</p>
+          {advice ? (
+            <p role="status" data-face-advice={advice.state} className={`patient-face-advice is-${advice.tone}`}>
+              <span aria-hidden="true">{advice.tone === 'ok' ? '✓' : '!'}</span> {advice.text}
+            </p>
+          ) : (
+            <p className="patient-camera-hint">얼굴과 입이 화면 가운데에 보이도록 맞춰 주세요.</p>
+          )}
           <p className="patient-camera-detail" style={{ color: WARD_COLORS.inkSoft }}>
             녹화 {settings.recordSeconds}초 · 확인 {settings.confirmSeconds}초
             {settings.tts ? ` · 음성 읽기 켬${voice ? '' : ` (${NO_VOICE_TEXT})`}${nightMuted ? ' · 밤 무음 중' : ''}` : ' · 음성 읽기 끔'}
@@ -645,7 +731,7 @@ export default function WardPage() {
             </p>
           )}
           {view.reason && <p className="patient-reason">{view.reason}</p>}
-          <p className="patient-headline">
+          <p className={`patient-headline${compactHeadline ? ' is-compact' : ''}`}>
             {displayedHeadline}
           </p>
           {view.candidates && view.candidates.length > 0 && (
@@ -672,6 +758,11 @@ export default function WardPage() {
               ))}
             </ol>
           )}
+          {advice && advice.tone !== 'ok' && calmIdleOrRecording && (
+            <p className="patient-face-inline" data-face-inline={advice.state} aria-live="off">
+              <span aria-hidden="true">!</span> 카메라: {advice.text}
+            </p>
+          )}
           <div className="patient-actions">
             {/* 화면 버튼은 단계(intent)를 붙여 보낸다: 그사이 단계가 바뀌었으면 상태도가 무시한다(예: 카운트다운이 막 끝난 뒤의 전송 취소). */}
             <span className="patient-action-buttons" data-no-switch onClick={blurAfterPointerClick}>
@@ -685,18 +776,19 @@ export default function WardPage() {
             </span>
           </div>
           {machine.phase === 'idle' && camStatus !== 'ready' && !machine.lipBlock && <p className="patient-camera-hint">카메라가 준비되면 녹화할 수 있어요.{practice ? ' 아래 시연 도구로 카메라 없이 화면 흐름을 확인할 수 있어요.' : ''}</p>}
+          {/* 말할 수 있는 입 모양 문장 (지금 쓰는 목록, 연습 모드는 기본 목록). 내 목록을 쓸 수 없는 동안에는 보이지 않는다. */}
+          {phrasesInCard && (
+            <PhrasePanel
+              index={machine.index}
+              open={settings.showPhrases}
+              onToggle={() => changeSettings({ showPhrases: !settings.showPhrases })}
+              inline
+            />
+          )}
         </section>
       </main>
 
       <div className="patient-secondary-content">
-        {/* 말할 수 있는 입 모양 문장 (지금 쓰는 목록, 연습 모드는 기본 목록). 내 목록을 쓸 수 없는 동안에는 보이지 않는다. */}
-        {!machine.lipBlock && (
-          <PhrasePanel
-            index={machine.index}
-            open={settings.showPhrases}
-            onToggle={() => changeSettings({ showPhrases: !settings.showPhrases })}
-          />
-        )}
         <RoomPanel room={machine.room} />
         {practice && (
           <PracticePanel

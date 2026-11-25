@@ -109,3 +109,5 @@
 .nurse-list-tag { font-size: 12px; font-weight: 750; border: 1px dashed currentColor; border-radius: 6px; padding: 3px 8px; overflow-wrap: anywhere; }
 .nurse-prototype-inline { display: inline-block; font-size: 13px; color: #52647a; border: 1px solid #d7dfeb; border-radius: 6px; padding: 1px 7px; margin-left: 4px; }
 .nurse-enroll-note { font-weight: 700; }
+/* 브라우저 알림 켜짐 표시 */
+.nurse-notify-on { display: inline-flex; align-items: center; gap: 6px; min-height: 46px; padding: 8px 14px; border-radius: 11px; background: #eef8f1; color: #14532d; border: 1px solid #93bba2; font-size: 14px; font-weight: 750; }

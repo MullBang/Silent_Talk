@@ -21,8 +21,14 @@ import {
   NURSE_STORAGE_KEY,
 } from '../ward/wardStore';
 import { WARD_COLORS } from '../ward/wardTheme';
-import { NURSE_FILTERS, ackClickAllowed, nurseSummary, visibleNurseCards, waitingText } from '../ward/nursePresentation';
+import {
+  NURSE_BASE_TITLE, NURSE_FILTERS, ackClickAllowed, notificationFor, nurseSummary, nurseTitle, visibleNurseCards, waitingText,
+} from '../ward/nursePresentation';
 import '../ward/nurse-ui.css';
+
+/** 앱 원래 제목 (모듈을 처음 읽을 때의 index.html 제목). */
+const APP_TITLE = typeof document !== 'undefined' && !String(document.title).includes(NURSE_BASE_TITLE)
+  ? document.title : 'Silent Talk — 립리딩 텍스트 변환';
 
 /**
  * 카드 색 (색만으로 구분하지 않고 글자 표시와 아이콘을 함께 쓴다).
@@ -67,6 +73,11 @@ export default function NursePage() {
   const beeperRef = useRef(null);
   if (!beeperRef.current) beeperRef.current = createBeeper();
   const channelRef = useRef(null);
+  // 브라우저 알림: 간호사가 다른 창을 보고 있어도 새 요청을 알 수 있게 (허용은 간호사가 직접 누른다).
+  const [notifyPerm, setNotifyPerm] = useState(() => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission));
+  const notifyPermRef = useRef(notifyPerm);
+  notifyPermRef.current = notifyPerm;
+  const notesRef = useRef(new Map()); // 카드 id → 띄운 브라우저 알림 (확인하면 닫는다)
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -89,6 +100,7 @@ export default function NursePage() {
         if (!r.alert) return;
         commit(r.cards);
         if (soundOnRef.current) beeperRef.current.play(r.alarm ? 'emergency' : 'normal');
+        notifyArrival(r.cards.find((c) => c.id === r.cardId));
       } else if (msg.type === 'ROOM_STATE') {
         // 환자 창마다 한 줄 (병실 번호를 바꾸면 그 창의 줄이 바뀐다).
         setRooms((prev) => noteRoomState(prev, msg, Date.now()));
@@ -105,6 +117,68 @@ export default function NursePage() {
       channelRef.current = null;
     };
   }, [commit]);
+
+  /**
+   * 새로 오거나 다시 온 카드를 브라우저 알림으로 띄운다. 이 창을 보고 있을 때는 띄우지 않는다(화면에 이미 보인다).
+   * @param {object|undefined} card
+   */
+  function notifyArrival(card) {
+    try {
+      if (!card || card.acked || notifyPermRef.current !== 'granted' || typeof Notification === 'undefined') return;
+      // 간호사 화면이 보이는 동안(옆에 띄워 둔 시연 포함)에는 화면 카드·소리로 충분하다. 탭이 가려졌을 때만 알린다.
+      if (!document.hidden) return;
+      const n = notificationFor(card, { label: cardLabel(card), headline: cardHeadline(card) });
+      const note = new Notification(n.title, { body: n.body, tag: n.tag, renotify: true, requireInteraction: n.urgent });
+      notesRef.current.get(card.id)?.close?.();
+      notesRef.current.set(card.id, note);
+      note.onclose = () => { if (notesRef.current.get(card.id) === note) notesRef.current.delete(card.id); };
+      note.onclick = () => {
+        try {
+          window.focus();
+          note.close();
+        } catch {
+          /* 창을 앞으로 가져오지 못해도 그대로 */
+        }
+      };
+    } catch {
+      /* 알림을 띄우지 못해도 화면 카드·소리는 그대로 */
+    }
+  }
+
+  const askNotify = useCallback(async () => {
+    try {
+      if (typeof Notification === 'undefined') return;
+      const result = await Notification.requestPermission();
+      setNotifyPerm(result);
+    } catch {
+      /* 브라우저가 묻지 못하면 그대로 */
+    }
+  }, []);
+
+  // 확인했거나(다른 간호사 창 포함) 지운 카드의 알림은 닫는다. 화면을 내릴 때도 모두 닫는다.
+  useEffect(() => {
+    for (const [id, note] of notesRef.current) {
+      const card = cards.find((c) => c.id === id);
+      if (!card || card.acked) {
+        try {
+          note.close();
+        } catch {
+          /* 이미 닫힘 */
+        }
+        notesRef.current.delete(id);
+      }
+    }
+  }, [cards]);
+  useEffect(() => () => {
+    for (const note of notesRef.current.values()) {
+      try {
+        note.close();
+      } catch {
+        /* 이미 닫힘 */
+      }
+    }
+    notesRef.current.clear();
+  }, []);
 
   // 다른 간호사 창에서 바뀐 기록을 따라간다.
   useEffect(() => {
@@ -183,6 +257,18 @@ export default function NursePage() {
 
   const sorted = useMemo(() => visibleNurseCards(cards, filter), [cards, filter]);
   const summary = useMemo(() => nurseSummary(cards), [cards]);
+
+  // 탭 제목: 확인 안 한 카드 수, 그리고 확인 안 한 경보가 있고 다른 창을 보고 있으면 1초마다 경보 문구와 번갈아 보인다.
+  useEffect(() => {
+    try {
+      const away = document.hidden || !document.hasFocus();
+      document.title = nurseTitle(summary, { flash: away && Math.floor(now / 1000) % 2 === 0 });
+    } catch {
+      /* 제목을 바꾸지 못해도 그대로 */
+    }
+  }, [summary, now]);
+  // 간호사 화면을 내리면 앱 원래 제목(index.html)으로 되돌린다.
+  useEffect(() => () => { document.title = APP_TITLE; }, []);
   const openAlarm = hasOpenAlarm(cards);
   const hiddenAlarms = summary.alarms - sorted.filter((card) => !card.acked && isAlarmKind(card.kind)).length;
   const roomList = Object.entries(rooms);
@@ -200,11 +286,24 @@ export default function NursePage() {
             className={`nurse-button nurse-sound ${soundOn ? 'is-on' : ''}`}>
             <span aria-hidden="true">♪</span> {soundOn ? '소리 켜짐 · 끄기' : '소리 켜기'}
           </button>
+          {notifyPerm === 'default' && (
+            <button type="button" onClick={askNotify} className="nurse-button nurse-button-secondary" data-notify="ask">
+              <span aria-hidden="true">🔔</span> 알림 받기
+            </button>
+          )}
+          {notifyPerm === 'granted' && (
+            <span className="nurse-notify-on" data-notify="on"><span aria-hidden="true">🔔</span> 다른 창을 볼 때도 알림</span>
+          )}
           <a href="#ward" target="_blank" rel="noopener noreferrer" className="nurse-button nurse-button-secondary">
             환자 화면 열기 <span aria-hidden="true">↗</span>
           </a>
         </div>
       </header>
+      {notifyPerm === 'denied' && (
+        <p className="nurse-sound-note" data-notify="denied">
+          브라우저 알림이 막혀 있어요. 다른 창을 볼 때도 알림을 받으려면 주소창 왼쪽의 사이트 설정에서 알림을 허용해 주세요.
+        </p>
+      )}
 
       {!soundOn && (
         <p role={openAlarm ? 'alert' : 'status'} className={`nurse-sound-note ${openAlarm ? 'has-alarm' : ''}`}>

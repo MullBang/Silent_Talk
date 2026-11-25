@@ -223,10 +223,13 @@ function EnrollSection({ current, onSelect, onOpenEnroll, blocked = null, listId
   );
 }
 
+/** 화면 밝기 선택지 (설정 darkScreen). */
+const DARK_SCREEN_CHOICES = Object.freeze([['off', '밝게'], ['night', '밤에만 어둡게'], ['on', '항상 어둡게']]);
+
 /**
  * 설정 창.
  * @param {object} props
- * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string, inputMode:'switch'|'direct', showPhrases:boolean}} props.settings
+ * @param {{recordSeconds:number, confirmSeconds:number, room:string, tts:boolean, nightMute:boolean, commandList:string, inputMode:'switch'|'direct', showPhrases:boolean, darkScreen:'off'|'night'|'on'}} props.settings
  * @param {(patch: object) => void} props.onChange
  * @param {() => void} props.onClose
  * @param {object|null} props.voice 오프라인 한국어 음성(없으면 null).
@@ -376,8 +379,26 @@ export default function WardSettingsPanel({
 
             <label className="settings-check">
               <input type="checkbox" checked={settings.showPhrases !== false} onChange={(e) => onChange({ showPhrases: e.target.checked })} className="settings-check-input" />
-              <span>말할 수 있는 문장 목록 보이기 (환자 화면 아래쪽)</span>
+              <span>말할 수 있는 문장 목록 보이기 (대기·녹화 중 결과 칸 안)</span>
             </label>
+
+            <fieldset className="settings-field">
+              <legend className="settings-label">화면 밝기</legend>
+              <div className="settings-segment">
+                {DARK_SCREEN_CHOICES.map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={(settings.darkScreen || 'off') === value}
+                    onClick={() => onChange({ darkScreen: value })}
+                    className="settings-segment-button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-help">어두운 화면은 밤에 눈부심을 줄입니다. 긴급·녹화 카드 색은 그대로예요.</p>
+            </fieldset>
           </section>
 
           <CommandListSection

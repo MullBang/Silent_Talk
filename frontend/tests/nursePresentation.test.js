@@ -46,3 +46,24 @@ test('a double click on 확인 cannot acknowledge the next card that slides into
   assert.equal(ackClickAllowed(1000, 1000 + 120, 0), false, 'keyboard Enter right after an ack is merged too');
   assert.equal(ackClickAllowed(1000, 1000 + ACK_MERGE_MS + 1, 0), true);
 });
+
+test('tab title shows the open count and flashes only while an alarm is unacknowledged', async () => {
+  const { nurseTitle, NURSE_BASE_TITLE, notificationFor } = await import('../src/ward/nursePresentation.js');
+  assert.equal(nurseTitle({ open: 0, alarms: 0 }), NURSE_BASE_TITLE);
+  assert.equal(nurseTitle({ open: 2, alarms: 0 }, { flash: true }), `(2) ${NURSE_BASE_TITLE}`, 'no flash without an alarm');
+  assert.equal(nurseTitle({ open: 2, alarms: 1 }, { flash: false }), `(2) ${NURSE_BASE_TITLE}`);
+  assert.match(nurseTitle({ open: 2, alarms: 1 }, { flash: true }), /경보 1건/);
+  const urgent = notificationFor({ id: 'c1', kind: 'emergency', room: '305', count: 1 }, { label: '[긴급]', headline: '숨쉬기가 답답해요' });
+  assert.equal(urgent.urgent, true);
+  assert.match(urgent.title, /305호 \[긴급\]/);
+  assert.equal(urgent.body, '숨쉬기가 답답해요');
+  const normal = notificationFor({ id: 'c2', kind: 'request', room: '412', count: 3 }, { label: '', headline: '물을 마시고 싶어요' });
+  assert.equal(normal.urgent, false);
+  assert.equal(normal.title, '412호 일반 요청 (×3)');
+  assert.equal(normal.tag, 'c2');
+  const cancel = notificationFor({ id: 'c3', kind: 'request', room: '305', count: 1, cancelRequested: true, text: '물을 마시고 싶어요' },
+    { label: '', headline: '물을 마시고 싶어요' });
+  assert.equal(cancel.title, '305호 취소 요청');
+  assert.match(cancel.body, /취소했어요: 물을 마시고 싶어요/);
+  assert.equal(cancel.urgent, false);
+});

@@ -11,6 +11,8 @@ export const DEFAULT_CONFIRM_SECONDS = 6;
 export const DEFAULT_ROOM = '305';
 /** 밤 무음 시간 (22시~6시, 음성 읽기를 자동으로 끈다). */
 export const NIGHT_START_HOUR = 22;
+/** 환자 화면 어둡게 설정 값. */
+export const DARK_SCREEN_OPTIONS = Object.freeze(['off', 'night', 'on']);
 export const NIGHT_END_HOUR = 6;
 export const SETTINGS_STORAGE_KEY = 'silent-talk-ward-settings-v1';
 /** 내 입 모양 등록 이름 (서버 프로필 ID 규칙과 같다: 영문·숫자·_·-, 1~32자). */
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   enrollProfileByList: Object.freeze({}), // 내 목록 ID → 그 목록의 등록 이름.
   inputMode: 'switch', // 'switch': 아무 키·화면 누름 = 스위치(스캐닝), 'direct': 고를 항목을 직접 누름.
   showPhrases: true, // 환자 화면에 말할 수 있는 입 모양 문장 목록을 펼쳐 둘지 (외우지 않아도 되게).
+  darkScreen: 'off', // 환자 화면 어둡게: 'off' 밝게 / 'night' 밤 시간(22~6시)만 / 'on' 늘.
 });
 
 /**
@@ -168,6 +171,7 @@ export function normalizeSettings(raw) {
       enrollProfileByList: normalizeEnrollProfileByList(src.enrollProfileByList),
       inputMode: src.inputMode === 'direct' ? 'direct' : 'switch',
       showPhrases: src.showPhrases !== false,
+      darkScreen: DARK_SCREEN_OPTIONS.includes(src.darkScreen) ? src.darkScreen : 'off',
     };
   } catch {
     return { ...DEFAULT_SETTINGS, enrollProfileByList: {} };
@@ -301,5 +305,20 @@ export function safeLocalStorage() {
     return globalThis.localStorage || null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * 지금 환자 화면을 어둡게 보일지.
+ * @param {{darkScreen?: string}} settings
+ * @param {Date} date
+ * @returns {boolean}
+ */
+export function darkScreenActive(settings, date) {
+  try {
+    if (settings?.darkScreen === 'on') return true;
+    return settings?.darkScreen === 'night' && isNightTime(date);
+  } catch {
+    return false;
   }
 }

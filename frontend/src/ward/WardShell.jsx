@@ -3,7 +3,7 @@
 // 이름 부분을 누르는 것은 환자 화면에서 스위치 누름으로 친다.
 // 등록 화면이 녹화·저장 중이면 'ward-ui-navigation-lock' 이벤트로 알려 오고, 그동안 다른 화면 열기 버튼을 막는다.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 
 import { blurAfterPointerClick } from '../record/pointerFocus';
 import './ui.css';
@@ -12,6 +12,8 @@ import './ui.css';
 const VIEW_LABELS = Object.freeze({ ward: '환자 화면', nurse: '간호사 화면', enroll: '입 모양 등록', lists: '내 목록 관리' });
 /** 등록 화면이 화면 이동을 막고 있음을 알리는 이벤트 이름. */
 export const NAVIGATION_LOCK_EVENT = 'ward-ui-navigation-lock';
+/** 환자 화면이 '크게 보기'(머리띠 숨김)·어두운 화면을 알리는 이벤트 이름. detail: {focus:boolean, dark:boolean}. */
+export const PATIENT_MODE_EVENT = 'ward-ui-patient-mode';
 
 /**
  * 같은 주소의 다른 병실 화면을 새 탭으로 연다 (BroadcastChannel은 같은 주소끼리만 통하므로 경로를 그대로 쓴다).
@@ -33,21 +35,34 @@ function openInNewTab(hash) {
  */
 export default function WardShell({ view, children }) {
   const [lock, setLock] = useState({ locked: false, reason: '' });
+  const [mode, setMode] = useState({ focus: false, dark: false });
 
-  useEffect(() => {
+  // 듣기는 useLayoutEffect로 먼저 건다: 환자 화면(자식)의 useEffect가 첫 화면에서 보내는 알림(어두운 화면 등)을 놓치지 않게.
+  useLayoutEffect(() => {
     const onLock = (event) => {
       const detail = event?.detail || {};
       setLock({ locked: detail.locked === true, reason: String(detail.reason || '') });
     };
+    const onMode = (event) => {
+      const detail = event?.detail || {};
+      setMode({ focus: detail.focus === true, dark: detail.dark === true });
+    };
     window.addEventListener(NAVIGATION_LOCK_EVENT, onLock);
-    return () => window.removeEventListener(NAVIGATION_LOCK_EVENT, onLock);
+    window.addEventListener(PATIENT_MODE_EVENT, onMode);
+    return () => {
+      window.removeEventListener(NAVIGATION_LOCK_EVENT, onLock);
+      window.removeEventListener(PATIENT_MODE_EVENT, onMode);
+    };
   }, []);
   // 화면이 바뀌면 이전 화면의 막음을 풀어 둔다 (등록 화면은 내릴 때도 풀어 준다).
-  useEffect(() => { setLock({ locked: false, reason: '' }); }, [view]);
+  useEffect(() => {
+    setLock({ locked: false, reason: '' });
+    if (view !== 'ward') setMode({ focus: false, dark: false });
+  }, [view]);
 
   const otherHash = view === 'nurse' ? '#ward' : '#nurse';
   return (
-    <div className="ward-app">
+    <div className={`ward-app${mode.focus ? ' is-focus' : ''}${mode.dark ? ' is-dark' : ''}`}>
       <div className="app-bar">
         <div className="app-brand">
           <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">

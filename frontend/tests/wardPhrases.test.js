@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { buildCommandIndex, buildCustomCommandIndex, phraseGroups } from '../src/ward/wardCommands.js';
-import { normalizeSettings } from '../src/ward/wardSettings.js';
+import { darkScreenActive, normalizeSettings } from '../src/ward/wardSettings.js';
 
 const json = JSON.parse(readFileSync(new URL('../src/ward/commands.json', import.meta.url)));
 const index = buildCommandIndex(json);
@@ -50,11 +50,26 @@ test('설정: 문장 목록은 기본으로 펼침, false일 때만 접음', () 
   assert.equal(normalizeSettings({ showPhrases: 'no' }).showPhrases, true);
 });
 
-test('화면 연결: 환자 화면이 지금 쓰는 목록으로 문장 칸을 그리고, 내 목록을 쓸 수 없으면 숨긴다', () => {
+test('화면 연결: 환자 화면이 결과 칸 안에 지금 쓰는 목록으로 문장 칸을 그리고, 내 목록을 쓸 수 없으면 숨긴다', () => {
   const ward = src('../src/pages/WardPage.jsx');
-  assert.match(ward, /!machine\.lipBlock && \(\s*<PhrasePanel\s+index=\{machine\.index\}/);
+  assert.match(ward, /const phrasesInCard = !machine\.lipBlock && /, '내 목록을 쓸 수 없으면 숨긴다');
+  assert.match(ward, /phrasesInCard && \(\s*<PhrasePanel\s+index=\{machine\.index\}/, '결과 칸 안(대기·녹화 중)에 지금 쓰는 목록으로');
+  assert.match(ward, /EMERGENCY_SCREENS\.includes\(machine\.screen\?\.kind\)/, '긴급 화면에는 문장 목록을 함께 보이지 않는다');
   const panel = src('../src/ward/PhrasePanel.jsx');
   assert.match(panel, /phraseGroups\(index\)/);
   assert.match(panel, /data-no-switch/, '접기 버튼은 스위치 누름이 아니다');
   assert.doesNotMatch(panel, /dispatch|SELECT_ITEM|onSelect/, '문장 칸은 보기만 한다(눌러서 고르지 않음)');
+});
+
+test('화면 밝기: 밝게(기본) / 밤에만 어둡게(22~6시) / 항상 어둡게', () => {
+  assert.equal(normalizeSettings({}).darkScreen, 'off');
+  assert.equal(normalizeSettings({ darkScreen: 'night' }).darkScreen, 'night');
+  assert.equal(normalizeSettings({ darkScreen: 'dark' }).darkScreen, 'off', '모르는 값은 밝게');
+  const noon = new Date(2026, 10, 25, 12, 0);
+  const night = new Date(2026, 10, 25, 23, 0);
+  assert.equal(darkScreenActive({ darkScreen: 'off' }, night), false);
+  assert.equal(darkScreenActive({ darkScreen: 'night' }, noon), false);
+  assert.equal(darkScreenActive({ darkScreen: 'night' }, night), true);
+  assert.equal(darkScreenActive({ darkScreen: 'on' }, noon), true);
+  assert.equal(darkScreenActive(null, night), false);
 });
